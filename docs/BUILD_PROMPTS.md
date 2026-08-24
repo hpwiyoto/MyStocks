@@ -201,6 +201,10 @@ notebook — bukan ditulis lalu berharap jalan di Colab):
   Sharpe XGBoost -0.16 → **+0.86**, profit factor 0.98 → 1.45, max drawdown -50% → -28%.
   XGBoost tampak paling menarik di iterasi ini, tapi tetap TIDAK diputuskan sebagai model final
   di sini — itu keputusan Anda sebelum masuk Fase 4.
+- **Keputusan final (setelah review)**: XGBoost. Dilatih ulang pada seluruh data historis (bukan
+  cuma satu fold) via cell "Export model produksi" di notebook, disimpan sebagai
+  `models/direction_xgboost_v1.json` + `_metadata.json` (feature_cols, base_rate, target_pct,
+  stop_pct — dipakai langsung oleh Fase 4, bukan diduplikasi/di-hardcode ulang).
 
 ```
 Fase ini dikerjakan di Google Colab sesuai pembagian lingkungan riset vs build. Bantu saya
@@ -223,9 +227,29 @@ Saya akan review sebelum model pemenang di-commit ke Codespaces di fase berikutn
 
 ---
 
-## FASE 4 — Prediction & Decision Engine
+## FASE 4 — Prediction & Decision Engine ✅ (sudah selesai)
 
 **Tujuan:** model terpilih jadi output actionable. Tanpa UI.
+
+**Catatan implementasi** (ditemukan lewat pengujian, bukan asumsi):
+- `xgboost` dipin ke `~=2.0.0` (BUKAN `~=2.0`, yang ternyata tetap resolve ke 2.1.4 — pelajaran
+  soal operator `~=`) — versi 2.1+ membundel `nvidia-nccl-cu12` (~300MB) secara default meski
+  cuma dipakai untuk inference CPU, dan xgboost 2.0.3 tidak membawa itu sama sekali.
+- Bug nyata: `XGBClassifier.save_model()` (wrapper sklearn) crash
+  (`TypeError: _estimator_type undefined`) pada kombinasi xgboost 2.0.3 + scikit-learn 1.9 yang
+  lebih baru. Solusi: `model.get_booster().save_model()` untuk simpan,
+  `xgb.Booster().load_model()` + `predict(DMatrix)` untuk load — diverifikasi hasil prediksi
+  identik dengan wrapper sklearn.
+- `.gitignore` awalnya mengecualikan `models/*.json` (dari Fase 0, sebelum ada artifact
+  sungguhan) — ditambahkan pengecualian eksplisit untuk `direction_xgboost_v1.json` +
+  `_metadata.json` supaya benar-benar ter-commit, bukan cuma pola umum yang di-drop.
+- `engine/model.py` merekonstruksi ulang preprocessing training (imputasi historical_win_rate,
+  flag has_similar_pattern, one-hot regime) untuk SATU baris live — bukan pakai
+  `pd.get_dummies` langsung (yang cuma akan menghasilkan kolom untuk regime baris itu saja,
+  bukan seluruh kolom regime_* yang diharapkan model).
+- Diuji: ticker tanpa `feature_daily`, ticker dengan fitur yang hilang (NULL) — keduanya
+  di-skip dengan warning jelas berisi daftar kolom yang hilang, bukan crash atau prediksi dari
+  data rusak. Idempotency diverifikasi (re-run tidak membuat duplikat).
 
 ```
 Model terpilih dari hasil Colab sudah saya berikan (artifact/parameter). Bangun /engine di

@@ -70,3 +70,19 @@ python -m scripts.export_for_colab
 ```
 
 Menghasilkan `data/export_for_colab_features.parquet` dan `..._prices.parquet` — upload keduanya ke [notebooks/fase3_ml_research.ipynb](notebooks/fase3_ml_research.ipynb) di Colab. Notebook membandingkan baseline/XGBoost/LightGBM lewat walk-forward validation (dengan embargo anti-lookahead) dan **tidak** memutuskan model final — itu keputusan manual sebelum Fase 4.
+
+Model produksi terpilih (**XGBoost**, `models/direction_xgboost_v1.json` + `_metadata.json`) dilatih pada seluruh data historis lewat sel "Export model produksi" di notebook yang sama.
+
+## Prediction & Decision Engine (Fase 4)
+
+Skor tiap ticker yang di-track pakai model Direction terlatih, hasilkan keputusan BUY/WATCH/AVOID + Entry/SL/TP:
+
+```bash
+python -m engine.predict
+```
+
+Aturan keputusan (di `engine/decision.py`, bukan angka sembarang):
+- Entry/SL/TP diturunkan langsung dari `target_pct`/`stop_pct` yang sama dengan definisi label saat training (5% / 2.5%) — R:R tetap 2.0.
+- **BUY**: probability ≥ 0.5. **WATCH**: probability ≥ base rate historis model tapi < 0.5. **AVOID**: di bawah base rate (tidak ada edge).
+
+Hasil tersimpan di tabel `predictions` (upsert per `stock_code`+`date`+`model_version`, aman dijalankan berulang). Ticker tanpa `feature_daily` atau dengan fitur yang hilang di-skip dengan warning jelas, bukan crash atau prediksi dari data rusak.

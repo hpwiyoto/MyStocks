@@ -2,6 +2,7 @@ pandas~=3.0
 numpy~=2.5
 yfinance~=1.6
 ta~=0.11
+xgboost~=2.0.0
 sqlalchemy~=2.0
 pymysql~=1.2
 streamlit~=1.62
