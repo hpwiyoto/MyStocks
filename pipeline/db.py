@@ -47,21 +47,6 @@ price_history = Table(
     UniqueConstraint("stock_code", "date", "source_provider", name="uq_price_history_code_date_source"),
 )
 
-foreign_flow = Table(
-    "foreign_flow",
-    metadata,
-    Column("id", BigInteger, primary_key=True, autoincrement=True),
-    Column("stock_code", String(10), nullable=False),
-    Column("date", Date, nullable=False),
-    Column("foreign_buy", BigInteger),
-    Column("foreign_sell", BigInteger),
-    Column("frequency", BigInteger),
-    Column("value", BigInteger),
-    Column("source", String(30), nullable=False),
-    Column("imported_at", DateTime, server_default=func.now()),
-    UniqueConstraint("stock_code", "date", name="uq_foreign_flow_code_date"),
-)
-
 
 def get_engine():
     host = os.getenv("MYSQL_HOST", "localhost")

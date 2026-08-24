@@ -9,7 +9,6 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
-from pipeline.alerts import run as check_manual_data_alerts
 from pipeline.db import get_engine, init_schema, price_history, stocks
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS, to_yfinance_symbol
@@ -120,9 +119,6 @@ def run(tickers=None):
             failures.append(code)
 
     logger.info("Done. %d rows upserted. Failures: %s", total, failures or "none")
-
-    check_manual_data_alerts(tickers)
-
     return {"rows_upserted": total, "failures": failures}
 
 

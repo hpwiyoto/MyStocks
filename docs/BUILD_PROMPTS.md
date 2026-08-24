@@ -1,6 +1,8 @@
 # MyStocks — Prompt Pembangunan Bertahap
 
-Dokumen ini berisi prompt siap-pakai untuk membangun MyStocks part-by-part, sesuai arsitektur dan keputusan yang sudah dibahas (Colab = research, Codespaces = build, VPS = production; yfinance + Stooq + data resmi IDX; XGBoost vs LightGBM via walk-forward; target probabilistik; UI Streamlit profesional).
+Dokumen ini berisi prompt siap-pakai untuk membangun MyStocks part-by-part, sesuai arsitektur dan keputusan yang sudah dibahas (Colab = research, Codespaces = build, VPS = production; yfinance sebagai satu-satunya sumber data; XGBoost vs LightGBM via walk-forward; target probabilistik; UI Streamlit profesional).
+
+**Riwayat keputusan:** Stooq (fallback OHLCV) dan data resmi IDX (foreign flow via impor CSV manual) sempat dicoba di Fase 1, tapi di-drop — keduanya menambah kompleksitas operasional (proteksi anti-bot di sisi Stooq/IDX, dan kebutuhan impor manual rutin) yang tidak sepadan untuk tahap ini. Scope disederhanakan jadi yfinance-only. Fitur money-flow (CMF/OBV/MFI) tetap ada di Fase 2, dihitung murni dari OHLCV.
 
 **Prinsip pemakaian — baca dulu sebelum mulai:**
 1. Jalankan **satu fase per sesi**. Jangan minta gabungan beberapa fase sekaligus — ini sengaja dipisah supaya AI (dan Anda) tidak kehilangan konteks atau membuat asumsi yang bias/prematur.
@@ -19,11 +21,9 @@ untuk membangun aplikasi produksi — VPS + Managed MySQL untuk production run. 
 pernah dipakai sebagai backend/database permanen.
 
 Sumber data: yfinance sebagai satu-satunya sumber OHLCV+fundamental (ticker format KODE.JK),
-dengan retry/backoff otomatis (Stooq sempat direncanakan sebagai fallback tapi di-drop karena
-endpoint gratisnya sekarang dilindungi proof-of-work anti-bot). Data resmi IDX (foreign
-buy/sell, frequency, value) diimpor MANUAL dari CSV yang diunduh sendiri oleh manusia lewat
-browser (bukan scraping otomatis — endpoint resmi IDX dilindungi Cloudflare managed challenge
-yang terbukti tidak bisa ditembus tanpa stealth-evasion, yang sengaja tidak dibangun).
+dengan retry/backoff otomatis. Stooq dan data resmi IDX (foreign flow) sempat dicoba lalu
+sengaja di-drop karena menambah kompleksitas operasional (anti-bot protection, kebutuhan impor
+manual rutin) yang tidak sepadan untuk tahap ini — fokus disederhanakan ke yfinance saja.
 
 Model kandidat: XGBoost dan LightGBM, dipilih lewat walk-forward backtest, bukan asumsi awal.
 Target prediksi didefinisikan probabilistik, contoh: P(harga naik ≥5% dalam 10 hari trading
@@ -39,14 +39,14 @@ Kita membangun ini bertahap, fase demi fase. Fase yang sedang saya minta adalah 
 
 ---
 
-## FASE 0 — Fondasi Proyek
+## FASE 0 — Fondasi Proyek ✅ (sudah selesai)
 
 **Tujuan:** kerangka repo saja, tanpa logic apapun.
 
 ```
 Bangun fondasi proyek MyStocks dengan struktur folder berikut:
 - /data          (raw & processed data, di-gitignore)
-- /pipeline      (data ingestion: yfinance, Stooq, IDX scraper)
+- /pipeline      (data ingestion: yfinance)
 - /features      (feature engineering modules)
 - /models        (training script & model artifacts)
 - /engine        (prediction & decision engine)
@@ -67,37 +67,29 @@ tunjukkan struktur folder final untuk saya review sebelum saya minta fase beriku
 
 ---
 
-## FASE 1 — Data Pipeline ✅ (sudah selesai — dicatat di sini sebagai riwayat keputusan)
+## FASE 1 — Data Pipeline ✅ (sudah selesai, disederhanakan jadi yfinance-only)
 
 **Tujuan:** data mentah masuk ke MySQL. Tanpa feature engineering.
 
-**Catatan penting hasil eksekusi fase ini** (ditemukan lewat pengujian langsung, bukan asumsi):
-Stooq ternyata dilindungi proof-of-work anti-bot dan endpoint resmi `GetStockSummary` IDX
-dilindungi Cloudflare managed challenge — keduanya sudah dicoba dengan browser automation asli
-(Playwright, tanpa stealth/evasion) dan tetap terblokir. Karena menembusnya butuh teknik
-stealth-evasion yang sengaja tidak dibangun, rencana awal direvisi:
-- Stooq di-drop sepenuhnya, diganti retry/backoff pada yfinance.
-- Data resmi IDX (foreign buy/sell/frequency/value) diimpor MANUAL dari CSV yang diunduh
-  sendiri oleh manusia lewat browser (`pipeline/import_foreign_flow.py`), bukan scraping
-  otomatis.
-- Karena data manual ini gampang terlupakan, ditambahkan `pipeline/alerts.py` yang otomatis
-  dipanggil di akhir setiap `ingest_price.run()` — mencetak WARNING (console + log file) kalau
-  ada saham yang foreign_flow-nya belum pernah diimpor atau sudah lewat 3 hari.
+**Riwayat keputusan** (ditemukan lewat pengujian langsung, bukan asumsi): rencana awal mencoba
+Stooq sebagai fallback dan data resmi IDX (foreign buy/sell/frequency) via impor CSV manual.
+Stooq ternyata dilindungi proof-of-work anti-bot dan endpoint resmi IDX dilindungi Cloudflare
+managed challenge — keduanya sudah dicoba dengan browser automation asli (Playwright, tanpa
+stealth/evasion) dan tetap terblokir, dan menembusnya butuh stealth-evasion yang sengaja tidak
+dibangun. Setelah dicoba, impor manual CSV foreign_flow dinilai menambah kompleksitas
+operasional yang tidak sepadan, sehingga scope disederhanakan: **yfinance saja**, tanpa fallback
+provider dan tanpa foreign_flow. Fitur money-flow tetap tersedia di Fase 2 lewat CMF/OBV/MFI
+yang dihitung murni dari OHLCV.
 
 ```
 Bangun modul data pipeline di /pipeline:
 
-1. yfinance untuk OHLCV + fundamental dasar saham IDX (ticker format KODE.JK, contoh BBCA.JK),
-   dengan retry/backoff otomatis saat gagal/timeout dan logging yang jelas.
-2. Modul import CSV TERPISAH untuk data resmi IDX (foreign buy/sell, frequency, value) yang
-   diunduh manual oleh manusia dari website IDX — normalisasi nama kolom karena format
-   ekspor bisa bervariasi, dan beri pesan error yang jelas kalau kolom tidak dikenali.
-   Kegagalan/absennya modul ini TIDAK boleh menggagalkan pipeline OHLCV utama.
+yfinance untuk OHLCV + fundamental dasar saham IDX (ticker format KODE.JK, contoh BBCA.JK),
+dengan retry/backoff otomatis saat gagal/timeout dan logging yang jelas.
 
 Simpan ke skema MySQL dengan tabel terpisah:
 - stocks         (master data ticker)
 - price_history  (OHLCV harian, kolom source_provider)
-- foreign_flow   (foreign buy/sell/frequency/value per hari per ticker, kolom source)
 
 Sertakan mekanisme update incremental (bukan re-download seluruh histori tiap run) dan logging
 yang jelas. JANGAN membuat feature engineering atau model di fase ini.
@@ -118,8 +110,7 @@ Bangun feature engineering engine di /features dari data di MySQL (fase sebelumn
 - Trend: SMA/EMA multi-period + slope + acceleration + distance_from_price
 - Momentum: RSI, MACD (line/signal/histogram) + slope/acceleration/3d-5d change
 - Volume: RVOL + volume slope/acceleration
-- Money flow: CMF, OBV, MFI + slope — DAN manfaatkan foreign_flow dari IDX (foreign net
-  buy/sell ratio, frequency anomaly) sebagai fitur unik yang tidak dimiliki Yahoo Finance
+- Money flow: CMF, OBV, MFI + slope (dihitung murni dari OHLCV yfinance)
 - Volatility: ATR%, Bollinger Band width + perubahannya
 - Market structure: higher-high/lower-low, distance to support/resistance
 - Market regime: klasifikasi kategorikal (bearish/bottoming/sideways/accumulation/
