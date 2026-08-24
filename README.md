@@ -60,3 +60,13 @@ python -m features.build_features
 ```
 
 Butuh minimal 60 hari price_history per ticker (indikator seperti ATR/RSI butuh window minimum; ticker yang lebih baru dari itu otomatis di-skip dengan warning, bukan error). Base indikator (RSI/MACD/Bollinger/ATR/CMF/MFI/OBV) memakai library `ta` — bukan `pandas-ta`, yang terbukti diam-diam menurunkan versi numpy yang sudah kita pin dan sempat menghasilkan nilai RSI yang mencurigakan saat diuji.
+
+## ML Research (Fase 3, di Google Colab)
+
+Colab tidak bisa menjangkau MySQL lokal/dev, jadi datanya diekspor dulu ke Parquet:
+
+```bash
+python -m scripts.export_for_colab
+```
+
+Menghasilkan `data/export_for_colab_features.parquet` dan `..._prices.parquet` — upload keduanya ke [notebooks/fase3_ml_research.ipynb](notebooks/fase3_ml_research.ipynb) di Colab. Notebook membandingkan baseline/XGBoost/LightGBM lewat walk-forward validation (dengan embargo anti-lookahead) dan **tidak** memutuskan model final — itu keputusan manual sebelum Fase 4.

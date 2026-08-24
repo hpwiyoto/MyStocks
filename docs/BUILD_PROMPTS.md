@@ -163,9 +163,38 @@ supaya saya bisa cek sebelum lanjut ke fase ML Research.
 
 ---
 
-## FASE 3 — ML Research (dikerjakan di Google Colab, bukan Codespaces)
+## FASE 3 — ML Research (dikerjakan di Google Colab, bukan Codespaces) ✅ (sudah selesai)
 
 **Tujuan:** validasi model & feature secara ilmiah sebelum masuk production code.
+
+**Catatan implementasi** (ditemukan lewat pengujian nyata di Codespaces sebelum ditranskripsi ke
+notebook — bukan ditulis lalu berharap jalan di Colab):
+- Colab tidak bisa menjangkau MySQL lokal/dev, jadi dibuat `scripts/export_for_colab.py` yang
+  mengekspor `feature_daily` + `price_history` (high/low/close) ke Parquet untuk diupload manual.
+- Fungsi triple-barrier labeling (`P(+5% sebelum -2.5% dalam 10 hari)`) diuji dengan 8 test case
+  tangan (termasuk boundary: tepat hari ke-10, kedua barrier di hari sama, data future tidak
+  cukup) — konvensi: stop-loss menang kalau ambigu, dan hasil "tidak resolve dalam horizon"
+  di-exclude (NaN) bukan dipaksa jadi label 0/1.
+- Walk-forward split pakai EMBARGO — tanpa ini, baris training dekat batas fold akan memakai
+  label yang resolusinya "mengintip" ke periode test (karena label butuh 10 hari ke depan).
+  Diverifikasi matematis: batas embargo persis pas, dikonfirmasi dengan membandingkan label dari
+  data penuh vs data terpotong dan hasilnya identik di semua fold.
+- `historical_win_rate` NaN di ~44% baris (hari tanpa pola historis mirip) — diisi netral 0.5 +
+  flag `has_similar_pattern`, bukan drop baris (drop akan membuang hampir separuh dataset).
+- Bug ditemukan & diperbaiki: baris `feature_daily` dari SQL tidak terurut kronologis lintas
+  ticker (ter-grup per ticker) — `max_drawdown` yang path-dependent jadi salah kalau tidak
+  di-sort dulu. `total_return`/`win_rate`/`sharpe` tidak terpengaruh (order-invariant secara
+  matematis), tapi drawdown pasti salah tanpa fix ini.
+- Model tidak diberi `random_state` awalnya → hasil sedikit beda tiap run (non-deterministic).
+  Diperbaiki, diverifikasi dengan diff 2 run berturut-turut → identik byte-per-byte.
+- Notebook diverifikasi dengan cara diekstrak dan dieksekusi persis seperti Colab akan
+  menjalankannya (bukan cuma dibaca sekilas) — hasilnya identik dengan skrip standalone yang
+  sudah diuji terpisah.
+- **Hasil run pertama** (10 ticker, 5 tahun): ROC-AUC ketiga model ~0.51-0.53 (sedikit di atas
+  acak — sinyal sehat untuk dataset sekecil ini, bukan tanda kegagalan). Temuan penting: SHAP
+  menunjukkan fitur skala-absolut (ema_9, sma_200, obv) mendominasi, bukan fitur ternormalisasi —
+  indikasi model mungkin sebagian "menghafal saham" lewat level harga. Rekomendasi: normalisasi
+  fitur skala-absolut sebelum iterasi berikutnya, sebelum membandingkan model lagi.
 
 ```
 Fase ini dikerjakan di Google Colab sesuai pembagian lingkungan riset vs build. Bantu saya
