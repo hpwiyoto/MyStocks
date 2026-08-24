@@ -104,19 +104,36 @@ saya verifikasi sebelum lanjut ke fase Feature Engineering.
 
 **Tujuan:** ubah data mentah jadi feature table. Tanpa training model.
 
+**Catatan scope:** dieksplorasi langsung ke yfinance (2026-08-24) dan ternyata `.info` untuk
+saham IDX terisi kaya (157 field untuk BBCA.JK: valuasi, profitabilitas, dividend, kepemilikan,
+target analis), `.quarterly_financials`/`.balance_sheet` juga tersedia, dan index IHSG (`^JKSE`)
+bisa di-fetch via yfinance juga. Semua ini gratis dari sumber yang sama (yfinance), tidak
+menambah sumber data baru — jadi scope Fase 2 diperluas untuk memanfaatkannya di samping fitur
+teknikal murni.
+
 ```
 Bangun feature engineering engine di /features dari data di MySQL (fase sebelumnya). Cakupan:
 
+Teknikal (dari price_history / OHLCV):
 - Trend: SMA/EMA multi-period + slope + acceleration + distance_from_price
 - Momentum: RSI, MACD (line/signal/histogram) + slope/acceleration/3d-5d change
 - Volume: RVOL + volume slope/acceleration
-- Money flow: CMF, OBV, MFI + slope (dihitung murni dari OHLCV yfinance)
+- Money flow: CMF, OBV, MFI + slope
 - Volatility: ATR%, Bollinger Band width + perubahannya
 - Market structure: higher-high/lower-low, distance to support/resistance
 - Market regime: klasifikasi kategorikal (bearish/bottoming/sideways/accumulation/
   early reversal/bullish/overextended) — jelaskan aturan/pendekatan yang dipakai
 - Historical pattern similarity: similarity_score, similar_pattern_count,
   historical_win_rate berbasis pola N-hari
+
+Fundamental & konteks pasar (dari yfinance .info / .quarterly_financials / index ^JKSE — data
+snapshot, bukan time series harian, jadi desain penyimpanannya boleh beda dari feature teknikal):
+- Valuasi: trailingPE, forwardPE, priceToBook, pegRatio
+- Profitabilitas: returnOnEquity, returnOnAssets, profitMargins, operatingMargins
+- Dividend: dividendYield, payoutRatio
+- Ukuran & kepemilikan: marketCap, heldPercentInsiders, heldPercentInstitutions
+- Sentimen analis: recommendationMean, upside % (targetMeanPrice vs harga sekarang)
+- Relative strength vs IHSG (^JKSE): return saham dikurangi return index pada window yang sama
 
 Simpan hasil sebagai tabel feature_daily di MySQL dengan kolom feature_version supaya
 perubahan feature set di masa depan tidak menimpa histori lama. JANGAN training model
