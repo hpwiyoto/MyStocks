@@ -193,8 +193,14 @@ notebook — bukan ditulis lalu berharap jalan di Colab):
 - **Hasil run pertama** (10 ticker, 5 tahun): ROC-AUC ketiga model ~0.51-0.53 (sedikit di atas
   acak — sinyal sehat untuk dataset sekecil ini, bukan tanda kegagalan). Temuan penting: SHAP
   menunjukkan fitur skala-absolut (ema_9, sma_200, obv) mendominasi, bukan fitur ternormalisasi —
-  indikasi model mungkin sebagian "menghafal saham" lewat level harga. Rekomendasi: normalisasi
-  fitur skala-absolut sebelum iterasi berikutnya, sebelum membandingkan model lagi.
+  indikasi model mungkin sebagian "menghafal saham" lewat level harga.
+- **Iterasi 2** (kolom skala-absolut dikeluarkan dari feature set — sma_20/50/200, ema_9/20/50,
+  macd/macd_signal/macd_hist+turunannya, volume_slope_5d, obv+turunannya): hipotesis terbukti
+  benar. SHAP sekarang didominasi fitur ternormalisasi (atr_pct_14, bb_width_pct,
+  price_vs_sma50_pct, dst). ROC-AUC tetap ~0.51-0.53 (wajar), tapi metrik trading membaik jelas:
+  Sharpe XGBoost -0.16 → **+0.86**, profit factor 0.98 → 1.45, max drawdown -50% → -28%.
+  XGBoost tampak paling menarik di iterasi ini, tapi tetap TIDAK diputuskan sebagai model final
+  di sini — itu keputusan Anda sebelum masuk Fase 4.
 
 ```
 Fase ini dikerjakan di Google Colab sesuai pembagian lingkungan riset vs build. Bantu saya
