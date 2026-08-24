@@ -100,7 +100,7 @@ saya verifikasi sebelum lanjut ke fase Feature Engineering.
 
 ---
 
-## FASE 2 — Feature Engineering Engine
+## FASE 2 — Feature Engineering Engine ✅ (sudah selesai)
 
 **Tujuan:** ubah data mentah jadi feature table. Tanpa training model.
 
@@ -110,6 +110,24 @@ target analis), `.quarterly_financials`/`.balance_sheet` juga tersedia, dan inde
 bisa di-fetch via yfinance juga. Semua ini gratis dari sumber yang sama (yfinance), tidak
 menambah sumber data baru — jadi scope Fase 2 diperluas untuk memanfaatkannya di samping fitur
 teknikal murni.
+
+**Catatan implementasi** (ditemukan lewat pengujian, bukan asumsi):
+- Base indikator (RSI/MACD/Bollinger/ATR/CMF/MFI/OBV) pakai library `ta`, BUKAN `pandas-ta` —
+  pandas-ta diam-diam menurunkan numpy yang sudah dipin (lewat dependency `numba`) dan
+  menghasilkan RSI pertama bernilai 0.0 yang mencurigakan saat diuji dengan data acak.
+- `ta`'s `AverageTrueRange` crash (IndexError) kalau diberi <14 baris data — ditambahkan guard
+  `MIN_ROWS_FOR_TECHNICAL_FEATURES=60` di orkestrator, ticker dengan histori pendek (baru
+  listing) di-skip dengan warning, bukan error.
+- Pattern similarity dihitung within-ticker (bukan cross-ticker) via correlation matrix
+  ter-vektorisasi, dengan 2 constraint yang diverifikasi manual pada data nyata: TIDAK ada
+  overlap antar window yang dibandingkan, dan TIDAK ada lookahead (outcome historis suatu pola
+  hanya dipakai kalau sudah "diketahui" pada tanggal fitur itu dihitung).
+- `dividendYield` dari yfinance ternyata berskala 0-100 (persen), BUKAN 0-1 seperti
+  `trailingAnnualDividendYield` — dikonfirmasi silang manual, didokumentasikan di kode supaya
+  tidak salah dikalikan 100 lagi di fase berikutnya.
+- Fundamental snapshot disimpan di tabel terpisah (`feature_fundamental_snapshot`, satu baris
+  per stock per tanggal snapshot) karena datanya point-in-time, bukan time series harian seperti
+  `feature_daily`.
 
 ```
 Bangun feature engineering engine di /features dari data di MySQL (fase sebelumnya). Cakupan:

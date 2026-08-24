@@ -50,3 +50,13 @@ python -m pipeline.ingest_price
 ```
 
 Ticker yang dilacak diatur di `pipeline/tickers.py` (`SEED_TICKERS`).
+
+## Feature engineering
+
+Hitung feature teknikal (`feature_daily`) + fundamental & relative strength vs IHSG (`feature_fundamental_snapshot`) dari data yang sudah di-ingest:
+
+```bash
+python -m features.build_features
+```
+
+Butuh minimal 60 hari price_history per ticker (indikator seperti ATR/RSI butuh window minimum; ticker yang lebih baru dari itu otomatis di-skip dengan warning, bukan error). Base indikator (RSI/MACD/Bollinger/ATR/CMF/MFI/OBV) memakai library `ta` — bukan `pandas-ta`, yang terbukti diam-diam menurunkan versi numpy yang sudah kita pin dan sempat menghasilkan nilai RSI yang mencurigakan saat diuji.

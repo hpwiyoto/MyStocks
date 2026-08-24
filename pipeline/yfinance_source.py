@@ -11,7 +11,7 @@ MAX_RETRIES = 3
 BACKOFF_SECONDS = 5
 
 
-def _with_retry(fn, description: str):
+def with_retry(fn, description: str):
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -39,7 +39,7 @@ def fetch_history(symbol: str, start: str | None = None, period: str | None = No
             raise ValueError(f"yfinance returned no data for {symbol}")
         return df
 
-    return _with_retry(_fetch, f"fetch_history({symbol})")
+    return with_retry(_fetch, f"fetch_history({symbol})")
 
 
 def fetch_profile(symbol: str) -> dict:
@@ -52,7 +52,19 @@ def fetch_profile(symbol: str) -> dict:
         }
 
     try:
-        return _with_retry(_fetch, f"fetch_profile({symbol})")
+        return with_retry(_fetch, f"fetch_profile({symbol})")
     except Exception:
         # Profile metadata is a nice-to-have; missing it should not block price ingestion.
         return {"name": None, "sector": None}
+
+
+def fetch_full_info(symbol: str) -> dict:
+    """Raw yfinance `.info` dict, retried. Returns {} on persistent failure —
+    fundamental snapshots are supplementary and shouldn't crash the caller."""
+    def _fetch():
+        return yf.Ticker(symbol).info or {}
+
+    try:
+        return with_retry(_fetch, f"fetch_full_info({symbol})")
+    except Exception:
+        return {}
