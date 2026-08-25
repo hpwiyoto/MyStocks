@@ -284,6 +284,13 @@ supaya saya validasi logikanya sebelum masuk ke fase UI.
 
 **Tujuan:** presentation layer yang bersih, smooth, dan terasa profesional.
 
+**Keputusan (2026-08-25)**: user sempat menanyakan apakah perlu tombol "training ulang" di
+aplikasi. Diputuskan TIDAK — bertentangan dengan pemisahan Colab (riset/training, butuh review
+manusia atas walk-forward/SHAP) vs Codespaces/app (serving). Sebagai gantinya, tambahkan
+**indikator read-only** di UI: umur model (`trained_at` dari metadata) dan berapa banyak data
+baru yang terkumpul sejak training (`n_training_rows` vs jumlah baris `feature_daily` sekarang)
+— pengingat kapan sebaiknya retrain manual di Colab, bukan tombol aksi.
+
 ```
 Bangun aplikasi Streamlit di /app yang menyajikan hasil dari prediction engine. Spesifikasi UI:
 
@@ -310,6 +317,14 @@ dan saya akan review UX sebelum masuk ke fase Deployment.
 ## FASE 6 — Production Deployment
 
 **Tujuan:** aplikasi berjalan otomatis di VPS. Tanpa mengubah logic model/UI.
+
+**Keputusan (2026-08-25)**: user menanyakan notifikasi kalau yfinance gagal/tidak update.
+Sengaja digabung ke fase ini (bukan dibangun terpisah lebih awal) karena baru relevan begitu
+pipeline berjalan otomatis tanpa pengawasan (poin 2 & 4 di bawah) — kalau masih dijalankan
+manual, kegagalan sudah langsung terlihat di terminal. Saat implementasi, bedakan dua mode
+kegagalan: (a) error eksplisit (koneksi gagal, exception — sudah ada retry+isolasi per-ticker
+dari Fase 1) vs (b) "diam-diam basi" (fetch sukses tapi tanggal terbaru di price_history tidak
+maju beberapa hari) — keduanya butuh deteksi terpisah, bukan cuma cek exception.
 
 ```
 Siapkan deployment ke VPS + Managed MySQL untuk production (Colab dan Codespaces tidak dipakai
