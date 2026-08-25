@@ -5,7 +5,7 @@ upsert the result into `predictions`.
 Usage:
     python -m engine.predict
 """
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from engine.db import init_schema, predictions
@@ -55,6 +55,15 @@ def run(tickers=None):
     tickers = tickers or SEED_TICKERS
     engine_db = get_engine()
     init_schema(engine_db)
+
+    inspector = inspect(engine_db)
+    missing_tables = [t for t in ("feature_daily", "price_history") if not inspector.has_table(t)]
+    if missing_tables:
+        logger.error(
+            "Table(s) %s don't exist yet. Run `python -m pipeline.ingest_price` "
+            "and `python -m features.build_features` first.", missing_tables,
+        )
+        return {"scored": [], "skipped": [], "failures": [], "error": f"missing tables: {missing_tables}"}
 
     booster, meta = load_model_and_metadata(MODEL_VERSION)
     feature_cols = meta["feature_cols"]

@@ -250,6 +250,15 @@ Saya akan review sebelum model pemenang di-commit ke Codespaces di fase berikutn
 - Diuji: ticker tanpa `feature_daily`, ticker dengan fitur yang hilang (NULL) — keduanya
   di-skip dengan warning jelas berisi daftar kolom yang hilang, bukan crash atau prediksi dari
   data rusak. Idempotency diverifikasi (re-run tidak membuat duplikat).
+- **Recheck integrasi (2026-08-25)**: dites di clone bersih dari nol (venv baru, MySQL baru,
+  `ingest_price` → `build_features` → `predict` end-to-end) — semua konsisten, `feature_cols` di
+  metadata model cocok 100% dengan skema `feature_daily` aktual, semua nilai `regime` di data
+  tercakup kolom `regime_*` model (tidak ada yang silently ter-encode nol). Satu gap ditemukan:
+  kalau `feature_daily`/`price_history` belum ada sama sekali (DB kosong, belum jalankan Fase
+  1/2), `engine.predict` tetap tidak crash total tapi mencetak 10× traceback SQL penuh yang
+  membingungkan. Diperbaiki dengan pengecekan tabel eksplisit di awal `run()` — sekarang
+  menghasilkan satu pesan jelas ("jalankan pipeline.ingest_price dan features.build_features
+  dulu") sebelum masuk loop ticker.
 
 ```
 Model terpilih dari hasil Colab sudah saya berikan (artifact/parameter). Bangun /engine di
