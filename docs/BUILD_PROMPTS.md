@@ -280,7 +280,7 @@ supaya saya validasi logikanya sebelum masuk ke fase UI.
 
 ---
 
-## FASE 5 — Streamlit Application (UI)
+## FASE 5 — Streamlit Application (UI) ✅ (sudah selesai)
 
 **Tujuan:** presentation layer yang bersih, smooth, dan terasa profesional.
 
@@ -290,6 +290,23 @@ manusia atas walk-forward/SHAP) vs Codespaces/app (serving). Sebagai gantinya, t
 **indikator read-only** di UI: umur model (`trained_at` dari metadata) dan berapa banyak data
 baru yang terkumpul sejak training (`n_training_rows` vs jumlah baris `feature_daily` sekarang)
 — pengingat kapan sebaiknya retrain manual di Colab, bukan tombol aksi.
+
+**Catatan implementasi** (diverifikasi dengan Playwright headless — screenshot & klik navigasi
+sungguhan, bukan cuma baca kode):
+- Menu native Streamlit (`app/pages/`) dipakai untuk sidebar nav, dark theme diatur di
+  `.streamlit/config.toml`, badge/kartu custom di `app/style.py`.
+- Bug data ditemukan lewat UI, bukan lewat cek kode: P/B ADRO tampil **15470.59** — dilacak
+  sampai sumbernya (yfinance `bookValue=0.17` untuk harga 2630, kemungkinan glitch data Yahoo
+  Finance), BUKAN bug di pipeline kita. Ditambahkan guard tampilan (`safe_ratio()` di
+  `app/style.py`) yang menampilkan "N/A*" + penjelasan untuk rasio valuasi di luar rentang wajar,
+  daripada menampilkan angka menyesatkan.
+- `use_container_width=True` (dipakai di 4 tempat) ternyata sudah melewati tanggal deprecation
+  Streamlit (2025-12-31) — diganti `width="stretch"` di semua pemanggilan.
+- Glitch dev-only: menambah nama baru ke modul yang sudah ke-import (`app.style`) tidak
+  otomatis ter-refresh oleh hot-reload Streamlit — perlu restart proses dev server, bukan
+  bug kode.
+- Filter (keputusan/regime/probabilitas minimum) diuji interaktif — jumlah kartu yang tampil
+  berubah sesuai filter dan konsisten dengan data asli.
 
 ```
 Bangun aplikasi Streamlit di /app yang menyajikan hasil dari prediction engine. Spesifikasi UI:

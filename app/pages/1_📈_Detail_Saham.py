@@ -1,0 +1,131 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+import plotly.graph_objects as go
+import streamlit as st
+from plotly.subplots import make_subplots
+
+from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_price_history
+from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, safe_ratio
+
+st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
+inject_base_css()
+
+predictions = load_latest_predictions()
+if predictions.empty:
+    st.warning("Belum ada data prediksi. Jalankan pipeline terlebih dahulu dari halaman utama.")
+    st.stop()
+
+tickers = predictions["stock_code"].tolist()
+default_ticker = st.session_state.get("selected_ticker", tickers[0])
+if default_ticker not in tickers:
+    default_ticker = tickers[0]
+
+selected = st.selectbox("Pilih saham", tickers, index=tickers.index(default_ticker))
+st.session_state["selected_ticker"] = selected
+
+row = predictions[predictions["stock_code"] == selected].iloc[0]
+feat = load_latest_feature_row(selected)
+fund = load_latest_fundamental(selected)
+
+with st.spinner("Memuat data harga..."):
+    price_df = load_price_history(selected, days=260)
+
+# --- Header ---
+h1, h2 = st.columns([3, 1])
+with h1:
+    st.markdown(
+        f"""
+        <div class="mystocks-ticker" style="font-size:2rem;">{selected} <span class="mystocks-muted" style="font-size:1.1rem;">{row['name'] or ''}</span></div>
+        <div style="margin-top:0.4rem;">{decision_badge(row['decision'])} &nbsp; {regime_badge(row['regime'])}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+with h2:
+    st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+# --- Entry / SL / TP ---
+e1, e2, e3, e4 = st.columns(4)
+e1.metric("Entry", f"{float(row['entry_price']):,.0f}")
+e2.metric("Stop Loss", f"{float(row['stop_loss_price']):,.0f}", delta=f"-{(1 - float(row['stop_loss_price'])/float(row['entry_price']))*100:.2f}%", delta_color="inverse")
+e3.metric("Take Profit", f"{float(row['take_profit_price']):,.0f}", delta=f"+{(float(row['take_profit_price'])/float(row['entry_price']) - 1)*100:.2f}%")
+e4.metric("Risk : Reward", f"1 : {float(row['risk_reward_ratio']):.1f}")
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+# --- Candlestick chart ---
+if price_df.empty:
+    st.info("Belum ada data harga untuk saham ini.")
+else:
+    price_df = price_df.copy()
+    price_df["sma20"] = price_df["close"].rolling(20).mean()
+    price_df["sma50"] = price_df["close"].rolling(50).mean()
+    price_df["sma200"] = price_df["close"].rolling(200).mean()
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
+    fig.add_trace(
+        go.Candlestick(
+            x=price_df["date"], open=price_df["open"], high=price_df["high"],
+            low=price_df["low"], close=price_df["close"], name="Harga",
+            increasing_line_color=COLOR_BUY, decreasing_line_color=COLOR_AVOID,
+        ),
+        row=1, col=1,
+    )
+    for col, color, label in [("sma20", "#F59E0B", "SMA20"), ("sma50", ACCENT, "SMA50"), ("sma200", "#8B5CF6", "SMA200")]:
+        fig.add_trace(
+            go.Scatter(x=price_df["date"], y=price_df[col], name=label, line=dict(color=color, width=1.3)),
+            row=1, col=1,
+        )
+    volume_colors = [COLOR_BUY if c >= o else COLOR_AVOID for o, c in zip(price_df["open"], price_df["close"])]
+    fig.add_trace(
+        go.Bar(x=price_df["date"], y=price_df["volume"], name="Volume", marker_color=volume_colors, opacity=0.6),
+        row=2, col=1,
+    )
+    fig.update_layout(
+        height=560,
+        template="plotly_dark",
+        paper_bgcolor="#0B1120",
+        plot_bgcolor="#0B1120",
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
+        xaxis_rangeslider_visible=False,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+# --- Panels: pattern similarity + fundamental ---
+p1, p2 = st.columns(2)
+
+with p1:
+    st.subheader("🔁 Historical Pattern Similarity")
+    if feat and feat.get("similarity_score") is not None:
+        st.metric("Similarity score (pola paling mirip)", f"{float(feat['similarity_score']):.2f}")
+        st.metric("Jumlah pola historis serupa", int(feat.get("similar_pattern_count") or 0))
+        win_rate = feat.get("historical_win_rate")
+        if win_rate is not None:
+            st.metric("Win rate pola serupa (10 hari ke depan)", f"{float(win_rate)*100:.1f}%")
+        else:
+            st.caption("Belum ada pola historis yang cukup mirip untuk dihitung win rate-nya.")
+    else:
+        st.caption("Data pattern similarity belum tersedia untuk saham ini.")
+
+with p2:
+    st.subheader("📊 Fundamental & Analis")
+    if fund:
+        f1, f2 = st.columns(2)
+        f1.metric("P/E (trailing)", safe_ratio(fund.get("trailing_pe"), "{:.1f}"))
+        f1.metric("P/B", safe_ratio(fund.get("price_to_book"), "{:.2f}"))
+        f1.metric("Dividend Yield", f"{fund['dividend_yield']:.2f}%" if fund.get("dividend_yield") is not None else "-")
+        f2.metric("ROE", f"{fund['return_on_equity']*100:.1f}%" if fund.get("return_on_equity") is not None else "-")
+        f2.metric("Relative Strength vs IHSG (20d)", f"{fund['relative_strength_20d_pct']:.1f}%" if fund.get("relative_strength_20d_pct") is not None else "-")
+        f2.metric("Analyst Upside", f"{fund['analyst_upside_pct']:.1f}%" if fund.get("analyst_upside_pct") is not None else "-")
+        if "N/A*" in (safe_ratio(fund.get("trailing_pe"), "{:.1f}"), safe_ratio(fund.get("price_to_book"), "{:.2f}")):
+            st.caption("*Data dari yfinance tidak wajar untuk rasio ini (terkonfirmasi: book value/EPS mendekati nol pada sumbernya), disembunyikan daripada menampilkan angka menyesatkan.")
+    else:
+        st.caption("Data fundamental belum tersedia untuk saham ini.")

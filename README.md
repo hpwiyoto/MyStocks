@@ -86,3 +86,15 @@ Aturan keputusan (di `engine/decision.py`, bukan angka sembarang):
 - **BUY**: probability ≥ 0.5. **WATCH**: probability ≥ base rate historis model tapi < 0.5. **AVOID**: di bawah base rate (tidak ada edge).
 
 Hasil tersimpan di tabel `predictions` (upsert per `stock_code`+`date`+`model_version`, aman dijalankan berulang). Ticker tanpa `feature_daily` atau dengan fitur yang hilang di-skip dengan warning jelas, bukan crash atau prediksi dari data rusak.
+
+## Aplikasi Streamlit (Fase 5)
+
+```bash
+streamlit run app/Home.py
+```
+
+- **Screener** (halaman utama) — kartu ranking saham berdasarkan probabilitas, badge warna untuk decision (BUY/WATCH/AVOID) & regime, filter di sidebar (keputusan, regime, probabilitas minimum).
+- **Detail Saham** — candlestick chart (Plotly, overlay SMA20/50/200 + volume), Entry/SL/TP, panel pattern similarity & fundamental.
+- **Info Model** — indikator umur model & jumlah data baru sejak training terakhir (pengingat retrain manual, bukan tombol aksi — lihat catatan Fase 5 di `docs/BUILD_PROMPTS.md`).
+
+Tema warna diatur di `.streamlit/config.toml` (dark mode) + `app/style.py` (badge/kartu). `/app` murni presentation layer — hanya query MySQL & baca `models/*_metadata.json`, tidak ada logic pipeline/training di dalamnya.
