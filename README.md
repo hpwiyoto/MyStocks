@@ -98,3 +98,30 @@ streamlit run app/Home.py
 - **Info Model** — indikator umur model & jumlah data baru sejak training terakhir (pengingat retrain manual, bukan tombol aksi — lihat catatan Fase 5 di `docs/BUILD_PROMPTS.md`).
 
 Tema warna diatur di `.streamlit/config.toml` (dark mode) + `app/style.py` (badge/kartu). `/app` murni presentation layer — hanya query MySQL & baca `models/*_metadata.json`, tidak ada logic pipeline/training di dalamnya.
+
+## Production Deployment (Fase 6)
+
+Satu VPS menjalankan semuanya lewat Docker Compose: MySQL (self-host, volume persisten), aplikasi Streamlit, dan scheduler yang menjalankan `ingest_price → build_features → predict → monitor` otomatis tiap hari jam 16:30 WIB (bisa diubah via `SCHEDULER_RUN_HOUR`/`SCHEDULER_RUN_MINUTE`).
+
+**Rekomendasi hosting gratis:** [Oracle Cloud "Always Free"](https://www.oracle.com/cloud/free/) (VM Ampere A1, 2 OCPU/12GB RAM, gratis selamanya bukan trial) — cukup untuk stack ini.
+
+### Setup di VPS
+
+```bash
+git clone https://github.com/hpwiyoto/MyStocks.git
+cd MyStocks
+cp .env.example .env   # isi kredensial MySQL sungguhan + MYSQL_ROOT_PASSWORD
+                        # TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID opsional untuk alert
+docker compose up -d --build
+```
+
+Verifikasi:
+```bash
+docker compose ps                                  # ketiganya harus "Up" / mysql "healthy"
+docker exec mystocks-scheduler-1 python -m scripts.run_daily   # trigger manual, cek log
+curl -I http://localhost:8501                       # HTTP 200
+```
+
+Buka `http://<IP-VPS>:8501` di browser. Untuk domain/HTTPS, pasang reverse proxy (nginx/caddy) di depan port 8501 — di luar scope Fase 6 ini.
+
+**Monitoring:** `scripts/monitor.py` mendeteksi dua jenis kegagalan — gagal ingest eksplisit, dan data "diam-diam basi" (fetch sukses tapi tanggal terbaru tidak maju >4 hari). Tanpa `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`, alert cuma masuk log (`data/logs/pipeline.log` di dalam container `scheduler`); isi keduanya untuk dapat notifikasi Telegram juga.

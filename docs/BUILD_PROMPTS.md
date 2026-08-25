@@ -347,7 +347,7 @@ dan saya akan review UX sebelum masuk ke fase Deployment.
 
 ---
 
-## FASE 6 — Production Deployment
+## FASE 6 — Production Deployment ✅ (sudah selesai)
 
 **Tujuan:** aplikasi berjalan otomatis di VPS. Tanpa mengubah logic model/UI.
 
@@ -358,6 +358,35 @@ manual, kegagalan sudah langsung terlihat di terminal. Saat implementasi, bedaka
 kegagalan: (a) error eksplisit (koneksi gagal, exception — sudah ada retry+isolasi per-ticker
 dari Fase 1) vs (b) "diam-diam basi" (fetch sukses tapi tanggal terbaru di price_history tidak
 maju beberapa hari) — keduanya butuh deteksi terpisah, bukan cuma cek exception.
+
+**Keputusan hosting (2026-08-25)**: user belum punya VPS. Dicek opsi gratis — Oracle Cloud
+"Always Free" (2 OCPU/12GB RAM ARM, gratis selamanya bukan trial, per Juni 2026 turun dari
+4 OCPU/24GB) dipilih sebagai target: satu VPS menjalankan semuanya (MySQL self-host + scheduler
++ Streamlit) via Docker Compose — lebih simpel dioperasikan daripada split
+Streamlit-Cloud+VPS-terpisah, dan Streamlit Community Cloud toh tidak bisa menjalankan cron job
+kita sama sekali (cuma hosting app-nya).
+
+**Catatan implementasi** (dibangun dan diuji SUNGGUHAN dengan `docker compose up` di
+Codespaces — bukan cuma ditulis lalu diasumsikan benar; ini proxy paling dekat untuk VPS Linux
+mana pun yang punya Docker):
+- Satu `Dockerfile` dipakai untuk 2 service (`app` dan `scheduler`) — command beda diatur di
+  `docker-compose.yml`, menghindari duplikasi instalasi dependency di 2 Dockerfile terpisah.
+- Scheduler pakai loop Python polos (`scripts/scheduler_loop.py`), BUKAN cron daemon di dalam
+  container (menghindari kerumitan setup cron/syslog untuk satu job) atau library scheduling
+  tambahan (tidak perlu untuk kasus sesederhana ini). Logika waktu (`next_run_time`) dipisah
+  jadi fungsi murni dan diuji dengan 5 skenario boundary (pagi, tepat sebelum/di/sesudah target,
+  malam) — semua benar termasuk kasus tepat di menit target.
+- `scripts/monitor.py` mendeteksi dua mode kegagalan sesuai keputusan di atas: gagal eksplisit
+  (dari `ingest_price`'s `failures` list) dan data basi (`MAX(date)` per ticker >4 hari dari
+  hari ini). Alert selalu masuk log; kalau `TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` diisi, juga
+  terkirim ke Telegram — diuji kedua jalur (log-only dan deteksi data basi via manipulasi
+  tanggal manual di DB).
+- Diverifikasi end-to-end di dalam container (bukan di host): `docker compose up` →
+  healthcheck MySQL → `docker exec ... python -m scripts.run_daily` menjalankan
+  ingest→features→predict→monitor lengkap dengan networking Docker sungguhan (`MYSQL_HOST=mysql`
+  hostname resolution) → aplikasi Streamlit menampilkan hasilnya lewat Playwright, nol error.
+- `requests` (dipakai langsung oleh `scripts/monitor.py` untuk Telegram, sebelumnya cuma
+  transitive dependency dari yfinance) ditambahkan eksplisit ke `requirements.txt`.
 
 ```
 Siapkan deployment ke VPS + Managed MySQL untuk production (Colab dan Codespaces tidak dipakai
