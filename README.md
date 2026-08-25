@@ -1,6 +1,6 @@
 # MyStocks
 
-Stock AI / Screener untuk saham Indonesia (IDX), dengan feature engineering, model probabilistik (XGBoost/LightGBM), dan dashboard Streamlit.
+Stock AI / Screener untuk saham Indonesia (IDX), dengan feature engineering, model probabilistik (XGBoost, dibandingkan dengan LightGBM & baseline sebelum dipilih — lihat Fase 3), dan dashboard Streamlit.
 
 ## Arsitektur
 
