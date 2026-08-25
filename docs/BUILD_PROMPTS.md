@@ -128,6 +128,16 @@ teknikal murni.
 - Fundamental snapshot disimpan di tabel terpisah (`feature_fundamental_snapshot`, satu baris
   per stock per tanggal snapshot) karena datanya point-in-time, bukan time series harian seperti
   `feature_daily`.
+- **Bug ditemukan & diperbaiki (2026-08-25, dilaporkan user via cross-check ke Stockbit)**:
+  `priceToBook` ADRO tampil 15470 alih-alih ~0.9. Akar masalah dilacak presisi: ADRO/Alamtri
+  Resources melaporkan laporan keuangan dalam USD (`financialCurrency=USD`, perusahaan tambang
+  ekspor) sementara sahamnya diperdagangkan dalam IDR (`currency=IDR`) — yfinance tidak
+  mengonversi `bookValue` sebelum dibagi ke harga IDR. `trailingPE`/EPS dikonfirmasi TIDAK
+  terpengaruh (sudah benar dalam IDR). Diperbaiki di `features/fundamental.py`: kalau
+  `financialCurrency != currency`, ambil kurs live via yfinance (`{financialCurrency}{currency}=X`)
+  dan koreksi `price_to_book`; kalau kurs gagal diambil, disimpan `None` (bukan angka salah).
+  Hasil terkoreksi 15470.588/17705 = 0.874, cocok dengan referensi Stockbit (0.91) dalam
+  toleransi wajar. Ini hanya memengaruhi ADRO dari 10 ticker yang di-track (dicek satu-satu).
 
 ```
 Bangun feature engineering engine di /features dari data di MySQL (fase sebelumnya). Cakupan:
@@ -307,6 +317,12 @@ sungguhan, bukan cuma baca kode):
   bug kode.
 - Filter (keputusan/regime/probabilitas minimum) diuji interaktif — jumlah kartu yang tampil
   berubah sesuai filter dan konsisten dengan data asli.
+- **Bug ditemukan (2026-08-25)**, saat menguji ulang perbaikan P/B di atas dengan DB kosong:
+  `app/data.py` melempar `pandas.errors.DatabaseError` mentah ke UI kalau tabel `predictions`
+  (atau tabel lain) belum ada — sama seperti gap yang sudah diperbaiki di `engine/predict.py`
+  Fase 4, tapi belum diterapkan di layer app. Diperbaiki dengan helper `_missing_tables()`
+  (cek via `sqlalchemy.inspect`) di semua fungsi `app/data.py` — sekarang menampilkan pesan
+  ramah yang sudah ada di `Home.py`, bukan traceback SQL.
 
 ```
 Bangun aplikasi Streamlit di /app yang menyajikan hasil dari prediction engine. Spesifikasi UI:

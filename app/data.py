@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
 import streamlit as st
+from sqlalchemy import inspect
 
 from engine.predict import MODEL_VERSION
 from pipeline.db import get_engine
@@ -19,9 +20,21 @@ MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 CACHE_TTL = 300  # seconds
 
 
+def _missing_tables(engine, required: list[str]) -> list[str]:
+    """Which of `required` tables don't exist yet -- lets each page show a
+    friendly "run this phase first" message instead of a raw SQL traceback
+    when a Streamlit session is opened before pipeline/features/engine have
+    ever populated the database (found via testing: a fresh DB otherwise
+    surfaces pandas.errors.DatabaseError straight to the user)."""
+    inspector = inspect(engine)
+    return [t for t in required if not inspector.has_table(t)]
+
+
 @st.cache_data(ttl=CACHE_TTL)
 def load_latest_predictions() -> pd.DataFrame:
     engine = get_engine()
+    if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
+        return pd.DataFrame()
     df = pd.read_sql(
         """
         SELECT p.stock_code, s.name, s.sector, p.date, p.probability, p.decision,
@@ -48,6 +61,8 @@ def load_latest_predictions() -> pd.DataFrame:
 @st.cache_data(ttl=CACHE_TTL)
 def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
     engine = get_engine()
+    if _missing_tables(engine, ["price_history"]):
+        return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
     df = pd.read_sql(
         """
         SELECT date, open, high, low, close, volume
@@ -65,6 +80,8 @@ def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
 @st.cache_data(ttl=CACHE_TTL)
 def load_latest_feature_row(stock_code: str) -> dict | None:
     engine = get_engine()
+    if _missing_tables(engine, ["feature_daily"]):
+        return None
     df = pd.read_sql(
         """
         SELECT * FROM feature_daily
@@ -80,6 +97,8 @@ def load_latest_feature_row(stock_code: str) -> dict | None:
 @st.cache_data(ttl=CACHE_TTL)
 def load_latest_fundamental(stock_code: str) -> dict | None:
     engine = get_engine()
+    if _missing_tables(engine, ["feature_fundamental_snapshot"]):
+        return None
     df = pd.read_sql(
         """
         SELECT * FROM feature_fundamental_snapshot
@@ -95,12 +114,16 @@ def load_latest_fundamental(stock_code: str) -> dict | None:
 @st.cache_data(ttl=CACHE_TTL)
 def load_stock_list() -> pd.DataFrame:
     engine = get_engine()
+    if _missing_tables(engine, ["stocks"]):
+        return pd.DataFrame(columns=["code", "name", "sector"])
     return pd.read_sql("SELECT code, name, sector FROM stocks ORDER BY code", engine)
 
 
 @st.cache_data(ttl=CACHE_TTL)
 def feature_daily_row_count() -> int:
     engine = get_engine()
+    if _missing_tables(engine, ["feature_daily"]):
+        return 0
     df = pd.read_sql("SELECT COUNT(*) AS c FROM feature_daily", engine)
     return int(df["c"].iloc[0])
 
