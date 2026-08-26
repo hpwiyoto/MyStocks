@@ -1,0 +1,3658 @@
+[
+  {
+    "code": "BBCA",
+    "name": "PT Bank Central Asia Tbk"
+  },
+  {
+    "code": "BYAN",
+    "name": "PT Bayan Resources Tbk."
+  },
+  {
+    "code": "DCII",
+    "name": "PT DCI Indonesia Tbk"
+  },
+  {
+    "code": "BBRI",
+    "name": "PT Bank Rakyat Indonesia (Persero) Tbk"
+  },
+  {
+    "code": "BREN",
+    "name": "PT Barito Renewables Energy Tbk"
+  },
+  {
+    "code": "BMRI",
+    "name": "PT Bank Mandiri (Persero) Tbk"
+  },
+  {
+    "code": "AMMN",
+    "name": "PT Amman Mineral Internasional Tbk"
+  },
+  {
+    "code": "TLKM",
+    "name": "Perusahaan Perseroan (Persero) PT Telekomunikasi Indonesia Tbk"
+  },
+  {
+    "code": "MORA",
+    "name": "PT Mora Telematika Indonesia Tbk"
+  },
+  {
+    "code": "ASII",
+    "name": "PT Astra International Tbk"
+  },
+  {
+    "code": "BRPT",
+    "name": "PT Barito Pacific Tbk"
+  },
+  {
+    "code": "TPIA",
+    "name": "PT Chandra Asri Pacific Tbk"
+  },
+  {
+    "code": "DSSA",
+    "name": "PT Dian Swastatika Sentosa Tbk"
+  },
+  {
+    "code": "SRAJ",
+    "name": "PT Sejahteraraya Anugrahjaya Tbk"
+  },
+  {
+    "code": "DNET",
+    "name": "PT Indoritel Makmur Internasional Tbk."
+  },
+  {
+    "code": "BBNI",
+    "name": "PT Bank Negara Indonesia (Persero) Tbk"
+  },
+  {
+    "code": "EMAS",
+    "name": "PT Merdeka Gold Resources Tbk"
+  },
+  {
+    "code": "SMMA",
+    "name": "PT Sinar Mas Multiartha Tbk"
+  },
+  {
+    "code": "MPRO",
+    "name": "PT Maha Properti Indonesia Tbk"
+  },
+  {
+    "code": "PANI",
+    "name": "PT Pantai Indah Kapuk Dua Tbk"
+  },
+  {
+    "code": "BRMS",
+    "name": "PT Bumi Resources Minerals Tbk"
+  },
+  {
+    "code": "CASA",
+    "name": "PT Capital Financial Indonesia Tbk"
+  },
+  {
+    "code": "CUAN",
+    "name": "PT Petrindo Jaya Kreasi Tbk"
+  },
+  {
+    "code": "ICBP",
+    "name": "PT Indofood CBP Sukses Makmur Tbk"
+  },
+  {
+    "code": "HMSP",
+    "name": "PT Hanjaya Mandala Sampoerna Tbk"
+  },
+  {
+    "code": "CDIA",
+    "name": "PT Chandra Daya Investasi TBK."
+  },
+  {
+    "code": "ISAT",
+    "name": "PT Indosat Tbk"
+  },
+  {
+    "code": "UNTR",
+    "name": "PT United Tractors Tbk"
+  },
+  {
+    "code": "BRIS",
+    "name": "PT Bank Syariah Indonesia Tbk"
+  },
+  {
+    "code": "AADI",
+    "name": "PT Adaro Andalan Indonesia Tbk"
+  },
+  {
+    "code": "BNLI",
+    "name": "PT Bank Permata Tbk"
+  },
+  {
+    "code": "ANTM",
+    "name": "PT Antam (Persero) Tbk"
+  },
+  {
+    "code": "ADRO",
+    "name": "PT Alamtri Resources Indonesia Tbk"
+  },
+  {
+    "code": "IMPC",
+    "name": "PT Impack Pratama Industri Tbk"
+  },
+  {
+    "code": "MDKA",
+    "name": "PT Merdeka Copper Gold Tbk"
+  },
+  {
+    "code": "BUMI",
+    "name": "PT Bumi Resources Tbk"
+  },
+  {
+    "code": "ADMR",
+    "name": "PT Alamtri Minerals Indonesia Tbk"
+  },
+  {
+    "code": "UNVR",
+    "name": "PT Unilever Indonesia Tbk"
+  },
+  {
+    "code": "INDF",
+    "name": "PT Indofood Sukses Makmur Tbk"
+  },
+  {
+    "code": "MLPT",
+    "name": "PT Multipolar Technology Tbk"
+  },
+  {
+    "code": "MBMA",
+    "name": "PT Merdeka Battery Materials Tbk."
+  },
+  {
+    "code": "NCKL",
+    "name": "PT Trimegah Bangun Persada Tbk"
+  },
+  {
+    "code": "AMRT",
+    "name": "PT Sumber Alfaria Trijaya Tbk"
+  },
+  {
+    "code": "PGUN",
+    "name": "PT Pradiksi Gunatama Tbk"
+  },
+  {
+    "code": "INCO",
+    "name": "PT Vale Indonesia Tbk"
+  },
+  {
+    "code": "GOTO",
+    "name": "PT GoTo Gojek Tokopedia Tbk"
+  },
+  {
+    "code": "PTRO",
+    "name": "PT Petrosea Tbk"
+  },
+  {
+    "code": "SUPR",
+    "name": "PT Solusi Tunas Pratama Tbk"
+  },
+  {
+    "code": "CPIN",
+    "name": "PT Charoen Pokphand Indonesia Tbk"
+  },
+  {
+    "code": "EXCL",
+    "name": "PT XLSMART Telecom Sejahtera Tbk"
+  },
+  {
+    "code": "INKP",
+    "name": "PT Indah Kiat Pulp & Paper Tbk"
+  },
+  {
+    "code": "MEGA",
+    "name": "PT Bank Mega Tbk"
+  },
+  {
+    "code": "PGEO",
+    "name": "PT Pertamina Geothermal Energy Tbk"
+  },
+  {
+    "code": "BNGA",
+    "name": "PT Bank CIMB Niaga Tbk"
+  },
+  {
+    "code": "BDMN",
+    "name": "PT Bank Danamon Indonesia Tbk"
+  },
+  {
+    "code": "GEMS",
+    "name": "PT Golden Energy Mines Tbk"
+  },
+  {
+    "code": "VKTR",
+    "name": "PT VKTR Teknologi Mobilitas Tbk"
+  },
+  {
+    "code": "GGRM",
+    "name": "PT Gudang Garam Tbk"
+  },
+  {
+    "code": "TAPG",
+    "name": "PT Triputra Agro Persada Tbk"
+  },
+  {
+    "code": "PGAS",
+    "name": "PT Perusahaan Gas Negara (Persero) Tbk"
+  },
+  {
+    "code": "CMRY",
+    "name": "PT Cisarua Mountain Dairy Tbk"
+  },
+  {
+    "code": "KLBF",
+    "name": "PT Kalbe Farma Tbk."
+  },
+  {
+    "code": "MTEL",
+    "name": "PT Dayamitra Telekomunikasi Tbk."
+  },
+  {
+    "code": "ARCI",
+    "name": "PT Archi Indonesia Tbk"
+  },
+  {
+    "code": "MYOR",
+    "name": "PT Mayora Indah Tbk"
+  },
+  {
+    "code": "BELI",
+    "name": "PT Global Digital Niaga Tbk"
+  },
+  {
+    "code": "MEDC",
+    "name": "PT Medco Energi Internasional Tbk"
+  },
+  {
+    "code": "ENRG",
+    "name": "PT Energi Mega Persada Tbk"
+  },
+  {
+    "code": "TBIG",
+    "name": "PT Tower Bersama Infrastructure Tbk"
+  },
+  {
+    "code": "EMTK",
+    "name": "PT Elang Mahkota Teknologi Tbk"
+  },
+  {
+    "code": "TINS",
+    "name": "PT TIMAH Tbk"
+  },
+  {
+    "code": "NISP",
+    "name": "PT Bank OCBC NISP Tbk"
+  },
+  {
+    "code": "JARR",
+    "name": "PT Jhonlin Agro Raya Tbk"
+  },
+  {
+    "code": "SILO",
+    "name": "PT Siloam International Hospitals Tbk"
+  },
+  {
+    "code": "PTBA",
+    "name": "PT Bukit Asam (Persero) Tbk"
+  },
+  {
+    "code": "GIAA",
+    "name": "PT. Garuda Indonesia (Persero) Tbk"
+  },
+  {
+    "code": "ITMG",
+    "name": "PT Indo Tambangraya Megah Tbk"
+  },
+  {
+    "code": "AKRA",
+    "name": "PT AKR Corporindo Tbk"
+  },
+  {
+    "code": "TOWR",
+    "name": "PT Sarana Menara Nusantara Tbk."
+  },
+  {
+    "code": "SRTG",
+    "name": "PT Saratoga Investama Sedaya Tbk"
+  },
+  {
+    "code": "FAPA",
+    "name": "PT FAP Agri Tbk"
+  },
+  {
+    "code": "JPFA",
+    "name": "PT Japfa Comfeed Indonesia Tbk"
+  },
+  {
+    "code": "MIKA",
+    "name": "PT Mitra Keluarga Karyasehat Tbk"
+  },
+  {
+    "code": "BINA",
+    "name": "PT Bank Ina Perdana Tbk"
+  },
+  {
+    "code": "TKIM",
+    "name": "PT Pabrik Kertas Tjiwi Kimia Tbk"
+  },
+  {
+    "code": "MAPI",
+    "name": "PT. Mitra Adiperkasa Tbk"
+  },
+  {
+    "code": "MDIY",
+    "name": "PT Daya Intiguna Yasa Tbk"
+  },
+  {
+    "code": "BTPN",
+    "name": "PT Bank SMBC Indonesia Tbk"
+  },
+  {
+    "code": "CBDK",
+    "name": "PT Bangun Kosambi Sukses Tbk"
+  },
+  {
+    "code": "PNBN",
+    "name": "PT Bank Pan Indonesia Tbk"
+  },
+  {
+    "code": "MGLV",
+    "name": "PT NexAI Digital Infrastruktur Tbk"
+  },
+  {
+    "code": "MKPI",
+    "name": "PT Metropolitan Kentjana Tbk"
+  },
+  {
+    "code": "NSSS",
+    "name": "PT Nusantara Sawit Sejahtera Tbk"
+  },
+  {
+    "code": "AVIA",
+    "name": "PT Avia Avian Tbk"
+  },
+  {
+    "code": "MSIN",
+    "name": "PT MNC Digital Entertainment Tbk"
+  },
+  {
+    "code": "JSMR",
+    "name": "PT Jasa Marga (Persero) Tbk"
+  },
+  {
+    "code": "BBHI",
+    "name": "PT Allo Bank Indonesia Tbk"
+  },
+  {
+    "code": "ADES",
+    "name": "PT Akasha Wira International Tbk"
+  },
+  {
+    "code": "INTP",
+    "name": "PT Indocement Tunggal Prakarsa Tbk"
+  },
+  {
+    "code": "MAPA",
+    "name": "PT Map Aktif Adiperkasa Tbk"
+  },
+  {
+    "code": "BUVA",
+    "name": "PT Bukit Uluwatu Villa Tbk"
+  },
+  {
+    "code": "SUPA",
+    "name": "PT Super Bank Indonesia Tbk"
+  },
+  {
+    "code": "DEWA",
+    "name": "PT Darma Henwa Tbk"
+  },
+  {
+    "code": "RAJA",
+    "name": "PT Rukun Raharja Tbk"
+  },
+  {
+    "code": "BNBR",
+    "name": "PT Bakrie & Brothers Tbk"
+  },
+  {
+    "code": "BBSI",
+    "name": "PT Krom Bank Indonesia Tbk"
+  },
+  {
+    "code": "BBTN",
+    "name": "PT Bank Tabungan Negara (Persero) Tbk"
+  },
+  {
+    "code": "PSAB",
+    "name": "PT J Resources Asia Pasifik Tbk"
+  },
+  {
+    "code": "SMAR",
+    "name": "PT Sinar Mas Agro Resources and Technology Tbk"
+  },
+  {
+    "code": "ULTJ",
+    "name": "PT Ultrajaya Milk Industry & Trading Company Tbk"
+  },
+  {
+    "code": "DSNG",
+    "name": "PT Dharma Satya Nusantara Tbk"
+  },
+  {
+    "code": "AALI",
+    "name": "PT Astra Agro Lestari Tbk"
+  },
+  {
+    "code": "SOHO",
+    "name": "PT Soho Global Health Tbk"
+  },
+  {
+    "code": "ARKO",
+    "name": "PT Arkora Hydro Tbk"
+  },
+  {
+    "code": "AUTO",
+    "name": "PT Astra Otoparts Tbk"
+  },
+  {
+    "code": "BNII",
+    "name": "PT Bank Maybank Indonesia Tbk"
+  },
+  {
+    "code": "CARE",
+    "name": "PT Metro Healthcare Indonesia Tbk"
+  },
+  {
+    "code": "MLBI",
+    "name": "PT Multi Bintang Indonesia Tbk"
+  },
+  {
+    "code": "RISE",
+    "name": "PT Jaya Sukses Makmur Sentosa Tbk"
+  },
+  {
+    "code": "POWR",
+    "name": "PT Cikarang Listrindo Tbk"
+  },
+  {
+    "code": "INDY",
+    "name": "PT. Indika Energy Tbk"
+  },
+  {
+    "code": "BSIM",
+    "name": "PT Bank Sinarmas Tbk"
+  },
+  {
+    "code": "ARTO",
+    "name": "PT Bank Jago Tbk"
+  },
+  {
+    "code": "JRPT",
+    "name": "PT Jaya Real Property, Tbk."
+  },
+  {
+    "code": "PACK",
+    "name": "PT Abadi Nusantara Hijau Investama Tbk"
+  },
+  {
+    "code": "RLCO",
+    "name": "PT Abadi Lestari Indonesia Tbk"
+  },
+  {
+    "code": "FASW",
+    "name": "PT Fajar Surya Wisesa Tbk"
+  },
+  {
+    "code": "SCMA",
+    "name": "PT Surya Citra Media Tbk"
+  },
+  {
+    "code": "BSDE",
+    "name": "PT Bumi Serpong Damai Tbk"
+  },
+  {
+    "code": "CMNT",
+    "name": "PT Cemindo Gemilang Tbk"
+  },
+  {
+    "code": "PWON",
+    "name": "PT Pakuwon Jati Tbk"
+  },
+  {
+    "code": "MCOL",
+    "name": "PT Prima Andalan Mandiri Tbk"
+  },
+  {
+    "code": "CITA",
+    "name": "PT Cita Mineral Investindo Tbk"
+  },
+  {
+    "code": "BKSL",
+    "name": "PT Sentul City Tbk"
+  },
+  {
+    "code": "BFIN",
+    "name": "PT BFI Finance Indonesia Tbk"
+  },
+  {
+    "code": "STAA",
+    "name": "PT Sumber Tani Agung Resources Tbk"
+  },
+  {
+    "code": "ALII",
+    "name": "PT Ancara Logistics Indonesia Tbk"
+  },
+  {
+    "code": "COIN",
+    "name": "PT Indokripto Koin Semesta Tbk"
+  },
+  {
+    "code": "STTP",
+    "name": "PT Siantar Top Tbk"
+  },
+  {
+    "code": "TSPC",
+    "name": "PT Tempo Scan Pacific Tbk"
+  },
+  {
+    "code": "YUPI",
+    "name": "PT Yupi Indo Jelly Gum Tbk"
+  },
+  {
+    "code": "HRUM",
+    "name": "PT Harum Energy Tbk"
+  },
+  {
+    "code": "RATU",
+    "name": "PT Raharja Energi Cepu Tbk"
+  },
+  {
+    "code": "LIFE",
+    "name": "PT MSIG Life Insurance Indonesia Tbk"
+  },
+  {
+    "code": "BSSR",
+    "name": "PT Baramulti Suksessarana Tbk"
+  },
+  {
+    "code": "CTRA",
+    "name": "PT Ciputra Development Tbk"
+  },
+  {
+    "code": "IBST",
+    "name": "PT Inti Bangun Sejahtera Tbk"
+  },
+  {
+    "code": "TCPI",
+    "name": "PT Transcoal Pacific Tbk"
+  },
+  {
+    "code": "GOOD",
+    "name": "PT Garudafood Putra Putri Jaya Tbk"
+  },
+  {
+    "code": "HRTA",
+    "name": "PT Hartadinata Abadi Tbk"
+  },
+  {
+    "code": "WIFI",
+    "name": "PT Solusi Sinergi Digital Tbk"
+  },
+  {
+    "code": "ADMF",
+    "name": "PT Adira Dinamika Multi Finance Tbk"
+  },
+  {
+    "code": "ESSA",
+    "name": "PT ESSA Industries Indonesia Tbk."
+  },
+  {
+    "code": "PRAY",
+    "name": "PT Famon Awal Bros Sedaya Tbk"
+  },
+  {
+    "code": "SINI",
+    "name": "PT Singaraja Putra Tbk"
+  },
+  {
+    "code": "XSPI",
+    "name": "Dana Investasi Real Estat Simas Plaza Indonesia"
+  },
+  {
+    "code": "BUKA",
+    "name": "PT Bukalapak.com Tbk."
+  },
+  {
+    "code": "BBKP",
+    "name": "PT Bank KB Indonesia Tbk"
+  },
+  {
+    "code": "SIDO",
+    "name": "PT Industri Jamu dan Farmasi Sido Muncul Tbk"
+  },
+  {
+    "code": "POLU",
+    "name": "PT Golden Flower Tbk"
+  },
+  {
+    "code": "SMGR",
+    "name": "PT Semen Indonesia (Persero) Tbk"
+  },
+  {
+    "code": "SMSM",
+    "name": "PT Selamat Sempurna Tbk"
+  },
+  {
+    "code": "LSIP",
+    "name": "PT Perusahaan Perkebunan London Sumatra Indonesia Tbk"
+  },
+  {
+    "code": "HEAL",
+    "name": "PT Medikaloka Hermina Tbk"
+  },
+  {
+    "code": "MDIA",
+    "name": "PT Intermedia Capital Tbk"
+  },
+  {
+    "code": "EDGE",
+    "name": "PT Indointernet Tbk."
+  },
+  {
+    "code": "CLEO",
+    "name": "PT Sariguna Primatirta Tbk"
+  },
+  {
+    "code": "BMAS",
+    "name": "PT Bank Kasikorn Indonesia Tbk"
+  },
+  {
+    "code": "SIMP",
+    "name": "PT Salim Ivomas Pratama Tbk"
+  },
+  {
+    "code": "BIPI",
+    "name": "PT Astrindo Nusantara Infrastruktur Tbk"
+  },
+  {
+    "code": "MIDI",
+    "name": "PT Midi Utama Indonesia Tbk"
+  },
+  {
+    "code": "RMKE",
+    "name": "PT RMK Energy Tbk"
+  },
+  {
+    "code": "CMNP",
+    "name": "PT Citra Marga Nusaphala Persada Tbk"
+  },
+  {
+    "code": "SSIA",
+    "name": "PT Surya Semesta Internusa Tbk"
+  },
+  {
+    "code": "PLIN",
+    "name": "PT Plaza Indonesia Realty Tbk"
+  },
+  {
+    "code": "DUTI",
+    "name": "PT Duta Pertiwi Tbk"
+  },
+  {
+    "code": "BHAT",
+    "name": "PT Bhakti Multi Artha Tbk"
+  },
+  {
+    "code": "SGRO",
+    "name": "PT Prime Agri Resources Tbk"
+  },
+  {
+    "code": "SSMS",
+    "name": "PT Sawit Sumbermas Sarana Tbk."
+  },
+  {
+    "code": "FILM",
+    "name": "PT.MD Entertainment Tbk"
+  },
+  {
+    "code": "DMAS",
+    "name": "PT Puradelta Lestari Tbk"
+  },
+  {
+    "code": "AGII",
+    "name": "PT Samator Indo Gas Tbk"
+  },
+  {
+    "code": "SGER",
+    "name": "PT Sumber Global Energy Tbk"
+  },
+  {
+    "code": "BJBR",
+    "name": "PT Bank Pembangunan Daerah Jawa Barat dan Banten Tbk"
+  },
+  {
+    "code": "WIKA",
+    "name": "PT Wijaya Karya (Persero) Tbk"
+  },
+  {
+    "code": "TMAS",
+    "name": "PT Temas Tbk."
+  },
+  {
+    "code": "INPP",
+    "name": "PT Indonesian Paradise Property Tbk"
+  },
+  {
+    "code": "BBMD",
+    "name": "PT Bank Mestika Dharma Tbk"
+  },
+  {
+    "code": "BJTM",
+    "name": "PT Bank Pembangunan Daerah Jawa Timur Tbk"
+  },
+  {
+    "code": "CNMA",
+    "name": "PT Nusantara Sejahtera Raya Tbk"
+  },
+  {
+    "code": "BTPS",
+    "name": "PT Bank BTPN Syariah Tbk"
+  },
+  {
+    "code": "ABMM",
+    "name": "PT ABM Investama Tbk"
+  },
+  {
+    "code": "ERAA",
+    "name": "PT Erajaya Swasembada Tbk"
+  },
+  {
+    "code": "INET",
+    "name": "PT Sinergi Inti Andalan Prima Tbk"
+  },
+  {
+    "code": "TLDN",
+    "name": "PT Teladan Prima Agro Tbk"
+  },
+  {
+    "code": "PNLF",
+    "name": "PT Panin Financial Tbk"
+  },
+  {
+    "code": "CYBR",
+    "name": "PT ITSEC Asia Tbk"
+  },
+  {
+    "code": "GMFI",
+    "name": "PT Garuda Maintenance Facility Aero Asia Tbk"
+  },
+  {
+    "code": "FORE",
+    "name": "PT Fore Kopi Indonesia Tbk"
+  },
+  {
+    "code": "SMMT",
+    "name": "PT Golden Eagle Energy Tbk"
+  },
+  {
+    "code": "KPIG",
+    "name": "PT MNC Tourism Indonesia Tbk"
+  },
+  {
+    "code": "CLAY",
+    "name": "PT Citra Putra Realty Tbk"
+  },
+  {
+    "code": "SMCB",
+    "name": "PT Solusi Bangun Indonesia Tbk"
+  },
+  {
+    "code": "BULL",
+    "name": "PT Buana Lintas Lautan Tbk"
+  },
+  {
+    "code": "EPMT",
+    "name": "PT Enseval Putera Megatrading Tbk."
+  },
+  {
+    "code": "OMED",
+    "name": "PT Jayamas Medica Industri Tbk"
+  },
+  {
+    "code": "APIC",
+    "name": "PT Pacific Strategic Financial Tbk"
+  },
+  {
+    "code": "MTDL",
+    "name": "PT Metrodata Electronics Tbk"
+  },
+  {
+    "code": "ACES",
+    "name": "PT Aspirasi Hidup Indonesia Tbk"
+  },
+  {
+    "code": "SHIP",
+    "name": "PT Sillo Maritime Perdana Tbk"
+  },
+  {
+    "code": "WBSA",
+    "name": "PT BSA Logistics Indonesia Tbk"
+  },
+  {
+    "code": "BOGA",
+    "name": "PT Apollo Global Interactive Tbk"
+  },
+  {
+    "code": "DMND",
+    "name": "PT Diamond Food Indonesia Tbk"
+  },
+  {
+    "code": "UNIC",
+    "name": "PT Unggul Indah Cahaya Tbk"
+  },
+  {
+    "code": "YULE",
+    "name": "PT Yulie Sekuritas Indonesia Tbk"
+  },
+  {
+    "code": "BSWD",
+    "name": "PT Bank of India Indonesia Tbk"
+  },
+  {
+    "code": "ANJT",
+    "name": "PT Austindo Nusantara Jaya Tbk"
+  },
+  {
+    "code": "NATO",
+    "name": "PT Olympus Strategic Indonesia Tbk"
+  },
+  {
+    "code": "SMRA",
+    "name": "PT Summarecon Agung Tbk"
+  },
+  {
+    "code": "MAYA",
+    "name": "PT Bank Mayapada Internasional Tbk"
+  },
+  {
+    "code": "ELSA",
+    "name": "PT Elnusa Tbk"
+  },
+  {
+    "code": "NICL",
+    "name": "PT PAM Mineral Tbk"
+  },
+  {
+    "code": "TOTL",
+    "name": "PT Total Bangun Persada Tbk"
+  },
+  {
+    "code": "SMDR",
+    "name": "PT Samudera Indonesia Tbk"
+  },
+  {
+    "code": "BPII",
+    "name": "PT Batavia Prosperindo Internasional Tbk"
+  },
+  {
+    "code": "HATM",
+    "name": "PT Habco Trans Maritima Tbk"
+  },
+  {
+    "code": "SAME",
+    "name": "PT Sarana Meditama Metropolitan Tbk"
+  },
+  {
+    "code": "VICI",
+    "name": "PT Victoria Care Indonesia Tbk"
+  },
+  {
+    "code": "BALI",
+    "name": "PT Bali Towerindo Sentra Tbk"
+  },
+  {
+    "code": "MBSS",
+    "name": "PT Mitrabahtera Segara Sejati Tbk"
+  },
+  {
+    "code": "ELPI",
+    "name": "PT Pelayaran Nasional Ekalya Purnamasari Tbk"
+  },
+  {
+    "code": "TUGU",
+    "name": "PT Asuransi Tugu Pratama Indonesia Tbk"
+  },
+  {
+    "code": "GJTL",
+    "name": "PT. Gajah Tunggal Tbk"
+  },
+  {
+    "code": "DRMA",
+    "name": "PT Dharma Polimetal Tbk"
+  },
+  {
+    "code": "MASB",
+    "name": "PT Bank Multiarta Sentosa Tbk"
+  },
+  {
+    "code": "TGKA",
+    "name": "PT Tigaraksa Satria Tbk"
+  },
+  {
+    "code": "TOBA",
+    "name": "PT TBS Energi Utama Tbk"
+  },
+  {
+    "code": "PALM",
+    "name": "PT Provident Investasi Bersama Tbk"
+  },
+  {
+    "code": "JECX",
+    "name": "PT Nitrasanata Dharma"
+  },
+  {
+    "code": "PKPK",
+    "name": "PT Paragon Karya Perkasa Tbk"
+  },
+  {
+    "code": "MPMX",
+    "name": "PT Mitra Pinasthika Mustika Tbk"
+  },
+  {
+    "code": "LPKR",
+    "name": "PT Lippo Karawaci Tbk"
+  },
+  {
+    "code": "KRAS",
+    "name": "PT Krakatau Steel (Persero) Tbk"
+  },
+  {
+    "code": "TRIM",
+    "name": "PT Trimegah Sekuritas Indonesia Tbk"
+  },
+  {
+    "code": "KIJA",
+    "name": "PT Kawasan Industri Jababeka Tbk"
+  },
+  {
+    "code": "TFCO",
+    "name": "PT Tifico Fiber Indonesia Tbk"
+  },
+  {
+    "code": "JTPE",
+    "name": "PT Jasuindo Tiga Perkasa Tbk"
+  },
+  {
+    "code": "MSTI",
+    "name": "PT Mastersystem Infotama Tbk"
+  },
+  {
+    "code": "MARK",
+    "name": "PT Mark Dynamics Indonesia Tbk"
+  },
+  {
+    "code": "AMAR",
+    "name": "PT Bank Amar Indonesia Tbk"
+  },
+  {
+    "code": "BIRD",
+    "name": "PT Blue Bird Tbk"
+  },
+  {
+    "code": "LINK",
+    "name": "PT Link Net Tbk"
+  },
+  {
+    "code": "PBID",
+    "name": "PT Panca Budi Idaman Tbk"
+  },
+  {
+    "code": "BANK",
+    "name": "PT Bank Aladin Syariah Tbk"
+  },
+  {
+    "code": "SURE",
+    "name": "PT Super Energy Tbk"
+  },
+  {
+    "code": "MTLA",
+    "name": "PT Metropolitan Land Tbk"
+  },
+  {
+    "code": "CASS",
+    "name": "PT Cahaya Aero Services Tbk"
+  },
+  {
+    "code": "SOCI",
+    "name": "PT Soechi Lines Tbk"
+  },
+  {
+    "code": "EURO",
+    "name": "PT Estee Gold Feet Tbk"
+  },
+  {
+    "code": "MKAP",
+    "name": "PT Multikarya Asia Pasifik Raya Tbk"
+  },
+  {
+    "code": "TBLA",
+    "name": "PT Tunas Baru Lampung Tbk"
+  },
+  {
+    "code": "NOBU",
+    "name": "PT Bank Nationalnobu Tbk"
+  },
+  {
+    "code": "BEEF",
+    "name": "PT Estika Tata Tiara Tbk"
+  },
+  {
+    "code": "MMIX",
+    "name": "PT Multi Medika Internasional Tbk"
+  },
+  {
+    "code": "PSGO",
+    "name": "PT Palma Serasih Tbk"
+  },
+  {
+    "code": "RDTX",
+    "name": "PT Roda Vivatex Tbk"
+  },
+  {
+    "code": "AGRO",
+    "name": "PT Bank Raya Indonesia Tbk"
+  },
+  {
+    "code": "IATA",
+    "name": "PT MNC Energy Investments Tbk"
+  },
+  {
+    "code": "GGRP",
+    "name": "PT Gunung Raja Paksi Tbk"
+  },
+  {
+    "code": "DKFT",
+    "name": "PT Central Omega Resources Tbk"
+  },
+  {
+    "code": "HEXA",
+    "name": "PT Hexindo Adiperkasa Tbk"
+  },
+  {
+    "code": "NIRO",
+    "name": "PT City Retail Developments Tbk"
+  },
+  {
+    "code": "WIIM",
+    "name": "PT Wismilak Inti Makmur Tbk"
+  },
+  {
+    "code": "LPPF",
+    "name": "PT MDS Retailing Tbk"
+  },
+  {
+    "code": "ARGO",
+    "name": "PT Argo Pantes Tbk"
+  },
+  {
+    "code": "IMAS",
+    "name": "PT Indomobil Sukses Internasional Tbk"
+  },
+  {
+    "code": "DAAZ",
+    "name": "PT Daaz Bara Lestari Tbk"
+  },
+  {
+    "code": "SMIL",
+    "name": "PT Sarana Mitra Luas Tbk"
+  },
+  {
+    "code": "ARNA",
+    "name": "PT Arwana Citramulia Tbk"
+  },
+  {
+    "code": "BBYB",
+    "name": "PT Bank Neo Commerce Tbk"
+  },
+  {
+    "code": "CENT",
+    "name": "PT Centratama Telekomunikasi Indonesia Tbk"
+  },
+  {
+    "code": "BWPT",
+    "name": "PT Eagle High Plantations Tbk"
+  },
+  {
+    "code": "ROTI",
+    "name": "PT Nippon Indosari Corpindo Tbk"
+  },
+  {
+    "code": "JSPT",
+    "name": "PT Jakarta Setiabudi Internasional Tbk"
+  },
+  {
+    "code": "KEJU",
+    "name": "PT Mulia Boga Raya Tbk"
+  },
+  {
+    "code": "SDRA",
+    "name": "PT Bank Woori Saudara Indonesia 1906 Tbk"
+  },
+  {
+    "code": "APLN",
+    "name": "PT Agung Podomoro Land Tbk"
+  },
+  {
+    "code": "GOLF",
+    "name": "PT Intra Golflink Resorts Tbk"
+  },
+  {
+    "code": "LPCK",
+    "name": "PT Lippo Cikarang Tbk"
+  },
+  {
+    "code": "CBRE",
+    "name": "PT Cakra Buana Resources Energi Tbk"
+  },
+  {
+    "code": "KEEN",
+    "name": "PT Kencana Energi Lestari Tbk"
+  },
+  {
+    "code": "BESS",
+    "name": "PT Batulicin Nusantara Maritim Tbk"
+  },
+  {
+    "code": "FPNI",
+    "name": "PT Lotte Chemical Titan Tbk"
+  },
+  {
+    "code": "ROCK",
+    "name": "PT Rockfields Properti Indonesia Tbk."
+  },
+  {
+    "code": "ISSP",
+    "name": "PT Steel Pipe Industry of Indonesia Tbk"
+  },
+  {
+    "code": "UANG",
+    "name": "PT Pakuan Tbk"
+  },
+  {
+    "code": "SAMF",
+    "name": "PT Saraswanti Anugerah Makmur, Tbk"
+  },
+  {
+    "code": "CPRO",
+    "name": "PT Central Proteina Prima Tbk"
+  },
+  {
+    "code": "PNIN",
+    "name": "PT Paninvest Tbk"
+  },
+  {
+    "code": "FISH",
+    "name": "PT FKS Multi Agro Tbk"
+  },
+  {
+    "code": "AGRS",
+    "name": "PT Bank IBK Indonesia Tbk"
+  },
+  {
+    "code": "MDLA",
+    "name": "PT Medela Potentia Tbk"
+  },
+  {
+    "code": "INPC",
+    "name": "PT Bank Artha Graha Internasional Tbk"
+  },
+  {
+    "code": "DWGL",
+    "name": "PT Dwi Guna Laksana Tbk"
+  },
+  {
+    "code": "NEST",
+    "name": "PT Esta Indonesia Tbk"
+  },
+  {
+    "code": "OMRE",
+    "name": "PT Indonesia Prima Property Tbk"
+  },
+  {
+    "code": "MAPB",
+    "name": "PT Map Boga Adiperkasa Tbk"
+  },
+  {
+    "code": "GTSI",
+    "name": "PT GTS Internasional Tbk"
+  },
+  {
+    "code": "MINA",
+    "name": "PT Sanurhasta Mitra Tbk"
+  },
+  {
+    "code": "SKRN",
+    "name": "PT Superkrane Mitra Utama Tbk"
+  },
+  {
+    "code": "SFAN",
+    "name": "PT Surya Fajar Capital Tbk"
+  },
+  {
+    "code": "VISI",
+    "name": "PT Satu Visi Putra Tbk"
+  },
+  {
+    "code": "PNGO",
+    "name": "PT AEP Pinago Plantations Tbk"
+  },
+  {
+    "code": "MNCN",
+    "name": "PT. Media Nusantara Citra Tbk"
+  },
+  {
+    "code": "HUMI",
+    "name": "PT Humpuss Maritim Internasional Tbk"
+  },
+  {
+    "code": "BUKK",
+    "name": "PT Bukaka Teknik Utama Tbk."
+  },
+  {
+    "code": "PSKT",
+    "name": "PT Red Planet Indonesia Tbk"
+  },
+  {
+    "code": "MCOR",
+    "name": "PT Bank China Construction Bank Indonesia Tbk"
+  },
+  {
+    "code": "BGTG",
+    "name": "PT Bank Ganesha Tbk"
+  },
+  {
+    "code": "SMDM",
+    "name": "PT Suryamas Dutamakmur Tbk"
+  },
+  {
+    "code": "PYFA",
+    "name": "PT Pyridam Farma Tbk"
+  },
+  {
+    "code": "DATA",
+    "name": "PT Remala Abadi Tbk"
+  },
+  {
+    "code": "DAYA",
+    "name": "PT Duta Intidaya Tbk"
+  },
+  {
+    "code": "ASGR",
+    "name": "PT Astra Graphia Tbk"
+  },
+  {
+    "code": "PORT",
+    "name": "PT Nusantara Pelabuhan Handal Tbk"
+  },
+  {
+    "code": "MYOH",
+    "name": "PT Samindo Resources Tbk"
+  },
+  {
+    "code": "CTBN",
+    "name": "PT Citra Tubindo Tbk"
+  },
+  {
+    "code": "DOOH",
+    "name": "PT Era Media Sejahtera Tbk"
+  },
+  {
+    "code": "RANS",
+    "name": "PT Rans Entertainmen Indonesia Tbk"
+  },
+  {
+    "code": "ALDO",
+    "name": "PT Alkindo Naratama Tbk"
+  },
+  {
+    "code": "MSJA",
+    "name": "PT Multi Spunindo Jaya Tbk"
+  },
+  {
+    "code": "BNBA",
+    "name": "PT Bank Bumi Arta Tbk"
+  },
+  {
+    "code": "KAEF",
+    "name": "PT Kimia Farma Tbk"
+  },
+  {
+    "code": "MAHA",
+    "name": "PT Mandiri Herindo Adiperkasa Tbk"
+  },
+  {
+    "code": "CBUT",
+    "name": "PT Citra Borneo Utama Tbk"
+  },
+  {
+    "code": "ASRI",
+    "name": "PT Alam Sutera Realty Tbk"
+  },
+  {
+    "code": "TOTO",
+    "name": "PT Surya Toto Indonesia Tbk"
+  },
+  {
+    "code": "PBSA",
+    "name": "PT Paramita Bangun Sarana Tbk"
+  },
+  {
+    "code": "ABDA",
+    "name": "PT Asuransi Bina Dana Arta Tbk"
+  },
+  {
+    "code": "BCIC",
+    "name": "PT Bank JTrust Indonesia Tbk"
+  },
+  {
+    "code": "MGRO",
+    "name": "PT Mahkota Group Tbk"
+  },
+  {
+    "code": "BACA",
+    "name": "PT Bank Capital Indonesia Tbk"
+  },
+  {
+    "code": "RALS",
+    "name": "PT Ramayana Lestari Sentosa Tbk"
+  },
+  {
+    "code": "ALKA",
+    "name": "PT Alakasa Industrindo Tbk"
+  },
+  {
+    "code": "JAWA",
+    "name": "PT Jaya Agra Wattie Tbk"
+  },
+  {
+    "code": "ASSA",
+    "name": "PT Adi Sarana Armada Tbk"
+  },
+  {
+    "code": "IRSX",
+    "name": "PT Folago Global Nusantara Tbk"
+  },
+  {
+    "code": "WINS",
+    "name": "PT Wintermar Offshore Marine Tbk"
+  },
+  {
+    "code": "UDNG",
+    "name": "PT Agro Bahari Nusantara Tbk"
+  },
+  {
+    "code": "FUTR",
+    "name": "PT Futura Energi Global Tbk"
+  },
+  {
+    "code": "TEBE",
+    "name": "PT Dana Brata Luhur Tbk"
+  },
+  {
+    "code": "BABP",
+    "name": "PT Bank MNC Internasional Tbk"
+  },
+  {
+    "code": "PRDA",
+    "name": "PT Prodia Widyahusada Tbk"
+  },
+  {
+    "code": "VICO",
+    "name": "PT Victoria Investama Tbk"
+  },
+  {
+    "code": "BCAP",
+    "name": "PT MNC Kapital Indonesia Tbk"
+  },
+  {
+    "code": "DNAR",
+    "name": "PT Bank Oke Indonesia Tbk"
+  },
+  {
+    "code": "BRAM",
+    "name": "PT Indo Kordsa Tbk"
+  },
+  {
+    "code": "BISI",
+    "name": "PT BISI International Tbk"
+  },
+  {
+    "code": "BHIT",
+    "name": "PT MNC Asia Holding Tbk"
+  },
+  {
+    "code": "FAST",
+    "name": "PT Fast Food Indonesia Tbk"
+  },
+  {
+    "code": "IPCC",
+    "name": "PT Indonesia Kendaraan Terminal Tbk"
+  },
+  {
+    "code": "IFSH",
+    "name": "PT Ifishdeco Tbk"
+  },
+  {
+    "code": "NETV",
+    "name": "PT MDTV Media Technologies Tbk"
+  },
+  {
+    "code": "MMLP",
+    "name": "PT Mega Manunggal Property Tbk"
+  },
+  {
+    "code": "DGWG",
+    "name": "PT Delta Giri Wacana Tbk"
+  },
+  {
+    "code": "OASA",
+    "name": "PT Maharaksa Biru Energi Tbk"
+  },
+  {
+    "code": "STAR",
+    "name": "PT Buana Artha Anugerah Tbk"
+  },
+  {
+    "code": "KETR",
+    "name": "PT Ketrosden Triasmitra"
+  },
+  {
+    "code": "MTMH",
+    "name": "PT Murni Sadar Tbk"
+  },
+  {
+    "code": "IFII",
+    "name": "PT Indonesia Fibreboard Industry Tbk"
+  },
+  {
+    "code": "KMTR",
+    "name": "PT Kirana Megatara Tbk"
+  },
+  {
+    "code": "JGLE",
+    "name": "PT Graha Andrasentra Propertindo Tbk"
+  },
+  {
+    "code": "PNBS",
+    "name": "PT Bank Panin Dubai Syariah Tbk"
+  },
+  {
+    "code": "UCID",
+    "name": "PT Uni-Charm Indonesia Tbk"
+  },
+  {
+    "code": "LPGI",
+    "name": "PT Lippo General Insurance Tbk"
+  },
+  {
+    "code": "SCCO",
+    "name": "PT Supreme Cable Manufacturing & Commerce Tbk"
+  },
+  {
+    "code": "BACH",
+    "name": "PT Bach Multi Global Tbk."
+  },
+  {
+    "code": "AMAG",
+    "name": "PT Asuransi Multi Artha Guna Tbk"
+  },
+  {
+    "code": "AYAM",
+    "name": "PT Janu Putra Sejahtera Tbk."
+  },
+  {
+    "code": "BMTR",
+    "name": "PT Global Mediacom Tbk"
+  },
+  {
+    "code": "IMJS",
+    "name": "PT Indomobil Multi Jasa Tbk"
+  },
+  {
+    "code": "BOLT",
+    "name": "PT Garuda Metalindo Tbk"
+  },
+  {
+    "code": "KINO",
+    "name": "PT Kino Indonesia Tbk"
+  },
+  {
+    "code": "BLES",
+    "name": "PT Superior Prima Sukses Tbk"
+  },
+  {
+    "code": "BKSW",
+    "name": "PT Bank QNB Indonesia Tbk"
+  },
+  {
+    "code": "AGAR",
+    "name": "PT Asia Sejahtera Mina Tbk"
+  },
+  {
+    "code": "MBAP",
+    "name": "PT Mitrabara Adiperdana Tbk"
+  },
+  {
+    "code": "INDS",
+    "name": "PT Indospring Tbk"
+  },
+  {
+    "code": "DVLA",
+    "name": "PT Darya-Varia Laboratoria Tbk"
+  },
+  {
+    "code": "MERK",
+    "name": "PT Merck Tbk"
+  },
+  {
+    "code": "DOID",
+    "name": "PT Buma Internasional Grup Tbk"
+  },
+  {
+    "code": "BLTZ",
+    "name": "PT Graha Layar Prima Tbk"
+  },
+  {
+    "code": "SUNI",
+    "name": "PT Sunindo Pratama Tbk"
+  },
+  {
+    "code": "PMJS",
+    "name": "PT Putra Mandiri Jembar Tbk"
+  },
+  {
+    "code": "DEPO",
+    "name": "PT Caturkarda Depo Bangunan Tbk"
+  },
+  {
+    "code": "ELTY",
+    "name": "PT Bakrieland Development Tbk"
+  },
+  {
+    "code": "BVIC",
+    "name": "PT Bank Victoria International Tbk"
+  },
+  {
+    "code": "SMBR",
+    "name": "PT Semen Baturaja (Persero) Tbk"
+  },
+  {
+    "code": "KOTA",
+    "name": "PT DMS Propertindo Tbk"
+  },
+  {
+    "code": "SPTO",
+    "name": "PT Surya Pertiwi Tbk"
+  },
+  {
+    "code": "CSAP",
+    "name": "PT Catur Sentosa Adiprana Tbk"
+  },
+  {
+    "code": "PSSI",
+    "name": "PT IMC Pelita Logistik Tbk"
+  },
+  {
+    "code": "NICE",
+    "name": "PT Adhi Kartiko Pratama Tbk"
+  },
+  {
+    "code": "GRIA",
+    "name": "PT Ingria Pratama Capitalindo Tbk"
+  },
+  {
+    "code": "FMII",
+    "name": "PT Fortune Mate Indonesia Tbk"
+  },
+  {
+    "code": "INDR",
+    "name": "PT. Indo-Rama Synthetics Tbk"
+  },
+  {
+    "code": "SONA",
+    "name": "PT Sona Topas Tourism Industry Tbk"
+  },
+  {
+    "code": "BMHS",
+    "name": "PT Bundamedik Tbk"
+  },
+  {
+    "code": "IPCM",
+    "name": "PT Jasa Armada Indonesia Tbk"
+  },
+  {
+    "code": "CARS",
+    "name": "PT Industri dan Perdagangan Bintraco Dharma Tbk"
+  },
+  {
+    "code": "TPMA",
+    "name": "PT Trans Power Marine Tbk"
+  },
+  {
+    "code": "RONY",
+    "name": "PT Aesler Grup Internasional Tbk"
+  },
+  {
+    "code": "POLI",
+    "name": "PT Pollux Hotels Group Tbk"
+  },
+  {
+    "code": "PTSN",
+    "name": "PT Sat Nusapersada Tbk"
+  },
+  {
+    "code": "ERAL",
+    "name": "PT Sinar Eka Selaras Tbk"
+  },
+  {
+    "code": "TRIN",
+    "name": "PT Perintis Triniti Properti Tbk"
+  },
+  {
+    "code": "CSRA",
+    "name": "PT Cisadane Sawit Raya Tbk"
+  },
+  {
+    "code": "MLIA",
+    "name": "PT Mulia Industrindo Tbk"
+  },
+  {
+    "code": "ACST",
+    "name": "PT Acset Indonusa Tbk"
+  },
+  {
+    "code": "ASLI",
+    "name": "PT Asri Karya Lestari Tbk"
+  },
+  {
+    "code": "MAIN",
+    "name": "PT Malindo Feedmill Tbk"
+  },
+  {
+    "code": "GSMF",
+    "name": "PT Equity Development Investment Tbk"
+  },
+  {
+    "code": "MKTR",
+    "name": "PT Menthobi Karyatama Raya Tbk"
+  },
+  {
+    "code": "ITMA",
+    "name": "PT Sumber Energi Andalan Tbk"
+  },
+  {
+    "code": "NRCA",
+    "name": "PT Nusa Raya Cipta Tbk"
+  },
+  {
+    "code": "MLPL",
+    "name": "PT Multipolar Tbk"
+  },
+  {
+    "code": "AMFG",
+    "name": "PT Asahimas Flat Glass Tbk"
+  },
+  {
+    "code": "GMTD",
+    "name": "PT Gowa Makassar Tourism Development Tbk"
+  },
+  {
+    "code": "DLTA",
+    "name": "PT Delta Djakarta Tbk"
+  },
+  {
+    "code": "SIPD",
+    "name": "PT Sreeya Sewu Indonesia Tbk"
+  },
+  {
+    "code": "KKGI",
+    "name": "PT Resource Alam Indonesia Tbk"
+  },
+  {
+    "code": "CFIN",
+    "name": "PT. Clipan Finance Indonesia Tbk"
+  },
+  {
+    "code": "HERO",
+    "name": "PT DFI Retail Nusantara Tbk"
+  },
+  {
+    "code": "JKON",
+    "name": "PT Jaya Konstruksi Manggala Pratama Tbk"
+  },
+  {
+    "code": "TRGU",
+    "name": "PT Cerestar Indonesia Tbk"
+  },
+  {
+    "code": "IPTV",
+    "name": "PT MNC Vision Networks Tbk"
+  },
+  {
+    "code": "EKAD",
+    "name": "PT Ekadharma International Tbk"
+  },
+  {
+    "code": "SKLT",
+    "name": "PT Sekar Laut Tbk"
+  },
+  {
+    "code": "PSAT",
+    "name": "PT Pancaran Samudera Transport Tbk"
+  },
+  {
+    "code": "DMMX",
+    "name": "PT Digital Mediatama Maxima Tbk"
+  },
+  {
+    "code": "WOOD",
+    "name": "PT Integra Indocabinet Tbk"
+  },
+  {
+    "code": "KBLI",
+    "name": "PT KMI Wire and Cable Tbk"
+  },
+  {
+    "code": "CEKA",
+    "name": "PT Wilmar Cahaya Indonesia Tbk."
+  },
+  {
+    "code": "GWSA",
+    "name": "PT Greenwood Sejahtera Tbk"
+  },
+  {
+    "code": "BLOG",
+    "name": "PT Trimitra Trans Persada Tbk"
+  },
+  {
+    "code": "RAAM",
+    "name": "PT Tripar Multivision Plus Tbk"
+  },
+  {
+    "code": "TRST",
+    "name": "PT Trias Sentosa Tbk"
+  },
+  {
+    "code": "BKDP",
+    "name": "PT Bukit Darmo Property Tbk"
+  },
+  {
+    "code": "PTPP",
+    "name": "PT PP (Persero) Tbk"
+  },
+  {
+    "code": "BSBK",
+    "name": "PT Wulandari Bangun Laksana Tbk"
+  },
+  {
+    "code": "DILD",
+    "name": "PT Intiland Development Tbk"
+  },
+  {
+    "code": "LTLS",
+    "name": "PT Lautan Luas Tbk"
+  },
+  {
+    "code": "BEST",
+    "name": "PT Bekasi Fajar Industrial Estate Tbk"
+  },
+  {
+    "code": "TIFA",
+    "name": "PT KDB Tifa Finance Tbk"
+  },
+  {
+    "code": "NFCX",
+    "name": "PT NFC Indonesia Tbk"
+  },
+  {
+    "code": "VERN",
+    "name": "PT Verona Indah Pictures Tbk"
+  },
+  {
+    "code": "BEKS",
+    "name": "PT. Bank Pembangunan Daerah Banten, Tbk"
+  },
+  {
+    "code": "BLUE",
+    "name": "PT Berkah Prima Perkasa Tbk"
+  },
+  {
+    "code": "AISA",
+    "name": "PT FKS Food Sejahtera Tbk"
+  },
+  {
+    "code": "ADHI",
+    "name": "PT Adhi Karya (Persero) Tbk"
+  },
+  {
+    "code": "PANS",
+    "name": "PT Panin Sekuritas Tbk"
+  },
+  {
+    "code": "ADCP",
+    "name": "PT Adhi Commuter Properti Tbk"
+  },
+  {
+    "code": "BBLD",
+    "name": "PT Buana Finance Tbk"
+  },
+  {
+    "code": "ARII",
+    "name": "PT Atlas Resources Tbk"
+  },
+  {
+    "code": "PPRE",
+    "name": "PT PP Presisi Tbk"
+  },
+  {
+    "code": "ATIC",
+    "name": "PT Anabatic Technologies Tbk"
+  },
+  {
+    "code": "TCID",
+    "name": "PT. Mandom Indonesia Tbk"
+  },
+  {
+    "code": "PADI",
+    "name": "PT Minna Padi Investama Sekuritas Tbk"
+  },
+  {
+    "code": "GDST",
+    "name": "PT Gunawan Dianjaya Steel Tbk"
+  },
+  {
+    "code": "PPRO",
+    "name": "PT Pembangunan Perumahan Properti Tbk"
+  },
+  {
+    "code": "GZCO",
+    "name": "PT Gozco Plantations Tbk"
+  },
+  {
+    "code": "PTPW",
+    "name": "PT Pratama Widya Tbk"
+  },
+  {
+    "code": "PDPP",
+    "name": "PT Primadaya Plastisindo Tbk"
+  },
+  {
+    "code": "BUAH",
+    "name": "PT Segar Kumala Indonesia Tbk"
+  },
+  {
+    "code": "ADMG",
+    "name": "PT. Polychem Indonesia Tbk"
+  },
+  {
+    "code": "YPAS",
+    "name": "PT Yanaprima Hastapersada Tbk"
+  },
+  {
+    "code": "JIHD",
+    "name": "PT Jakarta International Hotels & Development Tbk"
+  },
+  {
+    "code": "CAMP",
+    "name": "PT Campina Ice Cream Industry, Tbk."
+  },
+  {
+    "code": "FORU",
+    "name": "PT Fortune Indonesia Tbk"
+  },
+  {
+    "code": "ARTA",
+    "name": "PT Arthavest Tbk"
+  },
+  {
+    "code": "BUDI",
+    "name": "PT Budi Starch & Sweetener Tbk"
+  },
+  {
+    "code": "MFMI",
+    "name": "PT Multifiling Mitra Indonesia Tbk"
+  },
+  {
+    "code": "TALF",
+    "name": "PT Tunas Alfin Tbk"
+  },
+  {
+    "code": "MINE",
+    "name": "PT SINAR TERANG MANDIRI Tbk"
+  },
+  {
+    "code": "NICK",
+    "name": "PT Charnic Capital Tbk"
+  },
+  {
+    "code": "BBRM",
+    "name": "PT Pelayaran Nasional Bina Buana Raya Tbk"
+  },
+  {
+    "code": "WOMF",
+    "name": "PT Wahana Ottomitra Multiartha Tbk"
+  },
+  {
+    "code": "CITY",
+    "name": "PT Natura City Developments Tbk"
+  },
+  {
+    "code": "BSML",
+    "name": "PT Bintang Samudera Mandiri Lines Tbk"
+  },
+  {
+    "code": "SQMI",
+    "name": "PT Wilton Makmur Indonesia Tbk."
+  },
+  {
+    "code": "VOKS",
+    "name": "PT Voksel Electric Tbk"
+  },
+  {
+    "code": "TAMU",
+    "name": "PT Pelayaran Tamarin Samudra Tbk"
+  },
+  {
+    "code": "RELI",
+    "name": "PT Reliance Sekuritas Indonesia Tbk"
+  },
+  {
+    "code": "SKBM",
+    "name": "PT Sekar Bumi Tbk"
+  },
+  {
+    "code": "WIRG",
+    "name": "PT WIR ASIA Tbk"
+  },
+  {
+    "code": "KSIX",
+    "name": "PT Kentanix Supra International Tbk"
+  },
+  {
+    "code": "RODA",
+    "name": "PT Pikko Land Development Tbk"
+  },
+  {
+    "code": "RSCH",
+    "name": "PT Charlie Hospital Semarang Tbk"
+  },
+  {
+    "code": "BOLA",
+    "name": "PT Bali Bintang Sejahtera Tbk"
+  },
+  {
+    "code": "TBMS",
+    "name": "PT Tembaga Mulia Semanan Tbk"
+  },
+  {
+    "code": "AMAN",
+    "name": "PT Makmur Berkah Amanda Tbk"
+  },
+  {
+    "code": "ASLC",
+    "name": "PT Autopedia Sukses Lestari Tbk"
+  },
+  {
+    "code": "GHON",
+    "name": "PT Gihon Telekomunikasi Indonesia Tbk"
+  },
+  {
+    "code": "SPMA",
+    "name": "PT Suparma Tbk"
+  },
+  {
+    "code": "WMPP",
+    "name": "PT Widodo Makmur Perkasa Tbk"
+  },
+  {
+    "code": "RSGK",
+    "name": "PT Kedoya Adyaraya Tbk"
+  },
+  {
+    "code": "LIVE",
+    "name": "PT Homeco Victoria Makmur Tbk"
+  },
+  {
+    "code": "AREA",
+    "name": "PT Dunia Virtual Online Tbk"
+  },
+  {
+    "code": "BLTA",
+    "name": "PT Berlian Laju Tanker Tbk"
+  },
+  {
+    "code": "BELL",
+    "name": "PT Trisula Textile Industries Tbk"
+  },
+  {
+    "code": "HITS",
+    "name": "PT Humpuss Intermoda Transportasi Tbk."
+  },
+  {
+    "code": "INDO",
+    "name": "PT Royalindo Investa Wijaya Tbk"
+  },
+  {
+    "code": "INRU",
+    "name": "PT Toba Pulp Lestari Tbk"
+  },
+  {
+    "code": "GULA",
+    "name": "PT Aman Agrindo Tbk"
+  },
+  {
+    "code": "SOSS",
+    "name": "PT Alsok Indonesia Services Tbk"
+  },
+  {
+    "code": "RANC",
+    "name": "PT Supra Boga Lestari Tbk"
+  },
+  {
+    "code": "HGII",
+    "name": "PT Hero Global Investment Tbk"
+  },
+  {
+    "code": "VIVA",
+    "name": "PT Visi Media Asia Tbk"
+  },
+  {
+    "code": "FOLK",
+    "name": "PT Multi Garam Utama Tbk"
+  },
+  {
+    "code": "AMOR",
+    "name": "PT Ashmore Asset Management Indonesia Tbk"
+  },
+  {
+    "code": "MOLI",
+    "name": "PT Madusari Murni Indah Tbk"
+  },
+  {
+    "code": "JELI",
+    "name": "PT Niramas Utama Tbk."
+  },
+  {
+    "code": "WSBP",
+    "name": "PT Waskita Beton Precast Tbk"
+  },
+  {
+    "code": "MITI",
+    "name": "PT Mitra Investindo Tbk"
+  },
+  {
+    "code": "ZINC",
+    "name": "PT Kapuas Prima Coal Tbk"
+  },
+  {
+    "code": "KDSI",
+    "name": "PT Kedawung Setia Industrial Tbk"
+  },
+  {
+    "code": "KING",
+    "name": "PT Hoffmen Cleanindo Tbk"
+  },
+  {
+    "code": "ATAP",
+    "name": "PT Trimitra Prawara Goldland Tbk"
+  },
+  {
+    "code": "PGJO",
+    "name": "PT Bahtera Bumi Raya Tbk"
+  },
+  {
+    "code": "CMPP",
+    "name": "PT AirAsia Indonesia Tbk"
+  },
+  {
+    "code": "PJAA",
+    "name": "PT Pembangunan Jaya Ancol Tbk"
+  },
+  {
+    "code": "IPOL",
+    "name": "PT Indopoly Swakarsa Industry Tbk"
+  },
+  {
+    "code": "IBOS",
+    "name": "PT Indo Boga Sukses Tbk"
+  },
+  {
+    "code": "MTWI",
+    "name": "PT Malacca Trust Wuwungan Insurance Tbk"
+  },
+  {
+    "code": "PADA",
+    "name": "PT Personel Alih Daya Tbk"
+  },
+  {
+    "code": "BDKR",
+    "name": "PT Berdikari Pondasi Perkasa Tbk"
+  },
+  {
+    "code": "SMGA",
+    "name": "PT Sumber Mineral Global Abadi Tbk"
+  },
+  {
+    "code": "PTMR",
+    "name": "PT Master Print Tbk"
+  },
+  {
+    "code": "STRK",
+    "name": "PT Lovina Beach Brewery Tbk"
+  },
+  {
+    "code": "WTON",
+    "name": "PT Wijaya Karya Beton Tbk"
+  },
+  {
+    "code": "CBPE",
+    "name": "PT Citra Buana Prasida Tbk"
+  },
+  {
+    "code": "CHIP",
+    "name": "PT Pelita Teknologi Global Tbk"
+  },
+  {
+    "code": "KONI",
+    "name": "PT Perdana Bangun Pusaka Tbk"
+  },
+  {
+    "code": "DGIK",
+    "name": "PT Nusa Konstruksi Enjiniring Tbk"
+  },
+  {
+    "code": "PIPA",
+    "name": "PT Oxala Energy International Tbk"
+  },
+  {
+    "code": "AXIO",
+    "name": "PT Tera Data Indonusa Tbk"
+  },
+  {
+    "code": "LFLO",
+    "name": "PT Imago Mulia Persada Tbk"
+  },
+  {
+    "code": "URBN",
+    "name": "PT Urban Jakarta Propertindo Tbk."
+  },
+  {
+    "code": "SWID",
+    "name": "PT Saraswanti Indoland Development Tbk"
+  },
+  {
+    "code": "APEX",
+    "name": "PT Apexindo Pratama Duta Tbk"
+  },
+  {
+    "code": "LABS",
+    "name": "PT UBC Medical Indonesia Tbk"
+  },
+  {
+    "code": "WMUU",
+    "name": "PT Widodo Makmur Unggas Tbk"
+  },
+  {
+    "code": "BIKE",
+    "name": "PT Sepeda Bersama Indonesia Tbk"
+  },
+  {
+    "code": "IKBI",
+    "name": "PT Sumi Indo Kabel Tbk"
+  },
+  {
+    "code": "BPFI",
+    "name": "PT Woori Finance Indonesia Tbk"
+  },
+  {
+    "code": "HDFA",
+    "name": "PT Radana Bhaskara Finance Tbk"
+  },
+  {
+    "code": "MSKY",
+    "name": "PT MNC Sky Vision Tbk"
+  },
+  {
+    "code": "SOTS",
+    "name": "PT Satria Mega Kencana Tbk"
+  },
+  {
+    "code": "SHID",
+    "name": "PT Hotel Sahid Jaya International Tbk"
+  },
+  {
+    "code": "LEAD",
+    "name": "PT Logindo Samudramakmur Tbk."
+  },
+  {
+    "code": "ZONE",
+    "name": "PT Mega Perintis Tbk"
+  },
+  {
+    "code": "MPPA",
+    "name": "PT Matahari Putra Prima Tbk"
+  },
+  {
+    "code": "ZATA",
+    "name": "PT Bersama Zatta Jaya Tbk"
+  },
+  {
+    "code": "BABY",
+    "name": "PT Multitrend Indo Tbk"
+  },
+  {
+    "code": "SOFA",
+    "name": "PT Solusi Environment Asia Tbk"
+  },
+  {
+    "code": "MDLN",
+    "name": "PT Modernland Realty Tbk"
+  },
+  {
+    "code": "TIRT",
+    "name": "PT Tirta Mahakam Resources Tbk"
+  },
+  {
+    "code": "BRNA",
+    "name": "PT Berlina Tbk"
+  },
+  {
+    "code": "PANR",
+    "name": "PT Panorama Sentrawisata Tbk"
+  },
+  {
+    "code": "EMMI",
+    "name": "PT Esa Medika Mandiri Tbk"
+  },
+  {
+    "code": "SULI",
+    "name": "PT SLJ Global Tbk"
+  },
+  {
+    "code": "PMUI",
+    "name": "PT Prima Multi Usaha Indonesia Tbk"
+  },
+  {
+    "code": "AWAN",
+    "name": "PT Era Digital Media Tbk"
+  },
+  {
+    "code": "IRRA",
+    "name": "PT Itama Ranoraya Tbk"
+  },
+  {
+    "code": "PBRX",
+    "name": "PT Pan Brothers Tbk"
+  },
+  {
+    "code": "PEVE",
+    "name": "PT. Penta Valent Tbk"
+  },
+  {
+    "code": "HOKI",
+    "name": "PT Buyung Poetra Sembada Tbk"
+  },
+  {
+    "code": "HOPE",
+    "name": "PT Harapan Duta Pertiwi Tbk"
+  },
+  {
+    "code": "UNTD",
+    "name": "PT Terang Dunia Internusa Tbk"
+  },
+  {
+    "code": "WEGE",
+    "name": "PT Wijaya Karya Bangunan Gedung Tbk"
+  },
+  {
+    "code": "GUNA",
+    "name": "PT Gunanusa Eramandiri Tbk"
+  },
+  {
+    "code": "CHEK",
+    "name": "PT Diastika Biotekindo Tbk"
+  },
+  {
+    "code": "PZZA",
+    "name": "PT Sarimelati Kencana Tbk"
+  },
+  {
+    "code": "TRIS",
+    "name": "PT Trisula International Tbk"
+  },
+  {
+    "code": "IDPR",
+    "name": "PT Indonesia Pondasi Raya Tbk"
+  },
+  {
+    "code": "MHKI",
+    "name": "PT Multi Hanna Kreasindo Tbk"
+  },
+  {
+    "code": "KOKA",
+    "name": "PT Koka Indonesia Tbk"
+  },
+  {
+    "code": "VTNY",
+    "name": "PT Venteny Fortuna International Tbk"
+  },
+  {
+    "code": "DART",
+    "name": "PT Duta Anggada Realty Tbk."
+  },
+  {
+    "code": "ELIT",
+    "name": "PT Data Sinergitama Jaya Tbk"
+  },
+  {
+    "code": "UNSP",
+    "name": "PT Bakrie Sumatera Plantations Tbk"
+  },
+  {
+    "code": "NIKL",
+    "name": "PT Pelat Timah Nusantara Tbk"
+  },
+  {
+    "code": "ENAK",
+    "name": "PT Champ Resto Indonesia Tbk"
+  },
+  {
+    "code": "FITT",
+    "name": "PT Hotel Fitra International Tbk"
+  },
+  {
+    "code": "SURI",
+    "name": "PT Maja Agung Latexindo Tbk"
+  },
+  {
+    "code": "SMKL",
+    "name": "PT Satyamitra Kemas Lestari Tbk"
+  },
+  {
+    "code": "BOAT",
+    "name": "PT Newport Marine Services TBK"
+  },
+  {
+    "code": "CLPI",
+    "name": "PT Colorpak Indonesia Tbk"
+  },
+  {
+    "code": "KOCI",
+    "name": "PT Kokoh Exa Nusantara Tbk"
+  },
+  {
+    "code": "BBSS",
+    "name": "PT Bumi Benowo Sukses Sejahtera Tbk"
+  },
+  {
+    "code": "MDKI",
+    "name": "PT Emdeki Utama Tbk"
+  },
+  {
+    "code": "MAXI",
+    "name": "PT Maxindo Karya Anugerah Tbk"
+  },
+  {
+    "code": "AHAP",
+    "name": "PT Asuransi Harta Aman Pratama Tbk"
+  },
+  {
+    "code": "JECC",
+    "name": "PT Jembo Cable Company Tbk"
+  },
+  {
+    "code": "NELY",
+    "name": "PT Pelayaran Nelly Dwi Putri Tbk"
+  },
+  {
+    "code": "HAIS",
+    "name": "PT Hasnur Internasional Shipping Tbk"
+  },
+  {
+    "code": "MREI",
+    "name": "PT Maskapai Reasuransi Indonesia Tbk"
+  },
+  {
+    "code": "GPRA",
+    "name": "PT Perdana Gapuraprima Tbk"
+  },
+  {
+    "code": "GLVA",
+    "name": "PT Galva Technologies Tbk"
+  },
+  {
+    "code": "LUCY",
+    "name": "PT Lima Dua Lima Tiga Tbk"
+  },
+  {
+    "code": "SSTM",
+    "name": "PT Sunson Textile Manufacturer Tbk"
+  },
+  {
+    "code": "BAJA",
+    "name": "PT Saranacentral Bajatama Tbk"
+  },
+  {
+    "code": "BTEK",
+    "name": "PT Bumi Teknokultura Unggul Tbk"
+  },
+  {
+    "code": "GDYR",
+    "name": "PT Goodyear Indonesia Tbk"
+  },
+  {
+    "code": "BAYU",
+    "name": "PT Bayu Buana Tbk"
+  },
+  {
+    "code": "KDTN",
+    "name": "PT Puri Sentul Permai Tbk"
+  },
+  {
+    "code": "FUJI",
+    "name": "PT Fuji Finance Indonesia Tbk"
+  },
+  {
+    "code": "HYGN",
+    "name": "PT Ecocare Indo Pasifik Tbk"
+  },
+  {
+    "code": "PEGE",
+    "name": "PT Panca Global Kapital Tbk"
+  },
+  {
+    "code": "INPS",
+    "name": "PT Indah Prakasa Sentosa Tbk"
+  },
+  {
+    "code": "MUTU",
+    "name": "PT Mutuagung Lestari Tbk"
+  },
+  {
+    "code": "IGAR",
+    "name": "PT Champion Pacific Indonesia Tbk"
+  },
+  {
+    "code": "GTRA",
+    "name": "PT Grahaprima Suksesmandiri Tbk"
+  },
+  {
+    "code": "SRSN",
+    "name": "PT Indo Acidatama Tbk"
+  },
+  {
+    "code": "VRNA",
+    "name": "PT Mizuho Leasing Indonesia Tbk"
+  },
+  {
+    "code": "GTBO",
+    "name": "PT Garda Tujuh Buana Tbk"
+  },
+  {
+    "code": "KMDS",
+    "name": "PT Kurniamitra Duta Sentosa, Tbk"
+  },
+  {
+    "code": "ESTA",
+    "name": "PT Esta Multi Usaha Tbk"
+  },
+  {
+    "code": "CSIS",
+    "name": "PT Cahayasakti Investindo Sukses Tbk"
+  },
+  {
+    "code": "UFOE",
+    "name": "PT Damai Sejahtera Abadi Tbk"
+  },
+  {
+    "code": "RIGS",
+    "name": "PT Rig Tenders Indonesia Tbk"
+  },
+  {
+    "code": "MTFN",
+    "name": "PT Capitalinc Investment Tbk"
+  },
+  {
+    "code": "HALO",
+    "name": "PT Haloni Jane Tbk"
+  },
+  {
+    "code": "ASPR",
+    "name": "PT Asia Pramulia Tbk"
+  },
+  {
+    "code": "CRAB",
+    "name": "PT Toba Surimi Industries Tbk"
+  },
+  {
+    "code": "PRIM",
+    "name": "PT Royal Prima Tbk"
+  },
+  {
+    "code": "SAFE",
+    "name": "PT Steady Safe Tbk"
+  },
+  {
+    "code": "PNSE",
+    "name": "PT Pudjiadi and Sons Tbk"
+  },
+  {
+    "code": "DPUM",
+    "name": "PT Dua Putra Utama Makmur Tbk"
+  },
+  {
+    "code": "INAF",
+    "name": "PT Indofarma Tbk"
+  },
+  {
+    "code": "TYRE",
+    "name": "PT King Tire Indonesia Tbk"
+  },
+  {
+    "code": "KOBX",
+    "name": "PT Kobexindo Tractors Tbk"
+  },
+  {
+    "code": "DYAN",
+    "name": "PT Dyandra Media International Tbk"
+  },
+  {
+    "code": "TRUE",
+    "name": "PT Triniti Dinamik Tbk"
+  },
+  {
+    "code": "EAST",
+    "name": "PT Eastparc Hotel Tbk"
+  },
+  {
+    "code": "DADA",
+    "name": "PT Diamond Citra Propertindo Tbk"
+  },
+  {
+    "code": "CRSN",
+    "name": "PT Carsurin Tbk"
+  },
+  {
+    "code": "PJHB",
+    "name": "PT Pelayaran Jaya Hidup Baru TBK"
+  },
+  {
+    "code": "UNIQ",
+    "name": "PT Ulima Nitra Tbk"
+  },
+  {
+    "code": "WGSH",
+    "name": "PT Wira Global Solusi Tbk"
+  },
+  {
+    "code": "COCO",
+    "name": "PT Wahana Interfood Nusantara Tbk"
+  },
+  {
+    "code": "APLI",
+    "name": "PT Asiaplast Industries Tbk"
+  },
+  {
+    "code": "TRUS",
+    "name": "PT Trust Finance Indonesia Tbk"
+  },
+  {
+    "code": "BMSR",
+    "name": "PT Bintang Mitra Semestaraya Tbk"
+  },
+  {
+    "code": "SMLE",
+    "name": "PT Sinergi Multi Lestarindo Tbk"
+  },
+  {
+    "code": "RMKO",
+    "name": "PT Royaltama Mulia Kontraktorindo Tbk"
+  },
+  {
+    "code": "GOLD",
+    "name": "PT Visi Telekomunikasi Infrastruktur Tbk"
+  },
+  {
+    "code": "IOTF",
+    "name": "PT Sumber Sinergi Makmur Tbk"
+  },
+  {
+    "code": "TRUK",
+    "name": "PT Guna Timur Raya Tbk"
+  },
+  {
+    "code": "WINE",
+    "name": "PT HATTEN BALI Tbk"
+  },
+  {
+    "code": "BIPP",
+    "name": "PT Bhuwanatala Indah Permai Tbk"
+  },
+  {
+    "code": "NZIA",
+    "name": "PT Nusantara Almazia Tbk"
+  },
+  {
+    "code": "VAST",
+    "name": "PT Vastland Indonesia Tbk"
+  },
+  {
+    "code": "ASRM",
+    "name": "PT Asuransi Ramayana Tbk"
+  },
+  {
+    "code": "SCNP",
+    "name": "PT Selaras Citra Nusantara Perkasa Tbk"
+  },
+  {
+    "code": "SATU",
+    "name": "PT Kota Satu Properti Tbk"
+  },
+  {
+    "code": "HOMI",
+    "name": "PT Grand House Mulia Tbk"
+  },
+  {
+    "code": "KBLM",
+    "name": "PT Kabelindo Murni Tbk"
+  },
+  {
+    "code": "PTPS",
+    "name": "PT Pulau Subur Tbk"
+  },
+  {
+    "code": "JATI",
+    "name": "PT Informasi Teknologi Indonesia Tbk"
+  },
+  {
+    "code": "CCSI",
+    "name": "PT Communication Cable Systems Indonesia Tbk"
+  },
+  {
+    "code": "RGAS",
+    "name": "PT Kian Santang Muliatama Tbk"
+  },
+  {
+    "code": "REAL",
+    "name": "PT Repower Asia Indonesia Tbk"
+  },
+  {
+    "code": "BAIK",
+    "name": "PT Bersama Mencapai Puncak Tbk"
+  },
+  {
+    "code": "MPXL",
+    "name": "PT MPX Logistics International Tbk"
+  },
+  {
+    "code": "CNKO",
+    "name": "PT Exploitasi Energi Indonesia Tbk"
+  },
+  {
+    "code": "MGNA",
+    "name": "PT Magna Investama Mandiri Tbk"
+  },
+  {
+    "code": "NASA",
+    "name": "PT Andalan Perkasa Abadi Tbk"
+  },
+  {
+    "code": "ESTI",
+    "name": "PT Ever Shine Tex Tbk"
+  },
+  {
+    "code": "NAIK",
+    "name": "PT Adiwarna Anugerah Abadi Tbk"
+  },
+  {
+    "code": "IKPM",
+    "name": "PT Ikapharmindo Putramas Tbk"
+  },
+  {
+    "code": "BEER",
+    "name": "PT Jobubu Jarum Minahasa Tbk"
+  },
+  {
+    "code": "TOSK",
+    "name": "PT Topindo Solusi Komunika Tbk"
+  },
+  {
+    "code": "CASH",
+    "name": "PT Cashlez Worldwide Indonesia Tbk"
+  },
+  {
+    "code": "MYTX",
+    "name": "PT Asia Pacific Investama Tbk"
+  },
+  {
+    "code": "MICE",
+    "name": "PT Multi Indocitra Tbk"
+  },
+  {
+    "code": "PRDL",
+    "name": "PT Prodia Diagnostic Line Tbk"
+  },
+  {
+    "code": "KBAG",
+    "name": "PT Karya Bersama Anugerah Tbk"
+  },
+  {
+    "code": "KIAS",
+    "name": "PT Keramika Indonesia Assosiasi Tbk"
+  },
+  {
+    "code": "TAMA",
+    "name": "PT Lancartama Sejati Tbk"
+  },
+  {
+    "code": "TFAS",
+    "name": "PT Telefast Indonesia Tbk"
+  },
+  {
+    "code": "ATLA",
+    "name": "PT Atlantis Subsea Indonesia Tbk"
+  },
+  {
+    "code": "AKPI",
+    "name": "PT Argha Karya Prima Industry Tbk"
+  },
+  {
+    "code": "SOLA",
+    "name": "PT Xolare RCR Energy TBK"
+  },
+  {
+    "code": "DGNS",
+    "name": "PT Diagnos Laboratorium Utama Tbk"
+  },
+  {
+    "code": "TARA",
+    "name": "PT Agung Semesta Sejahtera Tbk"
+  },
+  {
+    "code": "PART",
+    "name": "PT Cipta Perdana Lancar Tbk"
+  },
+  {
+    "code": "TRON",
+    "name": "PT Teknologi Karya Digital Nusa Tbk"
+  },
+  {
+    "code": "KLAS",
+    "name": "PT Pelayaran Kurnia Lautan Semesta Tbk"
+  },
+  {
+    "code": "OKAS",
+    "name": "PT Ancora Indonesia Resources Tbk"
+  },
+  {
+    "code": "DEWI",
+    "name": "PT Dewi Shri Farmindo Tbk."
+  },
+  {
+    "code": "ASHA",
+    "name": "PT Cilacap Samudera Fishing Industry Tbk"
+  },
+  {
+    "code": "WICO",
+    "name": "Pt Wicaksana Overseas International Tbk"
+  },
+  {
+    "code": "DOSS",
+    "name": "PT Global Sukses Digital Tbk"
+  },
+  {
+    "code": "BATR",
+    "name": "PT Benteng Api Technic Tbk"
+  },
+  {
+    "code": "LPLI",
+    "name": "PT Star Pacific Tbk"
+  },
+  {
+    "code": "UVCR",
+    "name": "PT Trimegah Karya Pratama Tbk"
+  },
+  {
+    "code": "ALMI",
+    "name": "PT Alumindo Light Metal Industry Tbk"
+  },
+  {
+    "code": "YOII",
+    "name": "PT Asuransi Digital Bersama TBK"
+  },
+  {
+    "code": "HAJJ",
+    "name": "PT Arsy Buana Travelindo Tbk"
+  },
+  {
+    "code": "GRPM",
+    "name": "PT Graha Prima Mentari Tbk"
+  },
+  {
+    "code": "BPTR",
+    "name": "PT Batavia Prosperindo Trans Tbk"
+  },
+  {
+    "code": "PDES",
+    "name": "PT Destinasi Tirta Nusantara Tbk"
+  },
+  {
+    "code": "LAPD",
+    "name": "PT Leyand International Tbk"
+  },
+  {
+    "code": "CGAS",
+    "name": "PT Citra Nusantara Gemilang Tbk"
+  },
+  {
+    "code": "INOV",
+    "name": "PT Inocycle Technology Group Tbk"
+  },
+  {
+    "code": "BTON",
+    "name": "PT Betonjaya Manunggal Tbk"
+  },
+  {
+    "code": "MEJA",
+    "name": "PT Harta Djaya Karya Tbk"
+  },
+  {
+    "code": "BINO",
+    "name": "PT Perma Plasindo Tbk"
+  },
+  {
+    "code": "ASPI",
+    "name": "PT Andalan Sakti Primaindo Tbk"
+  },
+  {
+    "code": "AMIN",
+    "name": "PT Ateliers Mecaniques D'Indonesie Tbk"
+  },
+  {
+    "code": "MCAS",
+    "name": "PT M Cash Integrasi Tbk"
+  },
+  {
+    "code": "KREN",
+    "name": "PT Quantum Clovera Investama Tbk"
+  },
+  {
+    "code": "KBLV",
+    "name": "PT First Media Tbk"
+  },
+  {
+    "code": "IKAI",
+    "name": "PT Intikeramik Alamasri Industri Tbk"
+  },
+  {
+    "code": "EMDE",
+    "name": "PT Megapolitan Developments Tbk"
+  },
+  {
+    "code": "TIRA",
+    "name": "PT Tira Austenite Tbk"
+  },
+  {
+    "code": "TGUK",
+    "name": "PT Platinum Wahab Nusantara Tbk"
+  },
+  {
+    "code": "AKKU",
+    "name": "PT Anugerah Kagum Karya Utama Tbk"
+  },
+  {
+    "code": "SDPC",
+    "name": "PT Millennium Pharmacon International Tbk"
+  },
+  {
+    "code": "HRME",
+    "name": "PT Menteng Heritage Realty Tbk"
+  },
+  {
+    "code": "HBAT",
+    "name": "PT Minahasa Membangun Hebat Tbk"
+  },
+  {
+    "code": "SAGE",
+    "name": "PT Saptausaha Gemilangindah Tbk"
+  },
+  {
+    "code": "BOBA",
+    "name": "PT Formosa Ingredient Factory Tbk"
+  },
+  {
+    "code": "SLIS",
+    "name": "PT Gaya Abadi Sempurna Tbk"
+  },
+  {
+    "code": "HILL",
+    "name": "PT Hillcon Tbk"
+  },
+  {
+    "code": "ERTX",
+    "name": "PT Eratex Djaja Tbk"
+  },
+  {
+    "code": "PEHA",
+    "name": "PT Phapros Tbk"
+  },
+  {
+    "code": "AMMS",
+    "name": "PT Agung Menjangan Mas Tbk"
+  },
+  {
+    "code": "JMAS",
+    "name": "PT Asuransi Jiwa Syariah Jasa Mitra Abadi Tbk"
+  },
+  {
+    "code": "VINS",
+    "name": "PT Victoria Insurance Tbk"
+  },
+  {
+    "code": "BEBS",
+    "name": "PT Berkah Beton Sadaya Tbk"
+  },
+  {
+    "code": "ASJT",
+    "name": "PT Asuransi Jasa Tania Tbk"
+  },
+  {
+    "code": "NTBK",
+    "name": "PT Nusatama Berkah Tbk"
+  },
+  {
+    "code": "ACRO",
+    "name": "PT Samcro Hyosung Adilestari Tbk"
+  },
+  {
+    "code": "NINE",
+    "name": "PT Techno9 Indonesia Tbk"
+  },
+  {
+    "code": "LPPS",
+    "name": "PT Lenox Pasifik Investama Tbk"
+  },
+  {
+    "code": "ITIC",
+    "name": "PT Indonesian Tobacco Tbk"
+  },
+  {
+    "code": "LAND",
+    "name": "PT Trimitra Propertindo Tbk"
+  },
+  {
+    "code": "PTMP",
+    "name": "PT Mitra Pack Tbk"
+  },
+  {
+    "code": "INTA",
+    "name": "PT Intraco Penta Tbk"
+  },
+  {
+    "code": "APII",
+    "name": "PT Arita Prima Indonesia Tbk"
+  },
+  {
+    "code": "PURA",
+    "name": "PT Putra Rajawali Kencana Tbk"
+  },
+  {
+    "code": "RELF",
+    "name": "PT Graha Mitra Asia Tbk"
+  },
+  {
+    "code": "PTSP",
+    "name": "PT Pioneerindo Gourmet International Tbk"
+  },
+  {
+    "code": "KAQI",
+    "name": "PT Jantra Grupo Indonesia Tbk"
+  },
+  {
+    "code": "MDRN",
+    "name": "PT Modern Internasional Tbk"
+  },
+  {
+    "code": "SDMU",
+    "name": "PT Sidomulyo Selaras Tbk"
+  },
+  {
+    "code": "TMPO",
+    "name": "PT Tempo Inti Media Tbk"
+  },
+  {
+    "code": "PSDN",
+    "name": "PT Prasidha Aneka Niaga Tbk"
+  },
+  {
+    "code": "ASDM",
+    "name": "PT Asuransi Dayin Mitra Tbk"
+  },
+  {
+    "code": "ECII",
+    "name": "PT Electronic City Indonesia Tbk"
+  },
+  {
+    "code": "COAL",
+    "name": "PT Black Diamond Resources Tbk"
+  },
+  {
+    "code": "NPGF",
+    "name": "PT Nusa Palapa Gemilang Tbk"
+  },
+  {
+    "code": "GPSO",
+    "name": "PT Geoprima Solusi Tbk"
+  },
+  {
+    "code": "DIVA",
+    "name": "PT Distribusi Voucher Nusantara Tbk"
+  },
+  {
+    "code": "PPGL",
+    "name": "PT Prima Globalindo Logistik Tbk"
+  },
+  {
+    "code": "EPAC",
+    "name": "PT Megalestari Epack Sentosaraya Tbk"
+  },
+  {
+    "code": "SAPX",
+    "name": "PT Satria Antaran Prima Tbk"
+  },
+  {
+    "code": "PUDP",
+    "name": "PT Pudjiadi Prestige Tbk"
+  },
+  {
+    "code": "POLA",
+    "name": "PT Pool Advista Finance Tbk"
+  },
+  {
+    "code": "TRJA",
+    "name": "PT Transkon Jaya Tbk"
+  },
+  {
+    "code": "FWCT",
+    "name": "PT Wijaya Cahaya Timber Tbk"
+  },
+  {
+    "code": "LION",
+    "name": "PT Lion Metal Works Tbk"
+  },
+  {
+    "code": "LPIN",
+    "name": "PT Multi Prima Sejahtera Tbk"
+  },
+  {
+    "code": "CINT",
+    "name": "PT Chitose Internasional Tbk"
+  },
+  {
+    "code": "CAKK",
+    "name": "PT Cahayaputra Asa Keramik Tbk"
+  },
+  {
+    "code": "MRAT",
+    "name": "PT Mustika Ratu Tbk"
+  },
+  {
+    "code": "NAYZ",
+    "name": "PT Hassana Boga Sejahtera Tbk"
+  },
+  {
+    "code": "YELO",
+    "name": "PT Yelooo Integra Datanet Tbk"
+  },
+  {
+    "code": "WAPO",
+    "name": "PT Wahana Pronatural Tbk"
+  },
+  {
+    "code": "FIRE",
+    "name": "PT Alfa Energi Investama Tbk"
+  },
+  {
+    "code": "PAMG",
+    "name": "PT Bima Sakti Pertiwi Tbk"
+  },
+  {
+    "code": "ZYRX",
+    "name": "PT Zyrexindo Mandiri Buana Tbk"
+  },
+  {
+    "code": "BAUT",
+    "name": "PT Mitra Angkasa Sejahtera Tbk"
+  },
+  {
+    "code": "RBMS",
+    "name": "PT Ristia Bintang Mahkotasejati Tbk"
+  },
+  {
+    "code": "GLOB",
+    "name": "PT Globe Kita Terang Tbk"
+  },
+  {
+    "code": "AKSI",
+    "name": "PT Mineral Sumberdaya Mandiri Tbk"
+  },
+  {
+    "code": "INTD",
+    "name": "PT Inter Delta Tbk"
+  },
+  {
+    "code": "IPAC",
+    "name": "PT Era Graharealty Tbk"
+  },
+  {
+    "code": "MTPS",
+    "name": "PT Meta Epsi Tbk."
+  },
+  {
+    "code": "DKHH",
+    "name": "PT Cipta Sarana Medika Tbk"
+  },
+  {
+    "code": "HELI",
+    "name": "PT Jaya Trishindo Tbk"
+  },
+  {
+    "code": "OBAT",
+    "name": "PT Brigit Biofarmaka Technologi Tbk"
+  },
+  {
+    "code": "CTTH",
+    "name": "PT Citatah Tbk"
+  },
+  {
+    "code": "DSFI",
+    "name": "PT Dharma Samudera Fishing Industries Tbk"
+  },
+  {
+    "code": "PPRI",
+    "name": "PT Paperocks Indonesia Tbk"
+  },
+  {
+    "code": "ENZO",
+    "name": "PT Morenzo Abadi Perkasa Tbk"
+  },
+  {
+    "code": "WEHA",
+    "name": "PT WEHA Transportasi Indonesia Tbk"
+  },
+  {
+    "code": "DFAM",
+    "name": "PT Dafam Property Indonesia Tbk"
+  },
+  {
+    "code": "KLIN",
+    "name": "PT Klinko Karya Imaji Tbk"
+  },
+  {
+    "code": "OBMD",
+    "name": "PT OBM Drilchem Tbk"
+  },
+  {
+    "code": "LMPI",
+    "name": "PT Langgeng Makmur Industri Tbk"
+  },
+  {
+    "code": "PURI",
+    "name": "PT Puri Global Sukses Tbk"
+  },
+  {
+    "code": "RUIS",
+    "name": "PT Radiant Utama Interinsco Tbk"
+  },
+  {
+    "code": "MPIX",
+    "name": "PT Mitra Pedagang Indonesia Tbk"
+  },
+  {
+    "code": "MANG",
+    "name": "PT Manggung Polahraya Tbk"
+  },
+  {
+    "code": "WOWS",
+    "name": "PT Ginting Jaya Energi Tbk"
+  },
+  {
+    "code": "ANDI",
+    "name": "PT Andira Agro, Tbk"
+  },
+  {
+    "code": "LAJU",
+    "name": "PT Jasa Berdikari Logistics Tbk"
+  },
+  {
+    "code": "PTIS",
+    "name": "PT Indo Straits Tbk"
+  },
+  {
+    "code": "ASBI",
+    "name": "PT Asuransi Bintang Tbk"
+  },
+  {
+    "code": "ASMI",
+    "name": "PT Asuransi Maximus Graha Persada Tbk"
+  },
+  {
+    "code": "TAXI",
+    "name": "PT Express Transindo Utama Tbk"
+  },
+  {
+    "code": "KOPI",
+    "name": "PT Mitra Energi Persada Tbk"
+  },
+  {
+    "code": "NANO",
+    "name": "PT Nanotech Indonesia Global Tbk"
+  },
+  {
+    "code": "INCI",
+    "name": "PT Intanwijaya Internasional Tbk"
+  },
+  {
+    "code": "SEMA",
+    "name": "PT Semacom Integrated Tbk"
+  },
+  {
+    "code": "MBTO",
+    "name": "PT Martina Berto Tbk"
+  },
+  {
+    "code": "ESIP",
+    "name": "PT Sinergi Inti Plastindo Tbk"
+  },
+  {
+    "code": "TOOL",
+    "name": "PT Rohartindo Nusantara Luas Tbk"
+  },
+  {
+    "code": "MSIE",
+    "name": "PT Multisarana Intan Eduka Tbk"
+  },
+  {
+    "code": "CSMI",
+    "name": "PT Cipta Selera Murni Tbk"
+  },
+  {
+    "code": "ICON",
+    "name": "PT Island Concepts Indonesia Tbk"
+  },
+  {
+    "code": "GEMA",
+    "name": "PT Gema Grahasarana Tbk"
+  },
+  {
+    "code": "PMMP",
+    "name": "PT Panca Mitra Multiperdana Tbk"
+  },
+  {
+    "code": "AYLS",
+    "name": "PT Arkayana Lestari Grup Tbk"
+  },
+  {
+    "code": "MERI",
+    "name": "PT Merry Riana Edukasi Tbk"
+  },
+  {
+    "code": "ZBRA",
+    "name": "PT Dosni Roha Indonesia Tbk"
+  },
+  {
+    "code": "SMKM",
+    "name": "PT Sumber Mas Konstruksi Tbk"
+  },
+  {
+    "code": "KARW",
+    "name": "PT Meratus Jasa Prima Tbk"
+  },
+  {
+    "code": "MARI",
+    "name": "PT Mahaka Radio Integra Tbk"
+  },
+  {
+    "code": "CHEM",
+    "name": "PT Chemstar Indonesia Tbk"
+  },
+  {
+    "code": "KUAS",
+    "name": "PT Ace Oldfields Tbk"
+  },
+  {
+    "code": "ABBA",
+    "name": "PT Mahaka Media Tbk"
+  },
+  {
+    "code": "NASI",
+    "name": "PT Wahana Inti Makmur Tbk"
+  },
+  {
+    "code": "MTSM",
+    "name": "PT Metro Realty Tbk"
+  },
+  {
+    "code": "WINR",
+    "name": "PT Winner Nusantara Jaya Tbk"
+  },
+  {
+    "code": "FOOD",
+    "name": "PT Sentra Food Indonesia Tbk"
+  },
+  {
+    "code": "ISEA",
+    "name": "PT Indo American Seafoods Tbk"
+  },
+  {
+    "code": "INAI",
+    "name": "PT Indal Aluminium Industry Tbk"
+  },
+  {
+    "code": "RAFI",
+    "name": "PT Sari Kreasi Boga Tbk"
+  },
+  {
+    "code": "CANI",
+    "name": "PT Capitol Nusantara Indonesia Tbk"
+  },
+  {
+    "code": "MEDS",
+    "name": "PT Hetzer Medical Indonesia Tbk"
+  },
+  {
+    "code": "LABA",
+    "name": "PT Green Power Group Tbk"
+  },
+  {
+    "code": "LCKM",
+    "name": "PT LCK Global Kedaton Tbk"
+  },
+  {
+    "code": "MIRA",
+    "name": "PT Mitra International Resources Tbk"
+  },
+  {
+    "code": "KIOS",
+    "name": "PT Kioson Komersial Indonesia Tbk"
+  },
+  {
+    "code": "KRYA",
+    "name": "PT Bangun Karya Perkasa Jaya Tbk"
+  },
+  {
+    "code": "BAPI",
+    "name": "PT Bhakti Agung Propertindo Tbk"
+  },
+  {
+    "code": "JAYA",
+    "name": "PT Armada Berjaya Trans Tbk"
+  },
+  {
+    "code": "PTDU",
+    "name": "PT Djasa Ubersakti Tbk"
+  },
+  {
+    "code": "PICO",
+    "name": "PT Pelangi Indah Canindo Tbk"
+  },
+  {
+    "code": "DPNS",
+    "name": "PT Duta Pertiwi Nusantara Tbk"
+  },
+  {
+    "code": "SNLK",
+    "name": "PT Sunter Lakeside Hotel Tbk"
+  },
+  {
+    "code": "PGLI",
+    "name": "PT Pembangunan Graha Lestari Indah Tbk"
+  },
+  {
+    "code": "OPMS",
+    "name": "PT Optima Prima Metal Sinergi Tbk"
+  },
+  {
+    "code": "SICO",
+    "name": "PT Sigma Energy Compressindo Tbk"
+  },
+  {
+    "code": "KKES",
+    "name": "PT Kusuma Kemindo Sentosa Tbk"
+  },
+  {
+    "code": "SBMA",
+    "name": "PT Surya Biru Murni Acetylene Tbk"
+  },
+  {
+    "code": "OILS",
+    "name": "PT Indo Oil Perkasa Tbk"
+  },
+  {
+    "code": "JAST",
+    "name": "PT. Jasnita Telekomindo Tbk"
+  },
+  {
+    "code": "IBFN",
+    "name": "PT Intan Baru Prana Tbk"
+  },
+  {
+    "code": "BAPA",
+    "name": "PT Bekasi Asri Pemula Tbk"
+  },
+  {
+    "code": "ISAP",
+    "name": "PT Isra Presisi Indonesia Tbk"
+  },
+  {
+    "code": "LOPI",
+    "name": "PT Logisticsplus International Tbk"
+  },
+  {
+    "code": "BCIP",
+    "name": "PT Bumi Citra Permai Tbk"
+  },
+  {
+    "code": "MPOW",
+    "name": "PT Megapower Makmur Tbk"
+  },
+  {
+    "code": "OLIV",
+    "name": "PT Atlas Nexus Group Tbk"
+  },
+  {
+    "code": "XCIS",
+    "name": "DIRE Ciptadana Properti Ritel Indonesia"
+  },
+  {
+    "code": "INCF",
+    "name": "PT Indo Komoditi Korpora Tbk"
+  },
+  {
+    "code": "AIMS",
+    "name": "PT Artha Mahiya Investama Tbk"
+  },
+  {
+    "code": "RCCC",
+    "name": "PT Utama Radar Cahaya Tbk"
+  },
+  {
+    "code": "LUCK",
+    "name": "PT Sentral Mitra Informatika Tbk"
+  },
+  {
+    "code": "KJEN",
+    "name": "PT Krida Jaringan Nusantara Tbk"
+  },
+  {
+    "code": "POLY",
+    "name": "PT Asia Pacific Fibers Tbk"
+  },
+  {
+    "code": "GRPH",
+    "name": "PT Griptha Putra Persada Tbk"
+  },
+  {
+    "code": "BATA",
+    "name": "PT Sepatu Bata Tbk."
+  },
+  {
+    "code": "KOIN",
+    "name": "PT Kokoh Inti Arebama Tbk"
+  },
+  {
+    "code": "HDIT",
+    "name": "PT Hensel Davest Indonesia Tbk"
+  },
+  {
+    "code": "MENN",
+    "name": "PT Menn Teknologi Indonesia Tbk"
+  },
+  {
+    "code": "BRRC",
+    "name": "PT Raja Roti Cemerlang Tbk"
+  },
+  {
+    "code": "TGRA",
+    "name": "PT. Terregra Asia Energy Tbk"
+  },
+  {
+    "code": "IKAN",
+    "name": "PT Era Mandiri Cemerlang Tbk"
+  },
+  {
+    "code": "DEFI",
+    "name": "PT Danasupra Erapacific Tbk"
+  },
+  {
+    "code": "LMAX",
+    "name": "PT Lupromax Pelumas Indonesia Tbk"
+  },
+  {
+    "code": "SPRE",
+    "name": "PT Soraya Berjaya Indonesia Tbk"
+  },
+  {
+    "code": "TNCA",
+    "name": "PT Trimuda Nuansa Citra Tbk"
+  },
+  {
+    "code": "LRNA",
+    "name": "PT Eka Sari Lorena Transport Tbk"
+  },
+  {
+    "code": "IDEA",
+    "name": "PT Idea Indonesia Akademi Tbk"
+  },
+  {
+    "code": "TELE",
+    "name": "PT Omni Inovasi Indonesia Tbk"
+  },
+  {
+    "code": "IPPE",
+    "name": "PT Indo Pureco Pratama Tbk"
+  },
+  {
+    "code": "RUNS",
+    "name": "PT Global Sukses Solusi Tbk"
+  },
+  {
+    "code": "FLMC",
+    "name": "PT Falmaco Nonwoven Industri Tbk"
+  },
+  {
+    "code": "TAYS",
+    "name": "PT Jaya Swarasa Agung Tbk"
+  },
+  {
+    "code": "KICI",
+    "name": "PT Kedaung Indah Can Tbk"
+  },
+  {
+    "code": "RICY",
+    "name": "PT Ricky Putra Globalindo Tbk"
+  },
+  {
+    "code": "BIMA",
+    "name": "PT. Primarindo Asia Infrastructure, Tbk."
+  },
+  {
+    "code": "PCAR",
+    "name": "PT Prima Cakrawala Abadi Tbk"
+  },
+  {
+    "code": "SWAT",
+    "name": "PT Sriwahana Adityakarta Tbk"
+  },
+  {
+    "code": "DIGI",
+    "name": "PT Arkadia Digital Media Tbk"
+  },
+  {
+    "code": "WIDI",
+    "name": "PT Widiant Jaya Krenindo Tbk"
+  },
+  {
+    "code": "AEGS",
+    "name": "PT. Anugerah Spareparts Sejahtera Tbk"
+  },
+  {
+    "code": "ARKA",
+    "name": "PT Arkha Jayanti Persada Tbk"
+  },
+  {
+    "code": "SOUL",
+    "name": "PT Mitra Tirta Buwana Tbk"
+  },
+  {
+    "code": "ALTO",
+    "name": "PT Tri Banyan Tirta Tbk"
+  },
+  {
+    "code": "PLAN",
+    "name": "PT Planet Properindo Jaya Tbk"
+  },
+  {
+    "code": "HADE",
+    "name": "PT Himalaya Energi Perkasa Tbk"
+  },
+  {
+    "code": "TOPS",
+    "name": "PT Totalindo Eka Persada Tbk"
+  },
+  {
+    "code": "BMBL",
+    "name": "PT Lavender Bina Cendikia Tbk"
+  },
+  {
+    "code": "FIMP",
+    "name": "PT Fimperkasa Utama Tbk"
+  },
+  {
+    "code": "INDX",
+    "name": "PT Tanah Laut Tbk"
+  },
+  {
+    "code": "LMSH",
+    "name": "PT Lionmesh Prima Tbk"
+  },
+  {
+    "code": "MKNT",
+    "name": "PT Mitra Komunikasi Nusantara Tbk"
+  }
+]

@@ -20,13 +20,16 @@ models/*.pkl
 models/*.joblib
 models/*.txt
 models/*.json
-# Committed production model artifacts (small, deliberately versioned --
-# workflow is: train in Colab, download, commit here). Un-ignore explicitly
-# rather than dropping the models/*.json rule entirely, so future ad-hoc
-# experiment dumps in models/ don't get committed by accident.
+# Committed production model artifact (small, deliberately versioned --
+# workflow is: train, download/copy, commit here). Only the CURRENT
+# production version is un-ignored -- superseded versions (v1-v3) are kept
+# locally for rollback but not carried forward in git, same as any other
+# build artifact. Un-ignore explicitly rather than dropping the
+# models/*.json rule entirely, so future ad-hoc experiment dumps in models/
+# don't get committed by accident.
 !models/.gitkeep
-!models/direction_xgboost_v1.json
-!models/direction_xgboost_v1_metadata.json
+!models/direction_xgboost_v4.json
+!models/direction_xgboost_v4_metadata.json
 
 # OS / editor
 .DS_Store

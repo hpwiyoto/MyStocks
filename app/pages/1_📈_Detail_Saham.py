@@ -3,58 +3,84 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_price_history
+from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, safe_ratio
 
 st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
 inject_base_css()
 
-predictions = load_latest_predictions()
-if predictions.empty:
-    st.warning("Belum ada data prediksi. Jalankan pipeline terlebih dahulu dari halaman utama.")
+stocks_df = load_stock_list()
+if stocks_df.empty:
+    st.warning("Belum ada saham yang di-ingest. Jalankan pipeline terlebih dahulu dari halaman utama.")
     st.stop()
 
-tickers = predictions["stock_code"].tolist()
-default_ticker = st.session_state.get("selected_ticker", tickers[0])
-if default_ticker not in tickers:
-    default_ticker = tickers[0]
+predictions = load_latest_predictions()
 
-selected = st.selectbox("Pilih saham", tickers, index=tickers.index(default_ticker))
+# Pemilihan bebas: dari seluruh saham yang pernah di-ingest, bukan cuma yang
+# sudah punya prediksi hari ini -- tapi tetap kasih tahu mana yang belum.
+scored_codes = set(predictions["stock_code"]) if not predictions.empty else set()
+option_labels = {
+    row["code"]: f"{row['code']} — {row['name']}" + ("" if row["code"] in scored_codes else " (belum ada prediksi)")
+    for _, row in stocks_df.iterrows()
+}
+codes = stocks_df["code"].tolist()
+default_code = st.session_state.get("selected_ticker", codes[0])
+if default_code not in codes:
+    default_code = codes[0]
+
+selected = st.selectbox(
+    "Pilih saham (bebas dari seluruh saham yang sudah di-ingest)",
+    codes,
+    index=codes.index(default_code),
+    format_func=lambda c: option_labels.get(c, c),
+)
 st.session_state["selected_ticker"] = selected
 
-row = predictions[predictions["stock_code"] == selected].iloc[0]
+pred_match = predictions[predictions["stock_code"] == selected] if not predictions.empty else predictions
+row = pred_match.iloc[0] if len(pred_match) else None
 feat = load_latest_feature_row(selected)
 fund = load_latest_fundamental(selected)
 
 with st.spinner("Memuat data harga..."):
     price_df = load_price_history(selected, days=260)
 
+stock_name = stocks_df.loc[stocks_df["code"] == selected, "name"].iloc[0] if selected in stocks_df["code"].values else ""
+
 # --- Header ---
 h1, h2 = st.columns([3, 1])
 with h1:
+    badges = f"{decision_badge(row['decision'])} &nbsp; {regime_badge(row['regime'])}" if row is not None else ""
     st.markdown(
         f"""
-        <div class="mystocks-ticker" style="font-size:2rem;">{selected} <span class="mystocks-muted" style="font-size:1.1rem;">{row['name'] or ''}</span></div>
-        <div style="margin-top:0.4rem;">{decision_badge(row['decision'])} &nbsp; {regime_badge(row['regime'])}</div>
+        <div class="mystocks-ticker" style="font-size:2rem;">{selected} <span class="mystocks-muted" style="font-size:1.1rem;">{stock_name}</span></div>
+        <div style="margin-top:0.4rem;">{badges}</div>
         """,
         unsafe_allow_html=True,
     )
 with h2:
-    st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
+    if row is not None:
+        st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
 # --- Entry / SL / TP ---
-e1, e2, e3, e4 = st.columns(4)
-e1.metric("Entry", f"{float(row['entry_price']):,.0f}")
-e2.metric("Stop Loss", f"{float(row['stop_loss_price']):,.0f}", delta=f"-{(1 - float(row['stop_loss_price'])/float(row['entry_price']))*100:.2f}%", delta_color="inverse")
-e3.metric("Take Profit", f"{float(row['take_profit_price']):,.0f}", delta=f"+{(float(row['take_profit_price'])/float(row['entry_price']) - 1)*100:.2f}%")
-e4.metric("Risk : Reward", f"1 : {float(row['risk_reward_ratio']):.1f}")
+if row is not None:
+    e1, e2, e3, e4 = st.columns(4)
+    e1.metric("Entry", f"{float(row['entry_price']):,.0f}")
+    e2.metric("Stop Loss", f"{float(row['stop_loss_price']):,.0f}", delta=f"-{(1 - float(row['stop_loss_price'])/float(row['entry_price']))*100:.2f}%", delta_color="inverse")
+    e3.metric("Take Profit", f"{float(row['take_profit_price']):,.0f}", delta=f"+{(float(row['take_profit_price'])/float(row['entry_price']) - 1)*100:.2f}%")
+    e4.metric("Risk : Reward", f"1 : {float(row['risk_reward_ratio']):.1f}")
+else:
+    st.info(
+        "Saham ini belum punya prediksi terbaru (belum di-scoring model, atau histori harganya masih terlalu pendek). "
+        "Grafik & data fundamental di bawah tetap tersedia."
+    )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
@@ -63,27 +89,82 @@ if price_df.empty:
     st.info("Belum ada data harga untuk saham ini.")
 else:
     price_df = price_df.copy()
-    price_df["sma20"] = price_df["close"].rolling(20).mean()
+    price_df["ema5"] = price_df["close"].ewm(span=5, adjust=False).mean()
+    price_df["ema9"] = price_df["close"].ewm(span=9, adjust=False).mean()
+    price_df["bb_mid"] = price_df["close"].rolling(20).mean()
+    bb_std = price_df["close"].rolling(20).std()
+    price_df["bb_upper"] = price_df["bb_mid"] + 2 * bb_std
+    price_df["bb_lower"] = price_df["bb_mid"] - 2 * bb_std
     price_df["sma50"] = price_df["close"].rolling(50).mean()
     price_df["sma200"] = price_df["close"].rolling(200).mean()
+    price_df["volume_ma20"] = price_df["volume"].rolling(20).mean()
+
+    INDICATOR_OPTIONS = ["EMA5", "EMA9", "SMA20", "SMA50", "SMA200", "Bollinger Band(20)"]
+    ctrl1, ctrl2 = st.columns([1, 2])
+    with ctrl1:
+        chart_type = st.radio("Tipe candle", ["Normal", "Heikin-Ashi"], horizontal=True, key="chart_type")
+    with ctrl2:
+        selected_indicators = st.multiselect(
+            "Indikator ditampilkan", INDICATOR_OPTIONS, default=INDICATOR_OPTIONS, key="chart_indicators",
+        )
+
+    if chart_type == "Heikin-Ashi":
+        ha_close = (price_df["open"] + price_df["high"] + price_df["low"] + price_df["close"]) / 4
+        ha_open = ha_close.copy()
+        ha_open.iloc[0] = (price_df["open"].iloc[0] + price_df["close"].iloc[0]) / 2
+        for i in range(1, len(price_df)):
+            ha_open.iloc[i] = (ha_open.iloc[i - 1] + ha_close.iloc[i - 1]) / 2
+        ha_high = pd.concat([price_df["high"], ha_open, ha_close], axis=1).max(axis=1)
+        ha_low = pd.concat([price_df["low"], ha_open, ha_close], axis=1).min(axis=1)
+        plot_open, plot_high, plot_low, plot_close = ha_open, ha_high, ha_low, ha_close
+        candle_name = "Harga (Heikin-Ashi)"
+    else:
+        plot_open, plot_high, plot_low, plot_close = price_df["open"], price_df["high"], price_df["low"], price_df["close"]
+        candle_name = "Harga"
 
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
+
+    # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top
+    if "Bollinger Band(20)" in selected_indicators:
+        fig.add_trace(
+            go.Scatter(x=price_df["date"], y=price_df["bb_upper"], name="BB Upper", line=dict(color="rgba(139,92,246,0.35)", width=1), showlegend=False),
+            row=1, col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=price_df["date"], y=price_df["bb_lower"], name="Bollinger Band(20)", line=dict(color="rgba(139,92,246,0.35)", width=1),
+                fill="tonexty", fillcolor="rgba(139,92,246,0.08)",
+            ),
+            row=1, col=1,
+        )
+
     fig.add_trace(
         go.Candlestick(
-            x=price_df["date"], open=price_df["open"], high=price_df["high"],
-            low=price_df["low"], close=price_df["close"], name="Harga",
+            x=price_df["date"], open=plot_open, high=plot_high,
+            low=plot_low, close=plot_close, name=candle_name,
             increasing_line_color=COLOR_BUY, decreasing_line_color=COLOR_AVOID,
         ),
         row=1, col=1,
     )
-    for col, color, label in [("sma20", "#F59E0B", "SMA20"), ("sma50", ACCENT, "SMA50"), ("sma200", "#8B5CF6", "SMA200")]:
-        fig.add_trace(
-            go.Scatter(x=price_df["date"], y=price_df[col], name=label, line=dict(color=color, width=1.3)),
-            row=1, col=1,
-        )
+    for col, color, label in [
+        ("ema5", "#FFFFFF", "EMA5"),
+        ("ema9", "#EC4899", "EMA9"),
+        ("bb_mid", "#F59E0B", "SMA20"),
+        ("sma50", ACCENT, "SMA50"),
+        ("sma200", "#8B5CF6", "SMA200"),
+    ]:
+        if label in selected_indicators:
+            fig.add_trace(
+                go.Scatter(x=price_df["date"], y=price_df[col], name=label, line=dict(color=color, width=1.3)),
+                row=1, col=1,
+            )
     volume_colors = [COLOR_BUY if c >= o else COLOR_AVOID for o, c in zip(price_df["open"], price_df["close"])]
     fig.add_trace(
         go.Bar(x=price_df["date"], y=price_df["volume"], name="Volume", marker_color=volume_colors, opacity=0.6),
+        row=2, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=price_df["date"], y=price_df["volume_ma20"], name="MA20 Volume", line=dict(color="#F59E0B", width=1.3)),
         row=2, col=1,
     )
     fig.update_layout(

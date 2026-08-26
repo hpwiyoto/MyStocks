@@ -109,13 +109,58 @@ def compute_volatility(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def compute_all(df: pd.DataFrame) -> pd.DataFrame:
-    """df must have columns open/high/low/close/volume, indexed by date ascending."""
+def compute_trend_strength(df: pd.DataFrame) -> pd.DataFrame:
+    """ADX: trend STRENGTH (0-100), independent of direction -- complements
+    RSI/regime, which capture direction but not how strong the trend is."""
+    high, low, close = df["high"], df["low"], df["close"]
+    out = pd.DataFrame(index=df.index)
+    out["adx_14"] = ta.trend.ADXIndicator(high, low, close, window=14).adx()
+    return out
+
+
+def compute_gap(df: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame(index=df.index)
+    prev_close = df["close"].shift(1)
+    out["overnight_gap_pct"] = (df["open"] - prev_close) / prev_close * 100
+    return out
+
+
+def compute_calendar(df: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame(index=df.index)
+    dates = pd.to_datetime(df.index)
+    out["day_of_week"] = dates.dayofweek.astype(float)  # 0=Monday .. 4=Friday
+    out["is_month_end_week"] = (dates.day >= 25).astype(float)
+    return out
+
+
+def compute_relative_strength_series(close: pd.Series, index_close: pd.Series, window: int = 20) -> pd.Series:
+    """Rolling version of features.fundamental.compute_relative_strength --
+    one value per trading day (for training) instead of just the latest
+    (that one stays as-is, used for the live UI's fundamental panel). NaN
+    wherever `index_close` (IHSG) has no matching date."""
+    if index_close is None or index_close.empty:
+        return pd.Series(float("nan"), index=close.index)
+    aligned_index = index_close.reindex(close.index)
+    stock_return = close.pct_change(window)
+    index_return = aligned_index.pct_change(window)
+    return (stock_return - index_return) * 100
+
+
+def compute_all(df: pd.DataFrame, index_close: pd.Series = None) -> pd.DataFrame:
+    """df must have columns open/high/low/close/volume, indexed by date
+    ascending. `index_close` (optional): IHSG's own close series, date-
+    indexed the same way, for relative_strength_20d_pct -- omit to leave
+    that column NaN (e.g. when IHSG couldn't be fetched that run)."""
     parts = [
         compute_trend(df),
         compute_momentum(df),
         compute_volume(df),
         compute_money_flow(df),
         compute_volatility(df),
+        compute_trend_strength(df),
+        compute_gap(df),
+        compute_calendar(df),
     ]
-    return pd.concat(parts, axis=1)
+    result = pd.concat(parts, axis=1)
+    result["relative_strength_20d_pct"] = compute_relative_strength_series(df["close"], index_close)
+    return result

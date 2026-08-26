@@ -73,6 +73,12 @@ feature_daily = Table(
     Column("similarity_score", Numeric(6, 4)),
     Column("similar_pattern_count", Integer),
     Column("historical_win_rate", Numeric(6, 4)),
+    # Trend strength, gap, calendar, cross-market
+    Column("adx_14", Numeric(8, 4)),
+    Column("overnight_gap_pct", Numeric(10, 4)),
+    Column("day_of_week", Numeric(2, 0)),
+    Column("is_month_end_week", Numeric(2, 0)),
+    Column("relative_strength_20d_pct", Numeric(10, 4)),
     Column("created_at", DateTime, server_default=func.now()),
     UniqueConstraint("stock_code", "date", "feature_version", name="uq_feature_daily_code_date_version"),
 )

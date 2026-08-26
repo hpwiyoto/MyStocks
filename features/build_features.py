@@ -5,14 +5,15 @@ Usage:
     python -m features.build_features
 """
 import datetime as dt
+import math
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from features.db import FEATURE_VERSION, feature_daily, feature_fundamental_snapshot, init_schema
 from features.fundamental import IHSG_SYMBOL, compute_relative_strength, fetch_fundamental_snapshot
-from features.pattern_similarity import compute_pattern_similarity
+from features.pattern_similarity import compute_cross_ticker_pattern_similarity
 from features.regime import classify_regime
 from features.structure import compute_structure
 from features.technical import MIN_ROWS_FOR_TECHNICAL_FEATURES
@@ -26,12 +27,14 @@ logger = get_logger("features.build_features")
 
 BOOL_COLS = ("higher_high_20d", "higher_low_20d", "lower_high_20d", "lower_low_20d")
 INT_COLS = ("obv", "similar_pattern_count")
+PATTERN_QUERY_BATCH_SIZE = 150
 
 
 def _safe_float(value):
     if value is None or pd.isna(value):
         return None
-    return float(value)
+    value = float(value)
+    return value if math.isfinite(value) else None
 
 
 def _safe_int(value):
@@ -68,12 +71,12 @@ def load_price_history(conn, code: str) -> pd.DataFrame:
     return df
 
 
-def build_technical_features(df: pd.DataFrame) -> pd.DataFrame:
-    technical = compute_technical(df)
+def build_technical_features(df: pd.DataFrame, index_close: pd.Series, pattern: pd.DataFrame) -> pd.DataFrame:
+    technical = compute_technical(df, index_close)
     structure = compute_structure(df)
     merged = pd.concat([technical, structure], axis=1)
     merged["regime"] = classify_regime(merged, df["close"])
-    pattern = compute_pattern_similarity(df)
+    pattern = pattern.set_axis(merged.index)  # pattern was computed on a reset-index copy of df
     return pd.concat([merged, pattern], axis=1)
 
 
@@ -114,9 +117,9 @@ def upsert_fundamental_snapshot(conn, code: str, snapshot: dict) -> None:
     conn.execute(stmt)
 
 
-def _load_ihsg_close() -> pd.Series:
+def _load_ihsg_close(period: str = "max") -> pd.Series:
     try:
-        ihsg_df = fetch_history(IHSG_SYMBOL, period="1y")
+        ihsg_df = fetch_history(IHSG_SYMBOL, period=period)
     except Exception as exc:
         logger.warning("Failed to fetch IHSG (%s): %s — relative_strength will be null", IHSG_SYMBOL, exc)
         return pd.Series(dtype=float)
@@ -134,39 +137,93 @@ def run(tickers=None):
     engine = get_engine()
     init_schema(engine)
 
-    logger.info("Fetching IHSG (%s) history for relative strength", IHSG_SYMBOL)
+    # Fetched once, full history: needed both for the live "latest" relative
+    # strength (fundamental snapshot) and now also the historical per-day
+    # version (feature_daily), which needs IHSG's value on every past date,
+    # not just the last year.
+    logger.info("Fetching IHSG (%s) full history for relative strength", IHSG_SYMBOL)
     ihsg_close = _load_ihsg_close()
+
+    # --- Load every qualifying ticker's price history once, up front. Reused
+    # both for the cross-ticker pattern-similarity bank (needs everyone's
+    # history at once) and the per-ticker technical/structure/regime pass
+    # below -- avoids querying price_history twice per ticker.
+    price_by_code = {}
+    for code in tickers:
+        with engine.connect() as conn:
+            df = load_price_history(conn, code)
+        if df.empty:
+            logger.warning("%s: no price_history yet — run pipeline.ingest_price first, skipping", code)
+            continue
+        if len(df) < MIN_ROWS_FOR_TECHNICAL_FEATURES:
+            logger.warning(
+                "%s: only %d days of price_history (<%d minimum), skipping technical features for now",
+                code, len(df), MIN_ROWS_FOR_TECHNICAL_FEATURES,
+            )
+            continue
+        price_by_code[code] = df
+
+    # This sandbox has been getting interrupted mid-run repeatedly (Codespace
+    # idle-timeout killing the whole VM, not just this process -- see chat).
+    # Any ticker that already has adx_14 populated was already fully written
+    # by a prior attempt (technical + pattern columns land in one upsert per
+    # ticker, see upsert_feature_daily -- never partially populated), so skip
+    # re-querying/re-writing it. The bank below still needs EVERY ticker's
+    # price history for cross-ticker matches to stay correct, so this only
+    # narrows who gets queried and written, not what the bank is built from.
+    with engine.connect() as conn:
+        already_done = {
+            r[0] for r in conn.execute(
+                text("SELECT DISTINCT stock_code FROM feature_daily WHERE adx_14 IS NOT NULL")
+            ).fetchall()
+        }
+    remaining_codes = [c for c in price_by_code if c not in already_done]
+    skipped_count = len(price_by_code) - len(remaining_codes)
+    if skipped_count:
+        logger.info(
+            "Resuming: %d/%d tickers already have adx_14 populated from a prior attempt, skipping them "
+            "(%d remaining to process)",
+            skipped_count, len(price_by_code), len(remaining_codes),
+        )
+
+    # The bank (pass 1 inside compute_cross_ticker_pattern_similarity) is
+    # cheap to rebuild (~10s for ~900 tickers); querying it per-ticker (pass
+    # 2) is the slow, memory-sensitive part. Processing + writing query
+    # tickers in batches -- rebuilding the (cheap) bank each time -- means a
+    # crash partway through only costs the current batch, not the whole run.
+    pattern_input = {code: df.reset_index() for code, df in price_by_code.items()}
+    all_codes = remaining_codes
+    batches = [all_codes[i:i + PATTERN_QUERY_BATCH_SIZE] for i in range(0, len(all_codes), PATTERN_QUERY_BATCH_SIZE)]
+    logger.info(
+        "Computing cross-ticker pattern similarity for %d tickers (bank built from all %d qualifying), "
+        "in %d batches of up to %d (this is O(n^2)-ish and the slowest step here)",
+        len(all_codes), len(price_by_code), len(batches), PATTERN_QUERY_BATCH_SIZE,
+    )
 
     total_daily = 0
     total_fundamental = 0
     failures = []
 
-    for code in tickers:
-        try:
-            with engine.begin() as conn:
-                df = load_price_history(conn, code)
-                if df.empty:
-                    logger.warning("%s: no price_history yet — run pipeline.ingest_price first, skipping", code)
-                    continue
-                if len(df) < MIN_ROWS_FOR_TECHNICAL_FEATURES:
-                    logger.warning(
-                        "%s: only %d days of price_history (<%d minimum), skipping technical features for now",
-                        code, len(df), MIN_ROWS_FOR_TECHNICAL_FEATURES,
-                    )
-                    continue
+    for batch_i, batch_codes in enumerate(batches):
+        logger.info("Pattern batch %d/%d (%d tickers)...", batch_i + 1, len(batches), len(batch_codes))
+        pattern_results = compute_cross_ticker_pattern_similarity(pattern_input, query_codes=batch_codes)
 
-                features = build_technical_features(df)
-                n = upsert_feature_daily(conn, code, features)
-                total_daily += n
-                logger.info("%s: upserted %d feature_daily rows", code, n)
+        for code in batch_codes:
+            df = price_by_code[code]
+            try:
+                with engine.begin() as conn:
+                    features = build_technical_features(df, ihsg_close, pattern_results[code])
+                    n = upsert_feature_daily(conn, code, features)
+                    total_daily += n
+                    logger.info("%s: upserted %d feature_daily rows", code, n)
 
-                snapshot = fetch_fundamental_snapshot(to_yfinance_symbol(code))
-                snapshot["relative_strength_20d_pct"] = compute_relative_strength(df["close"], ihsg_close)
-                upsert_fundamental_snapshot(conn, code, snapshot)
-                total_fundamental += 1
-        except Exception as exc:
-            logger.error("%s: feature build failed, skipping — %s", code, exc)
-            failures.append(code)
+                    snapshot = fetch_fundamental_snapshot(to_yfinance_symbol(code))
+                    snapshot["relative_strength_20d_pct"] = compute_relative_strength(df["close"], ihsg_close)
+                    upsert_fundamental_snapshot(conn, code, snapshot)
+                    total_fundamental += 1
+            except Exception as exc:
+                logger.error("%s: feature build failed, skipping — %s", code, exc)
+                failures.append(code)
 
     logger.info(
         "Done. feature_daily rows: %d, fundamental snapshots: %d. Failures: %s",

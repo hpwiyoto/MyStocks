@@ -11,15 +11,24 @@ Risk management rules (documented, not arbitrary):
 - Decision tiers are anchored to the model's own historical base rate
   (fraction of all training rows that were a "win"), not an arbitrary
   round number:
-    BUY   — probability >= 0.5 (model believes success is more likely than
-            not, in absolute terms).
-    WATCH — base_rate <= probability < 0.5 (a real edge over the
-            unconditional historical average, but not yet coin-flip-favorable).
+    BUY   — probability >= BUY_THRESHOLD (see below).
+    WATCH — base_rate <= probability < BUY_THRESHOLD (a real edge over the
+            unconditional historical average, but not yet BUY-grade).
     AVOID — probability < base_rate (no edge at all; worse than doing
             nothing / picking at random from history).
+
+BUY_THRESHOLD was 0.5 ("more likely than not, in absolute terms") through
+model v3. Raised to 0.60 for v4 after a walk-forward threshold sweep
+(threshold_sweep.py, pooled out-of-sample predictions across all 4 folds)
+showed a consistent, monotonic improvement in precision/profit-factor/max-
+drawdown as the threshold rises from 0.5 to 0.7 -- 0.5->0.60 alone moves
+precision 71.4%->76.1% and profit factor 4.99->6.35. 0.60 was picked over
+more aggressive values (e.g. 0.70, precision 79.5%/profit factor 7.75) as
+the more robust, less overfit-to-the-sweep-itself choice that still keeps a
+usable number of live BUY signals rather than making them vanishingly rare.
 """
 
-BUY_THRESHOLD = 0.5
+BUY_THRESHOLD = 0.60
 
 
 def decide(probability: float, base_rate: float, entry_price: float, target_pct: float, stop_pct: float) -> dict:

@@ -98,7 +98,7 @@ def decision_badge(decision: str) -> str:
 
 
 def regime_badge(regime: str) -> str:
-    if not regime:
+    if not isinstance(regime, str):
         return badge_html("unknown", TEXT_MUTED)
     color = REGIME_COLORS.get(regime, TEXT_MUTED)
     return badge_html(regime.replace("_", " "), color)
