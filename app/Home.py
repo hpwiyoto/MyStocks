@@ -11,6 +11,14 @@ from app.style import decision_badge, inject_base_css, regime_badge
 st.set_page_config(page_title="MyStocks — Screener", page_icon="📈", layout="wide")
 inject_base_css()
 
+ENTRY_RANGE_PCT = 0.005  # +-0.5% zona beli di sekitar harga saat ini, bukan satu angka persis
+ENTRY_RANGE_MIN_RUPIAH = 2  # +-1% saham gocap (Rp50) < Rp1 -- dibulatkan jadi "50 - 50", jaminan lebar minimum
+
+
+def entry_range(price: float) -> tuple[float, float]:
+    half_width = max(price * ENTRY_RANGE_PCT, ENTRY_RANGE_MIN_RUPIAH)
+    return price - half_width, price + half_width
+
 st.title("📈 MyStocks Screener")
 st.caption("Prediksi harian saham IDX — probabilitas naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.")
 
@@ -104,10 +112,14 @@ for row_chunk in rows:
                 unsafe_allow_html=True,
             )
             st.progress(min(max(float(r["probability"]), 0.0), 1.0), text=f"Probabilitas: {prob_pct:.1f}%")
-            e1, e2, e3 = st.columns(3)
-            e1.markdown(f"<span class='mystocks-muted'>Entry</span><br>{float(r['entry_price']):,.0f}", unsafe_allow_html=True)
-            e2.markdown(f"<span class='mystocks-muted'>Stop Loss</span><br>{float(r['stop_loss_price']):,.0f}", unsafe_allow_html=True)
-            e3.markdown(f"<span class='mystocks-muted'>Take Profit</span><br>{float(r['take_profit_price']):,.0f}", unsafe_allow_html=True)
+            current_price = float(r["entry_price"])
+            entry_low, entry_high = entry_range(current_price)
+            e1, e2 = st.columns(2)
+            e1.markdown(f"<span class='mystocks-muted'>Harga Saat Ini</span><br>{current_price:,.0f}", unsafe_allow_html=True)
+            e2.markdown(f"<span class='mystocks-muted'>Entry</span><br>{entry_low:,.0f} - {entry_high:,.0f}", unsafe_allow_html=True)
+            e3, e4 = st.columns(2)
+            e3.markdown(f"<span class='mystocks-muted'>Stop Loss</span><br>{float(r['stop_loss_price']):,.0f}", unsafe_allow_html=True)
+            e4.markdown(f"<span class='mystocks-muted'>Take Profit</span><br>{float(r['take_profit_price']):,.0f}", unsafe_allow_html=True)
             if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")
@@ -121,19 +133,25 @@ st.caption("Klik header kolom untuk sortir ulang. Klik satu baris untuk buka hal
 
 table_df = filtered[["stock_code", "name", "decision", "probability", "regime", "entry_price", "stop_loss_price", "take_profit_price"]].reset_index(drop=True)
 table_df["probability"] = table_df["probability"].astype(float) * 100  # ProgressColumn format="%.1f%%" doesn't auto-scale from 0-1
+table_df["entry_range"] = table_df["entry_price"].apply(lambda p: "{:,.0f} - {:,.0f}".format(*entry_range(p)))
 
 event = st.dataframe(
     table_df,
     width="stretch",
     hide_index=True,
     height=min(36 * (len(table_df) + 1) + 3, 600),
+    column_order=[
+        "stock_code", "name", "decision", "probability", "regime",
+        "entry_price", "entry_range", "stop_loss_price", "take_profit_price",
+    ],
     column_config={
         "stock_code": st.column_config.TextColumn("Kode"),
         "name": st.column_config.TextColumn("Nama"),
         "decision": st.column_config.TextColumn("Keputusan"),
         "probability": st.column_config.ProgressColumn("Probabilitas", format="%.1f%%", min_value=0.0, max_value=100.0),
         "regime": st.column_config.TextColumn("Regime"),
-        "entry_price": st.column_config.NumberColumn("Entry", format="%.0f"),
+        "entry_price": st.column_config.NumberColumn("Harga Saat Ini", format="%.0f"),
+        "entry_range": st.column_config.TextColumn("Entry"),
         "stop_loss_price": st.column_config.NumberColumn("Stop Loss", format="%.0f"),
         "take_profit_price": st.column_config.NumberColumn("Take Profit", format="%.0f"),
     },
