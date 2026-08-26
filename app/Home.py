@@ -7,12 +7,16 @@ import streamlit as st
 
 from app.data import load_latest_predictions
 from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
+from engine.predict import run as predict_run
+from features.build_features import run as build_features_run
+from pipeline.ingest_price import run as ingest_price_run
 
 st.set_page_config(page_title="MyStocks — Screener", page_icon="📈", layout="wide")
 inject_base_css()
 
 ENTRY_RANGE_PCT = 0.005  # +-0.5% zona beli di sekitar harga saat ini, bukan satu angka persis
 ENTRY_RANGE_MIN_RUPIAH = 2  # +-1% saham gocap (Rp50) < Rp1 -- dibulatkan jadi "50 - 50", jaminan lebar minimum
+TABLE_TOP_N = 30  # tabel & tombol update harga sama-sama dibatasi ke ini, bukan seluruh hasil filter
 
 
 def entry_range(price: float) -> tuple[float, float]:
@@ -60,11 +64,6 @@ with st.sidebar:
         index=PRICE_FILTER_OPTIONS.index(_persisted_price) if _persisted_price in PRICE_FILTER_OPTIONS else 0,
     )
     _save_persisted("price_filter", price_filter)
-
-    st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-    if st.button("🔄 Refresh data", width="stretch"):
-        st.cache_data.clear()
-        st.rerun()
 
 with st.spinner("Memuat prediksi terbaru..."):
     df = load_latest_predictions()
@@ -116,6 +115,25 @@ col4.metric("Ditampilkan", len(filtered))
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
+# Refreshing all ~900 tickers (fetch + features + predict) takes tens of
+# minutes even with the fast incremental feature path -- far too slow for a
+# synchronous button click. Scoping it to the same top-N shown in the table
+# below (not the full filtered set, which could still be hundreds) keeps
+# every click cheap regardless of how broad the sidebar filters are.
+refresh_codes = filtered.head(TABLE_TOP_N)["stock_code"].tolist()
+with st.sidebar:
+    st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+    if st.button(f"🔄 Update harga ({len(refresh_codes)} ticker tampil)", width="stretch"):
+        if not refresh_codes:
+            st.sidebar.warning("Tidak ada ticker yang cocok filter saat ini untuk di-update.")
+        else:
+            with st.spinner(f"Mengambil harga terbaru untuk {len(refresh_codes)} ticker..."):
+                ingest_price_run(tickers=refresh_codes)
+                build_features_run(tickers=refresh_codes)
+                predict_run(tickers=refresh_codes)
+            st.cache_data.clear()
+            st.rerun()
+
 if filtered.empty:
     st.info("Tidak ada saham yang cocok dengan filter saat ini.")
     st.stop()
@@ -164,11 +182,22 @@ for row_chunk in rows:
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
-# --- Tabel ranking penuh: scalable untuk ratusan ticker (klik baris untuk detail) ---
-st.subheader(f"📋 Semua Saham ({len(filtered)}) — urut berdasarkan probabilitas")
+# --- Tabel ranking: dibatasi top N teratas (bukan seluruh hasil filter) --
+# menampilkan ratusan baris sekaligus memberatkan render browser & query
+# tanpa manfaat nyata, karena yang dicari selalu peluang terbaik dulu.
+# (TABLE_TOP_N juga membatasi tombol Update Harga di atas, lihat sana.)
+table_source = filtered.head(TABLE_TOP_N)
+if len(filtered) > TABLE_TOP_N:
+    st.subheader(f"📋 Top {TABLE_TOP_N} Saham dari {len(filtered)} — urut berdasarkan probabilitas")
+    st.caption(
+        f"Menampilkan {TABLE_TOP_N} peluang probabilitas tertinggi saja (bukan semua {len(filtered)} hasil filter) "
+        "supaya tetap ringan. Persempit filter di sidebar untuk melihat saham tertentu."
+    )
+else:
+    st.subheader(f"📋 Semua Saham ({len(filtered)}) — urut berdasarkan probabilitas")
 st.caption("Klik header kolom untuk sortir ulang. Klik satu baris untuk buka halaman detail saham itu.")
 
-table_df = filtered[["stock_code", "name", "decision", "probability", "regime", "entry_price", "stop_loss_price", "take_profit_price"]].reset_index(drop=True)
+table_df = table_source[["stock_code", "name", "decision", "probability", "regime", "entry_price", "stop_loss_price", "take_profit_price"]].reset_index(drop=True)
 table_df["probability"] = table_df["probability"].astype(float) * 100  # ProgressColumn format="%.1f%%" doesn't auto-scale from 0-1
 table_df["entry_range"] = table_df["entry_price"].apply(lambda p: "{:,.0f} - {:,.0f}".format(*entry_range(p)))
 

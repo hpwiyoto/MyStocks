@@ -166,6 +166,7 @@ def compute_cross_ticker_pattern_similarity(
     horizon: int = HORIZON,
     corr_threshold: float = CORR_THRESHOLD,
     query_codes=None,
+    only_dates_after: dict = None,
 ) -> dict:
     """Cross-ticker version of the same feature. `price_by_ticker` maps stock
     code -> DataFrame with 'date' (ascending) and 'close' columns, index
@@ -179,6 +180,18 @@ def compute_cross_ticker_pattern_similarity(
     before moving on) without losing cross-ticker correctness -- the bank
     itself is cheap to rebuild (~10s for ~900 tickers), it's the per-ticker
     querying that's slow and worth being able to resume partway through.
+
+    `only_dates_after` (optional): {stock_code: date} -- for a ticker present
+    here, only rows with date strictly after the given date are queried (the
+    rest keep NaN/0 in the result, same as any other un-queried row). This is
+    what makes a routine daily update cheap: re-querying a ticker's entire
+    ~1200-day history every day to add ONE new row is most of what made the
+    original backfill take hours, and none of yesterday's rows' results
+    change by adding one more day of data -- their query set (every OTHER
+    still-eligible window) is a superset that grows, but a ticker's already-
+    computed row never needs revisiting. The bank itself still includes
+    every ticker's full history regardless of this argument, since a new
+    day's row from ANY other ticker is a legitimate match for it.
 
     Unlike the legacy version, `similarity_score` here is only ever the best
     match AMONG those already clearing `corr_threshold` (found via an exact
@@ -272,6 +285,9 @@ def compute_cross_ticker_pattern_similarity(
         win_rate = np.full(t_count, np.nan)
 
         query_idx = np.where(valid_row)[0]
+        if only_dates_after and code in only_dates_after:
+            cutoff = np.datetime64(only_dates_after[code])
+            query_idx = query_idx[dates[query_idx] > cutoff]
         if len(query_idx) == 0:
             results[code] = pd.DataFrame({
                 "similarity_score": similarity_score, "similar_pattern_count": similar_count,

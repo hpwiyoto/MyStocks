@@ -164,40 +164,37 @@ def run(tickers=None):
         price_by_code[code] = df
 
     # This sandbox has been getting interrupted mid-run repeatedly (Codespace
-    # idle-timeout killing the whole VM, not just this process -- see chat).
-    # Any ticker that already has adx_14 populated was already fully written
-    # by a prior attempt (technical + pattern columns land in one upsert per
-    # ticker, see upsert_feature_daily -- never partially populated), so skip
-    # re-querying/re-writing it. The bank below still needs EVERY ticker's
-    # price history for cross-ticker matches to stay correct, so this only
-    # narrows who gets queried and written, not what the bank is built from.
+    # idle-timeout killing the whole VM, not just this process -- see chat),
+    # AND -- more importantly for routine daily runs -- re-querying a
+    # ticker's entire ~1200-day history every day just to add one new row
+    # is most of what made both the backfill AND a plain "update today's
+    # price" run take hours. `last_feature_date` (per ticker, only present
+    # if that ticker already has an up-to-date-schema row) drives
+    # `only_dates_after` in compute_cross_ticker_pattern_similarity, so a
+    # ticker with nothing new to add costs next to nothing here, and one
+    # with one new day only gets THAT day queried, not its whole history.
+    # A ticker absent from this dict (brand new, or pre-dates the adx_14
+    # column) gets its full history queried, same as before.
     with engine.connect() as conn:
-        already_done = {
-            r[0] for r in conn.execute(
-                text("SELECT DISTINCT stock_code FROM feature_daily WHERE adx_14 IS NOT NULL")
-            ).fetchall()
-        }
-    remaining_codes = [c for c in price_by_code if c not in already_done]
-    skipped_count = len(price_by_code) - len(remaining_codes)
-    if skipped_count:
-        logger.info(
-            "Resuming: %d/%d tickers already have adx_14 populated from a prior attempt, skipping them "
-            "(%d remaining to process)",
-            skipped_count, len(price_by_code), len(remaining_codes),
-        )
+        last_feature_date = dict(conn.execute(text(
+            "SELECT stock_code, MAX(date) FROM feature_daily WHERE adx_14 IS NOT NULL GROUP BY stock_code"
+        )).fetchall())
 
     # The bank (pass 1 inside compute_cross_ticker_pattern_similarity) is
     # cheap to rebuild (~10s for ~900 tickers); querying it per-ticker (pass
-    # 2) is the slow, memory-sensitive part. Processing + writing query
-    # tickers in batches -- rebuilding the (cheap) bank each time -- means a
+    # 2) is the slow, memory-sensitive part -- though with only_dates_after
+    # above, most tickers on a routine run now query just one row, not
+    # their whole history. Still batching + writing incrementally so a
     # crash partway through only costs the current batch, not the whole run.
     pattern_input = {code: df.reset_index() for code, df in price_by_code.items()}
-    all_codes = remaining_codes
+    all_codes = list(price_by_code.keys())
     batches = [all_codes[i:i + PATTERN_QUERY_BATCH_SIZE] for i in range(0, len(all_codes), PATTERN_QUERY_BATCH_SIZE)]
+    already_scored_count = sum(1 for c in all_codes if c in last_feature_date)
     logger.info(
-        "Computing cross-ticker pattern similarity for %d tickers (bank built from all %d qualifying), "
-        "in %d batches of up to %d (this is O(n^2)-ish and the slowest step here)",
-        len(all_codes), len(price_by_code), len(batches), PATTERN_QUERY_BATCH_SIZE,
+        "Computing cross-ticker pattern similarity for %d tickers (%d already scored before, cheap "
+        "incremental query; %d never scored, full history), in %d batches of up to %d",
+        len(all_codes), already_scored_count, len(all_codes) - already_scored_count,
+        len(batches), PATTERN_QUERY_BATCH_SIZE,
     )
 
     total_daily = 0
@@ -206,13 +203,30 @@ def run(tickers=None):
 
     for batch_i, batch_codes in enumerate(batches):
         logger.info("Pattern batch %d/%d (%d tickers)...", batch_i + 1, len(batches), len(batch_codes))
-        pattern_results = compute_cross_ticker_pattern_similarity(pattern_input, query_codes=batch_codes)
+        pattern_results = compute_cross_ticker_pattern_similarity(
+            pattern_input, query_codes=batch_codes, only_dates_after=last_feature_date,
+        )
 
         for code in batch_codes:
             df = price_by_code[code]
             try:
                 with engine.begin() as conn:
                     features = build_technical_features(df, ihsg_close, pattern_results[code])
+                    cutoff = last_feature_date.get(code)
+                    if cutoff is not None:
+                        # only_dates_after left every row up to `cutoff` with NaN/0
+                        # pattern columns (never queried, by design) -- upserting
+                        # those would blank out already-correct historical data,
+                        # so only the genuinely new rows get written. `features.index`
+                        # holds plain datetime.date (from price_history's DATE column,
+                        # via load_price_history's set_index) -- compare against
+                        # `cutoff` as-is (also a datetime.date from MySQL), not a
+                        # pd.Timestamp, which raises TypeError against a bare date.
+                        features = features[features.index > cutoff]
+                    if features.empty:
+                        logger.info("%s: no new trading days since %s, nothing to write", code, cutoff)
+                        continue
+
                     n = upsert_feature_daily(conn, code, features)
                     total_daily += n
                     logger.info("%s: upserted %d feature_daily rows", code, n)
