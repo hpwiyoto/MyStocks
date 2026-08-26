@@ -104,6 +104,22 @@ def regime_badge(regime: str) -> str:
     return badge_html(regime.replace("_", " "), color)
 
 
+def render_developer_footer():
+    """Sidebar footer shown on every page -- developer contact info."""
+    st.sidebar.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+    st.sidebar.markdown(
+        """
+        <div style="font-size:0.8rem; line-height:1.6;">
+            <div class="mystocks-muted">Dikembangkan oleh</div>
+            <div style="font-weight:600;">Heru Purbo Wiyoto</div>
+            <div class="mystocks-muted">📱 0811 1299 599</div>
+            <div class="mystocks-muted">✉️ heru.purbowiyoto@gmail.com</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def safe_ratio(value, fmt: str = "{:.2f}", max_abs: float = 100) -> str:
     """Format a valuation ratio (P/E, P/B), guarding against a confirmed
     upstream data quirk: yfinance's bookValue field is near-zero for some IDX

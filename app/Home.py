@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 
 from app.data import load_latest_predictions
-from app.style import decision_badge, inject_base_css, regime_badge
+from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
 
 st.set_page_config(page_title="MyStocks — Screener", page_icon="📈", layout="wide")
 inject_base_css()
@@ -22,15 +22,45 @@ def entry_range(price: float) -> tuple[float, float]:
 st.title("📈 MyStocks Screener")
 st.caption("Prediksi harian saham IDX — probabilitas naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.")
 
+# Home.py uses the classic file-based pages/ structure, where -- unlike the
+# newer st.navigation API -- widget-keyed session_state is NOT reliably kept
+# across a page switch (confirmed by testing: filters reset even with a
+# plain `key=` set). Persisting the actual value in a plain (non-widget)
+# session_state slot and feeding it back in as value=/default=/index= on
+# every rerun works around that; a widget `key=` alone does not.
+def _persisted(name, default):
+    return st.session_state.get(f"persist_{name}", default)
+
+
+def _save_persisted(name, value):
+    st.session_state[f"persist_{name}"] = value
+
+
+PRICE_FILTER_OPTIONS = ["Semua", "Di bawah 50", "50 - 100", "100 - 1.000", "Di atas 1.000"]
+
 with st.sidebar:
     st.header("🔎 Filter")
-    search = st.text_input("Cari kode/nama saham", placeholder="mis. BBCA atau bank")
-    decision_filter = st.multiselect("Keputusan", ["BUY", "WATCH", "AVOID"], default=["BUY", "WATCH", "AVOID"])
-    min_prob = st.slider("Probabilitas minimum", 0.0, 1.0, 0.0, 0.05)
-    price_filter = st.selectbox(
-        "Harga saham",
-        ["Semua", "Di bawah 50", "50 - 100", "100 - 1.000", "Di atas 1.000"],
+    search = st.text_input(
+        "Cari kode/nama saham", placeholder="mis. BBCA atau bank", value=_persisted("search", ""),
     )
+    _save_persisted("search", search)
+
+    decision_filter = st.multiselect(
+        "Keputusan", ["BUY", "WATCH", "AVOID"],
+        default=_persisted("decision_filter", ["BUY", "WATCH", "AVOID"]),
+    )
+    _save_persisted("decision_filter", decision_filter)
+
+    min_prob = st.slider("Probabilitas minimum", 0.0, 1.0, _persisted("min_prob", 0.0), 0.05)
+    _save_persisted("min_prob", min_prob)
+
+    _persisted_price = _persisted("price_filter", "Semua")
+    price_filter = st.selectbox(
+        "Harga saham", PRICE_FILTER_OPTIONS,
+        index=PRICE_FILTER_OPTIONS.index(_persisted_price) if _persisted_price in PRICE_FILTER_OPTIONS else 0,
+    )
+    _save_persisted("price_filter", price_filter)
+
     st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
     if st.button("🔄 Refresh data", width="stretch"):
         st.cache_data.clear()
@@ -47,8 +77,15 @@ if df.empty:
     st.stop()
 
 regime_options = sorted(df["regime"].dropna().unique().tolist())
+# drop persisted selections that no longer exist in today's data (e.g.
+# after a Refresh) -- multiselect errors if default holds a value not in
+# the current options list
+_persisted_regime = [r for r in _persisted("regime_filter", regime_options) if r in regime_options]
 with st.sidebar:
-    regime_filter = st.multiselect("Regime", regime_options, default=regime_options)
+    regime_filter = st.multiselect("Regime", regime_options, default=_persisted_regime)
+_save_persisted("regime_filter", regime_filter)
+
+render_developer_footer()
 
 filtered = df[
     df["decision"].isin(decision_filter)

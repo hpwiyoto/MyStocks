@@ -9,10 +9,14 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_price_history, load_stock_list
-from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, safe_ratio
+from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
 st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
 inject_base_css()
+render_developer_footer()
+
+if st.button("← Kembali ke Home"):
+    st.switch_page("Home.py")
 
 stocks_df = load_stock_list()
 if stocks_df.empty:

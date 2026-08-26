@@ -6,10 +6,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import streamlit as st
 
 from app.data import days_since, feature_daily_row_count, load_model_metadata
-from app.style import inject_base_css
+from app.style import inject_base_css, render_developer_footer
 
 st.set_page_config(page_title="MyStocks — Info Model", page_icon="🤖", layout="wide")
 inject_base_css()
+render_developer_footer()
+
+if st.button("← Kembali ke Home"):
+    st.switch_page("Home.py")
 
 st.title("🤖 Info Model")
 st.caption("Model yang sedang dipakai untuk menghasilkan prediksi di halaman Screener.")
