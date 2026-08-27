@@ -30,9 +30,23 @@ usable number of live BUY signals rather than making them vanishingly rare.
 
 BUY_THRESHOLD = 0.60
 
+# IDX's practical price floor ("gocap") -- confirmed by checking real Home
+# output: PNBS/MDLN/HDIT/CPRO were all parked exactly at Rp50, BTEK at Rp10,
+# each showing an inflated BUY probability. At this price, tick size (Rp1)
+# alone is 2-3% of price -- most of the model's 5%-target/2.5%-stop window,
+# so a "win" there is largely tick-level noise, not a real technical signal.
+# Forced to AVOID here regardless of model probability, on top of (not
+# instead of) excluding these rows from training entirely -- see
+# scripts/export_for_colab.py's matching GOCAP_PRICE_FLOOR use, so a v5+
+# model never saw these rows during training either and serving stays
+# consistent with what it was actually trained on.
+GOCAP_PRICE_FLOOR = 50
+
 
 def decide(probability: float, base_rate: float, entry_price: float, target_pct: float, stop_pct: float) -> dict:
-    if probability >= BUY_THRESHOLD:
+    if entry_price <= GOCAP_PRICE_FLOOR:
+        decision = "AVOID"
+    elif probability >= BUY_THRESHOLD:
         decision = "BUY"
     elif probability >= base_rate:
         decision = "WATCH"

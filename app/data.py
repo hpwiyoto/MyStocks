@@ -14,6 +14,7 @@ import yfinance as yf
 from sqlalchemy import inspect
 
 from engine.predict import MODEL_VERSION
+from features.news import fetch_news_headlines
 from pipeline.db import get_engine
 from pipeline.logging_config import get_logger
 from pipeline.tickers import to_yfinance_symbol
@@ -24,6 +25,8 @@ MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 CACHE_TTL = 300  # seconds
 LIVE_PRICE_TTL = 30  # seconds -- short on purpose, this is the "what's it doing right now" overlay
+NEWS_TTL = 1800  # seconds -- headlines don't need 30s freshness like price does, and this is one
+                 # extra outbound HTTP call per Detail Saham page load, no need to repeat it often
 
 
 def _missing_tables(engine, required: list[str]) -> list[str]:
@@ -165,3 +168,14 @@ def load_live_prices(codes: tuple[str, ...]) -> dict[str, float]:
         except Exception as exc:
             logger.warning("%s: live price fetch failed, falling back to last close — %s", code, exc)
     return prices
+
+
+@st.cache_data(ttl=NEWS_TTL)
+def load_news(stock_code: str, stock_name: str = "") -> list[dict]:
+    """Display-only headline panel (Detail Saham) -- see features.news for
+    why this is never fed into the model. Query by code+name together
+    ("BBCA Bank Central Asia saham") when a name is available -- narrower
+    than code alone, which for a short/common code can pull in unrelated
+    results."""
+    query = f"{stock_code} {stock_name} saham".strip()
+    return fetch_news_headlines(query)

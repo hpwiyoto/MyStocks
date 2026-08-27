@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_price_history, load_stock_list
+from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
 st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
@@ -214,3 +214,20 @@ with p2:
             st.caption("*Data dari yfinance tidak wajar untuk rasio ini (terkonfirmasi: book value/EPS mendekati nol pada sumbernya), disembunyikan daripada menampilkan angka menyesatkan.")
     else:
         st.caption("Data fundamental belum tersedia untuk saham ini.")
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+# --- Berita: panel tampilan saja, TIDAK masuk ke model (lihat features/news.py) ---
+st.subheader("📰 Berita Terkait")
+news_items = load_news(selected, stock_name)
+if news_items:
+    st.caption("Headline dari Google News, hanya untuk dibaca sendiri -- bukan bagian dari perhitungan probabilitas model.")
+    for item in news_items:
+        date_str = item["pub_date"].strftime("%d %b %Y") if item["pub_date"] else ""
+        meta = " · ".join(p for p in (item["source"], date_str) if p)
+        st.markdown(
+            f"**[{item['title']}]({item['link']})**" + (f"  \n<span class='mystocks-muted'>{meta}</span>" if meta else ""),
+            unsafe_allow_html=True,
+        )
+else:
+    st.caption("Belum ada berita yang ditemukan untuk saham ini.")

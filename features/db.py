@@ -54,12 +54,15 @@ feature_daily = Table(
     Column("cmf_slope_5d", Numeric(10, 6)),
     Column("obv", BigInteger),
     Column("obv_slope_5d", Numeric(18, 4)),
+    Column("obv_zscore_20", Numeric(10, 4)),
     Column("mfi_14", Numeric(8, 4)),
     Column("mfi_slope_5d", Numeric(10, 4)),
     # Volatility
     Column("atr_pct_14", Numeric(8, 4)),
     Column("bb_width_pct", Numeric(10, 4)),
     Column("bb_width_change_5d", Numeric(10, 4)),
+    # VWAP
+    Column("price_vs_vwap20_pct", Numeric(10, 4)),
     # Market structure
     Column("higher_high_20d", Boolean),
     Column("higher_low_20d", Boolean),
@@ -79,6 +82,13 @@ feature_daily = Table(
     Column("day_of_week", Numeric(2, 0)),
     Column("is_month_end_week", Numeric(2, 0)),
     Column("relative_strength_20d_pct", Numeric(10, 4)),
+    Column("sector_relative_strength_20d_pct", Numeric(10, 4)),
+    # Fundamental (static per run -- latest known snapshot merged onto every
+    # row for that ticker, NOT a true point-in-time historical series; see
+    # build_features._merge_fundamental_features for why)
+    Column("trailing_pe", Numeric(10, 4)),
+    Column("price_to_book", Numeric(10, 4)),
+    Column("market_cap_log", Numeric(10, 4)),
     Column("created_at", DateTime, server_default=func.now()),
     UniqueConstraint("stock_code", "date", "feature_version", name="uq_feature_daily_code_date_version"),
 )

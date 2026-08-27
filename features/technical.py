@@ -88,6 +88,16 @@ def compute_money_flow(df: pd.DataFrame) -> pd.DataFrame:
     obv = ta.volume.OnBalanceVolumeIndicator(close, volume).on_balance_volume()
     out["obv"] = obv
     out["obv_slope_5d"] = _slope(obv, 5)
+    # Raw OBV is a running cumulative sum -- its absolute magnitude scales with
+    # how long the ticker has been listed and its typical volume, so it's
+    # meaningless to compare across tickers and was left out of every model
+    # through v4 for exactly that reason. z-scoring against its own trailing
+    # 20-day mean/std turns it into "is money flowing in/out more than this
+    # ticker's own recent norm right now" -- comparable across tickers, and
+    # usable as a real training feature.
+    obv_mean_20 = obv.rolling(20).mean()
+    obv_std_20 = obv.rolling(20).std().replace(0, float("nan"))  # avoid /0 on a flat/no-volume stretch
+    out["obv_zscore_20"] = (obv - obv_mean_20) / obv_std_20
 
     mfi = ta.volume.MFIIndicator(high, low, close, volume, window=14).money_flow_index()
     out["mfi_14"] = mfi
@@ -106,6 +116,20 @@ def compute_volatility(df: pd.DataFrame) -> pd.DataFrame:
     bb_width_pct = (bb.bollinger_hband() - bb.bollinger_lband()) / bb.bollinger_mavg() * 100
     out["bb_width_pct"] = bb_width_pct
     out["bb_width_change_5d"] = bb_width_pct - bb_width_pct.shift(5)
+    return out
+
+
+def compute_vwap(df: pd.DataFrame) -> pd.DataFrame:
+    """Rolling 20-day VWAP -- daily bars only (no intraday ticks here), so
+    this is the standard multi-day approximation: volume-weighted average of
+    each day's typical price ((H+L+C)/3), not a single trading day's VWAP.
+    price_vs_vwap20_pct follows the same "distance from a volume-weighted
+    reference line" idea as price_vs_sma50_pct, but weighted by how much
+    actually traded on each day instead of treating every day equally."""
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3
+    out = pd.DataFrame(index=df.index)
+    vwap_20 = (typical_price * df["volume"]).rolling(20).sum() / df["volume"].rolling(20).sum()
+    out["price_vs_vwap20_pct"] = _pct_distance(df["close"], vwap_20)
     return out
 
 
@@ -146,21 +170,29 @@ def compute_relative_strength_series(close: pd.Series, index_close: pd.Series, w
     return (stock_return - index_return) * 100
 
 
-def compute_all(df: pd.DataFrame, index_close: pd.Series = None) -> pd.DataFrame:
+def compute_all(df: pd.DataFrame, index_close: pd.Series = None, sector_close: pd.Series = None) -> pd.DataFrame:
     """df must have columns open/high/low/close/volume, indexed by date
     ascending. `index_close` (optional): IHSG's own close series, date-
     indexed the same way, for relative_strength_20d_pct -- omit to leave
-    that column NaN (e.g. when IHSG couldn't be fetched that run)."""
+    that column NaN (e.g. when IHSG couldn't be fetched that run).
+    `sector_close` (optional): this ticker's own sector's composite close
+    series (see build_features._build_sector_composites), for
+    sector_relative_strength_20d_pct -- a peer-group comparison, sharper
+    than relative_strength_20d_pct's whole-market comparison since it
+    controls for sector-wide moves (e.g. a broad banking rally lifting every
+    bank at once isn't evidence any one of them has an edge over its peers)."""
     parts = [
         compute_trend(df),
         compute_momentum(df),
         compute_volume(df),
         compute_money_flow(df),
         compute_volatility(df),
+        compute_vwap(df),
         compute_trend_strength(df),
         compute_gap(df),
         compute_calendar(df),
     ]
     result = pd.concat(parts, axis=1)
     result["relative_strength_20d_pct"] = compute_relative_strength_series(df["close"], index_close)
+    result["sector_relative_strength_20d_pct"] = compute_relative_strength_series(df["close"], sector_close)
     return result

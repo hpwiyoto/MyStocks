@@ -71,13 +71,67 @@ def load_price_history(conn, code: str) -> pd.DataFrame:
     return df
 
 
-def build_technical_features(df: pd.DataFrame, index_close: pd.Series, pattern: pd.DataFrame) -> pd.DataFrame:
-    technical = compute_technical(df, index_close)
+def build_technical_features(
+    df: pd.DataFrame, index_close: pd.Series, pattern: pd.DataFrame, sector_close: pd.Series = None,
+) -> pd.DataFrame:
+    technical = compute_technical(df, index_close, sector_close)
     structure = compute_structure(df)
     merged = pd.concat([technical, structure], axis=1)
     merged["regime"] = classify_regime(merged, df["close"])
     pattern = pattern.set_axis(merged.index)  # pattern was computed on a reset-index copy of df
     return pd.concat([merged, pattern], axis=1)
+
+
+def _build_sector_composites(price_by_code: dict, sector_by_code: dict) -> dict:
+    """Equal-weight synthetic sector index per sector, built from whichever
+    of `price_by_code`'s tickers belong to it. Composite is the cross-
+    sectional MEAN of each member's daily % return (skipna), compounded into
+    a level series -- not a "rebase everyone to 100 on one shared date"
+    index, on purpose: with members listed at very different dates, a shared
+    rebase date collapses to whenever the youngest member started trading,
+    throwing away most of the sector's usable history. Averaging daily
+    returns instead has no such floor -- a member just doesn't contribute on
+    days it has no data yet, same idea as IHSG being used for
+    relative_strength_20d_pct, but scoped to a ticker's own peer group
+    instead of the whole market (see technical.compute_all's docstring for
+    why that's a sharper signal).
+
+    NOTE: on a partial run (e.g. the Home "Update harga" button, scoped to
+    just the on-screen tickers) each sector's composite is only as
+    representative as however many of that sector's members happen to be in
+    this call's `tickers` -- fine for a live-price refresh, but a full run
+    (all ~900 tickers) is what training data should come from.
+    """
+    sector_returns = {}
+    for code, df in price_by_code.items():
+        sector = sector_by_code.get(code)
+        if sector:
+            sector_returns.setdefault(sector, []).append(df["close"].pct_change())
+
+    composites = {}
+    for sector, returns_list in sector_returns.items():
+        mean_daily_return = pd.concat(returns_list, axis=1).mean(axis=1, skipna=True)
+        composites[sector] = (1 + mean_daily_return.fillna(0)).cumprod() * 100
+    return composites
+
+
+def _merge_fundamental_features(features: pd.DataFrame, snapshot: dict) -> pd.DataFrame:
+    """Stamp trailing_pe / price_to_book / market_cap_log as a CONSTANT
+    value across every row being written this call. feature_fundamental_
+    snapshot only has a few days of history (recently added), nowhere near
+    the ~3-year price_history window walk-forward training uses, so there is
+    no true point-in-time fundamental series to join against past dates.
+    Using today's snapshot as a static "what kind of company is this" proxy
+    for a ticker's whole history is a deliberate approximation -- reasonable
+    given these move slowly relative to a 10-day prediction horizon, but NOT
+    a point-in-time backtest. Flagged here so that limitation doesn't get
+    lost by the time this reaches training."""
+    features = features.copy()
+    features["trailing_pe"] = snapshot.get("trailing_pe")
+    features["price_to_book"] = snapshot.get("price_to_book")
+    market_cap = snapshot.get("market_cap")
+    features["market_cap_log"] = math.log10(market_cap) if market_cap and market_cap > 0 else None
+    return features
 
 
 def upsert_feature_daily(conn, code: str, features: pd.DataFrame) -> int:
@@ -206,6 +260,14 @@ def run(tickers=None):
     logger.info("Fetching IHSG (%s) full history for relative strength", IHSG_SYMBOL)
     ihsg_close = _load_ihsg_close()
 
+    with engine.connect() as conn:
+        sector_by_code = dict(conn.execute(text("SELECT code, sector FROM stocks")).fetchall())
+    sector_composites = _build_sector_composites(price_by_code, sector_by_code)
+    logger.info(
+        "Built %d sector composites from %d tickers for sector_relative_strength_20d_pct",
+        len(sector_composites), len(price_by_code),
+    )
+
     # The bank (pass 1 inside compute_cross_ticker_pattern_similarity) is
     # cheap to rebuild (~10s for ~900 tickers); querying it per-ticker (pass
     # 2) is the slow, memory-sensitive part -- though with only_dates_after
@@ -237,7 +299,8 @@ def run(tickers=None):
             df = price_by_code[code]
             try:
                 with engine.begin() as conn:
-                    features = build_technical_features(df, ihsg_close, pattern_results[code])
+                    sector_close = sector_composites.get(sector_by_code.get(code))
+                    features = build_technical_features(df, ihsg_close, pattern_results[code], sector_close)
                     cutoff = last_feature_date.get(code)
                     if cutoff is not None:
                         # only_dates_after left every row up to `cutoff` with NaN/0
@@ -253,11 +316,17 @@ def run(tickers=None):
                         logger.info("%s: no new trading days since %s, nothing to write", code, cutoff)
                         continue
 
+                    # Fetched here (before the upsert, not after like before) so
+                    # trailing_pe/price_to_book/market_cap_log can be merged into
+                    # `features` -- same live yfinance call as before, just
+                    # reordered, not an extra fetch.
+                    snapshot = fetch_fundamental_snapshot(to_yfinance_symbol(code))
+                    features = _merge_fundamental_features(features, snapshot)
+
                     n = upsert_feature_daily(conn, code, features)
                     total_daily += n
                     logger.info("%s: upserted %d feature_daily rows", code, n)
 
-                    snapshot = fetch_fundamental_snapshot(to_yfinance_symbol(code))
                     snapshot["relative_strength_20d_pct"] = compute_relative_strength(df["close"], ihsg_close)
                     upsert_fundamental_snapshot(conn, code, snapshot)
                     total_fundamental += 1
