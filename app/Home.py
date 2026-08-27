@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 
-from app.data import load_latest_predictions
+from app.data import load_latest_predictions, load_live_prices
 from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
 from engine.predict import run as predict_run
 from features.build_features import run as build_features_run
@@ -16,7 +16,10 @@ inject_base_css()
 
 ENTRY_RANGE_PCT = 0.005  # +-0.5% zona beli di sekitar harga saat ini, bukan satu angka persis
 ENTRY_RANGE_MIN_RUPIAH = 2  # +-1% saham gocap (Rp50) < Rp1 -- dibulatkan jadi "50 - 50", jaminan lebar minimum
-TABLE_TOP_N = 30  # tabel & tombol update harga sama-sama dibatasi ke ini, bukan seluruh hasil filter
+TABLE_TOP_N = 25  # cap "mode semua" (tanpa daftar ticker manual) -- tabel, live-price overlay, & tombol
+                  # update harga sama-sama dibatasi ke ini. Naik dari 15 atas permintaan eksplisit.
+MANUAL_TICKER_MAX = 40  # sanity cap kalau user comma-paste daftar ticker yang sangat panjang --
+                         # jaga biaya live-price fetch & tombol update harga tetap wajar
 
 
 def entry_range(price: float) -> tuple[float, float]:
@@ -45,7 +48,11 @@ PRICE_FILTER_OPTIONS = ["Semua", "Di bawah 50", "50 - 100", "100 - 1.000", "Di a
 with st.sidebar:
     st.header("🔎 Filter")
     search = st.text_input(
-        "Cari kode/nama saham", placeholder="mis. BBCA atau bank", value=_persisted("search", ""),
+        "Cari kode/nama saham",
+        placeholder="mis. BBCA atau bank, atau BBCA, TLKM, ASII untuk beberapa ticker",
+        help="Pisahkan dengan koma untuk menampilkan beberapa ticker tertentu sekaligus "
+             "(cocok kode persis, tidak dibatasi Top 25).",
+        value=_persisted("search", ""),
     )
     _save_persisted("search", search)
 
@@ -100,7 +107,15 @@ elif price_filter == "100 - 1.000":
     filtered = filtered[(price >= 100) & (price < 1000)]
 elif price_filter == "Di atas 1.000":
     filtered = filtered[price >= 1000]
-if search:
+# Comma present -> treat as a manual list of exact ticker codes (the user
+# typed specific stocks they want, e.g. "BBCA, TLKM, ASII") rather than one
+# substring query -- a single term still matches by substring against both
+# code and name (so "bank" or a partial code keeps working as before).
+manual_tickers = [t.strip().lower() for t in search.split(",") if t.strip()] if search else []
+manual_ticker_mode = len(manual_tickers) > 1
+if manual_ticker_mode:
+    filtered = filtered[filtered["stock_code"].str.lower().isin(manual_tickers)]
+elif search:
     q = search.strip().lower()
     filtered = filtered[
         filtered["stock_code"].str.lower().str.contains(q)
@@ -120,7 +135,33 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 # synchronous button click. Scoping it to the same top-N shown in the table
 # below (not the full filtered set, which could still be hundreds) keeps
 # every click cheap regardless of how broad the sidebar filters are.
-refresh_codes = filtered.head(TABLE_TOP_N)["stock_code"].tolist()
+# Manual ticker mode is the one exception: the user explicitly named these
+# stocks, so show every one of them (up to the MANUAL_TICKER_MAX safety cap)
+# instead of truncating to the "best N by probability" ranking, which would
+# silently drop a ticker they specifically searched for.
+table_source = filtered.head(MANUAL_TICKER_MAX if manual_ticker_mode else TABLE_TOP_N).copy()
+refresh_codes = table_source["stock_code"].tolist()
+
+# Live price overlay: on every page load/rerun (not just the button below),
+# fetch a CURRENT quote for just these on-screen tickers (<=25 by default,
+# <=MANUAL_TICKER_MAX in manual-search mode) and use it in place of
+# `entry_price` (which is only as fresh as the last daily pipeline run, i.e.
+# up to a day stale). Cheap enough (~0.3s/ticker, cached 30s) to run
+# unconditionally here -- this is why the on-screen count is capped at all,
+# so this stays fast even though it runs on every rerun, not just on click.
+live_prices = load_live_prices(tuple(refresh_codes))
+if live_prices:
+    table_source["entry_price"] = table_source.apply(
+        lambda r: live_prices.get(r["stock_code"], r["entry_price"]), axis=1,
+    )
+if refresh_codes:
+    n_live = len(live_prices)
+    st.caption(
+        f"💹 Harga live: {n_live}/{len(refresh_codes)} ticker berhasil diambil real-time "
+        f"(sisanya pakai harga penutupan terakhir)." if n_live < len(refresh_codes)
+        else f"💹 Harga live untuk {n_live} ticker yang ditampilkan (update tiap 30 detik)."
+    )
+
 with st.sidebar:
     st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
     if st.button(f"🔄 Update harga ({len(refresh_codes)} ticker tampil)", width="stretch"):
@@ -140,8 +181,11 @@ if filtered.empty:
 
 # --- Top peluang: highlight kartu untuk beberapa probabilitas tertinggi ---
 TOP_N_CARDS = 9
-top = filtered.head(TOP_N_CARDS)
-st.subheader(f"🏆 Top {min(TOP_N_CARDS, len(top))} Peluang Tertinggi")
+top = table_source.head(TOP_N_CARDS)  # already has live prices overlaid, see above
+if manual_ticker_mode:
+    st.subheader(f"🏆 {len(top)} Ticker yang Dicari")
+else:
+    st.subheader(f"🏆 Top {min(TOP_N_CARDS, len(top))} Peluang Tertinggi")
 
 CARDS_PER_ROW = 3
 rows = [top.iloc[i : i + CARDS_PER_ROW] for i in range(0, len(top), CARDS_PER_ROW)]
@@ -185,9 +229,16 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 # --- Tabel ranking: dibatasi top N teratas (bukan seluruh hasil filter) --
 # menampilkan ratusan baris sekaligus memberatkan render browser & query
 # tanpa manfaat nyata, karena yang dicari selalu peluang terbaik dulu.
-# (TABLE_TOP_N juga membatasi tombol Update Harga di atas, lihat sana.)
-table_source = filtered.head(TABLE_TOP_N)
-if len(filtered) > TABLE_TOP_N:
+# (table_source dihitung di atas, sekalian dipakai untuk live-price overlay
+# & tombol Update Harga.)
+if manual_ticker_mode:
+    st.subheader(f"📋 {len(table_source)} Saham Dicari — urut berdasarkan probabilitas")
+    if len(filtered) > MANUAL_TICKER_MAX:
+        st.caption(
+            f"Menampilkan {MANUAL_TICKER_MAX} dari {len(filtered)} ticker yang cocok (dibatasi supaya tetap ringan) "
+            "-- persempit daftar ticker yang dicari untuk melihat semuanya."
+        )
+elif len(filtered) > TABLE_TOP_N:
     st.subheader(f"📋 Top {TABLE_TOP_N} Saham dari {len(filtered)} — urut berdasarkan probabilitas")
     st.caption(
         f"Menampilkan {TABLE_TOP_N} peluang probabilitas tertinggi saja (bukan semua {len(filtered)} hasil filter) "

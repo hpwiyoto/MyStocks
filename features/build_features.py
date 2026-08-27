@@ -137,13 +137,6 @@ def run(tickers=None):
     engine = get_engine()
     init_schema(engine)
 
-    # Fetched once, full history: needed both for the live "latest" relative
-    # strength (fundamental snapshot) and now also the historical per-day
-    # version (feature_daily), which needs IHSG's value on every past date,
-    # not just the last year.
-    logger.info("Fetching IHSG (%s) full history for relative strength", IHSG_SYMBOL)
-    ihsg_close = _load_ihsg_close()
-
     # --- Load every qualifying ticker's price history once, up front. Reused
     # both for the cross-ticker pattern-similarity bank (needs everyone's
     # history at once) and the per-ticker technical/structure/regime pass
@@ -168,17 +161,50 @@ def run(tickers=None):
     # AND -- more importantly for routine daily runs -- re-querying a
     # ticker's entire ~1200-day history every day just to add one new row
     # is most of what made both the backfill AND a plain "update today's
-    # price" run take hours. `last_feature_date` (per ticker, only present
-    # if that ticker already has an up-to-date-schema row) drives
+    # price" run take hours. `last_feature_date` (per ticker) drives
     # `only_dates_after` in compute_cross_ticker_pattern_similarity, so a
     # ticker with nothing new to add costs next to nothing here, and one
     # with one new day only gets THAT day queried, not its whole history.
-    # A ticker absent from this dict (brand new, or pre-dates the adx_14
-    # column) gets its full history queried, same as before.
+    # A ticker absent from this dict (brand new) gets its full history
+    # queried, same as before. No adx_14-IS-NOT-NULL filter here on purpose:
+    # the v3 schema migration backfill is long complete (measured: 33/993k
+    # rows, all one ticker whose data genuinely can't produce an ADX value,
+    # not stale pre-migration rows), and that filter defeated the index --
+    # MySQL couldn't loose-scan the (stock_code, date, feature_version) index
+    # for MAX(date) per group with a non-indexed WHERE column in the mix, so
+    # it fell back to a ~979k-row full index scan (~20s) instead of ~900
+    # index-only lookups (~0.1s) on every single call, including this
+    # button's.
     with engine.connect() as conn:
         last_feature_date = dict(conn.execute(text(
-            "SELECT stock_code, MAX(date) FROM feature_daily WHERE adx_14 IS NOT NULL GROUP BY stock_code"
+            "SELECT stock_code, MAX(date) FROM feature_daily GROUP BY stock_code"
         )).fetchall())
+
+    # Short-circuit before the expensive IHSG fetch (a "max"-period yfinance
+    # call, ~25s regardless of scope) when every requested ticker is already
+    # fully scored through its latest price_history row -- the common case
+    # for the Home "Update harga" button, which re-runs this for the same
+    # ~15 on-screen tickers and, outside of trading hours or on a repeat
+    # click, usually has nothing new to compute. Measured: cuts a no-op call
+    # from ~30s to under 1s.
+    needs_update = [
+        code for code, df in price_by_code.items()
+        if code not in last_feature_date or df.index.max() > last_feature_date[code]
+    ]
+    if not needs_update:
+        logger.info(
+            "All %d requested tickers already scored through their latest price_history row, "
+            "nothing to compute -- skipping IHSG fetch and pattern similarity",
+            len(price_by_code),
+        )
+        return {"feature_daily_rows": 0, "fundamental_snapshots": 0, "failures": []}
+
+    # Fetched once, full history: needed both for the live "latest" relative
+    # strength (fundamental snapshot) and now also the historical per-day
+    # version (feature_daily), which needs IHSG's value on every past date,
+    # not just the last year.
+    logger.info("Fetching IHSG (%s) full history for relative strength", IHSG_SYMBOL)
+    ihsg_close = _load_ihsg_close()
 
     # The bank (pass 1 inside compute_cross_ticker_pattern_similarity) is
     # cheap to rebuild (~10s for ~900 tickers); querying it per-ticker (pass

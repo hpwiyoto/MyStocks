@@ -10,14 +10,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
 import streamlit as st
+import yfinance as yf
 from sqlalchemy import inspect
 
 from engine.predict import MODEL_VERSION
 from pipeline.db import get_engine
+from pipeline.logging_config import get_logger
+from pipeline.tickers import to_yfinance_symbol
+
+logger = get_logger("app.data")
 
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
 
 CACHE_TTL = 300  # seconds
+LIVE_PRICE_TTL = 30  # seconds -- short on purpose, this is the "what's it doing right now" overlay
 
 
 def _missing_tables(engine, required: list[str]) -> list[str]:
@@ -137,3 +143,25 @@ def load_model_metadata() -> dict:
 def days_since(date_str: str) -> int:
     trained = dt.date.fromisoformat(date_str)
     return (dt.date.today() - trained).days
+
+
+@st.cache_data(ttl=LIVE_PRICE_TTL)
+def load_live_prices(codes: tuple[str, ...]) -> dict[str, float]:
+    """Current/live market price for a SMALL set of tickers (the ones on
+    screen right now -- e.g. the top 15 -- never the full ~900-ticker
+    universe, that's what the daily pipeline is for). Deliberately separate
+    from the DB-backed prediction data: this is a pure display overlay, no
+    feature/prediction recompute, so it's cheap enough (~0.3s/ticker via
+    yfinance's lightweight `fast_info`, not a full `.history()` fetch) to
+    run on every page load without the multi-minute pipeline cost. Returns
+    only the tickers that succeeded -- caller falls back to the
+    (necessarily one-day-stale-at-most) `entry_price` from `predictions`
+    for anything missing here, e.g. a transient yfinance hiccup.
+    """
+    prices = {}
+    for code in codes:
+        try:
+            prices[code] = float(yf.Ticker(to_yfinance_symbol(code)).fast_info["last_price"])
+        except Exception as exc:
+            logger.warning("%s: live price fetch failed, falling back to last close — %s", code, exc)
+    return prices
