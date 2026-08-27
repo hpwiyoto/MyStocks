@@ -33,9 +33,15 @@ def load_model_and_metadata(model_version: str):
 
 def build_feature_row(feature_row: dict, feature_cols: list[str]):
     """Returns (X, missing_cols). X is a 1-row DataFrame with exactly
-    `feature_cols` in order; missing_cols lists any that couldn't be filled
-    (caller should skip prediction for that ticker rather than feed the
-    model a silently-incomplete row)."""
+    `feature_cols` in order. A column that's genuinely NULL for this row
+    (e.g. trailing_pe for a persistently loss-making company -- ~34% of
+    rows, confirmed by checking the DB directly) is passed through as NaN
+    rather than skipping the ticker entirely: XGBoost handles missing
+    values natively (DMatrix treats NaN as "missing" and learns a default
+    branch direction for it during training), so there's no reason a single
+    absent ratio should blank out an otherwise-complete prediction.
+    missing_cols is kept in the return signature for callers that still
+    want to log/inspect it, but is no longer used to force a skip here."""
     row = dict(feature_row)
 
     similar_count = row.get("similar_pattern_count") or 0
@@ -48,20 +54,11 @@ def build_feature_row(feature_row: dict, feature_cols: list[str]):
         if c.startswith("regime_"):
             row[c] = 1 if c == f"regime_{regime_value}" else 0
 
-    values = {}
-    missing = []
-    for c in feature_cols:
-        v = row.get(c)
-        if v is None:
-            missing.append(c)
-        else:
-            values[c] = v
+    values = {c: row.get(c) for c in feature_cols}
+    missing = [c for c, v in values.items() if v is None]
 
-    if missing:
-        return None, missing
-
-    X = pd.DataFrame([values], columns=feature_cols).astype(float)
-    return X, []
+    X = pd.DataFrame([values], columns=feature_cols).astype(float)  # None -> NaN
+    return X, missing
 
 
 def predict_probability(booster: xgb.Booster, X: pd.DataFrame) -> float:

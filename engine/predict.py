@@ -92,9 +92,13 @@ def run(tickers=None):
 
                 X, missing = build_feature_row(feat_row, feature_cols)
                 if missing:
-                    logger.warning("%s: missing features %s, skipping", code, missing)
-                    skipped.append(code)
-                    continue
+                    # A genuinely NULL ratio (e.g. trailing_pe for a
+                    # persistently loss-making company -- ~34% of rows,
+                    # confirmed by checking the DB directly) is not a
+                    # reason to drop the whole ticker: X already has NaN in
+                    # `missing`'s columns, and XGBoost handles that natively.
+                    # Logged for visibility, not treated as a skip.
+                    logger.info("%s: %s NULL, predicting with the rest of the feature row anyway", code, missing)
 
                 probability = predict_probability(booster, X)
                 decision_result = decide(probability, base_rate, entry_price, target_pct, stop_pct)
