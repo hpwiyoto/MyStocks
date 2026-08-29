@@ -18,7 +18,7 @@ from pipeline.tickers import SEED_TICKERS
 
 logger = get_logger("engine.predict")
 
-MODEL_VERSION = "direction_xgboost_v4"
+MODEL_VERSION = "direction_xgboost_v5"
 
 
 def latest_feature_row(conn, code: str):

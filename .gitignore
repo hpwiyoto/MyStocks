@@ -29,8 +29,8 @@ models/*.json
 # models/*.json rule entirely, so future ad-hoc experiment dumps in models/
 # don't get committed by accident.
 !models/.gitkeep
-!models/direction_xgboost_v4.json
-!models/direction_xgboost_v4_metadata.json
+!models/direction_xgboost_v5.json
+!models/direction_xgboost_v5_metadata.json
 
 # OS / editor
 .DS_Store

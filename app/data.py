@@ -59,7 +59,16 @@ def load_latest_predictions() -> pd.DataFrame:
             GROUP BY stock_code
         ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
         WHERE p.model_version = %(model_version)s
-        ORDER BY p.probability DESC
+        ORDER BY
+            -- Decision tier first (BUY, then WATCH, then AVOID), probability
+            -- only as the tiebreaker within a tier -- NOT probability alone.
+            -- A gocap-floor AVOID (engine.decision.GOCAP_PRICE_FLOOR) can
+            -- have a higher raw model probability than a real WATCH pick
+            -- (the override is about tradeability, not the score itself),
+            -- so sorting by probability alone let those rows crowd out
+            -- genuine opportunities at the top of Home's ranked table.
+            CASE p.decision WHEN 'BUY' THEN 0 WHEN 'WATCH' THEN 1 ELSE 2 END,
+            p.probability DESC
         """,
         engine,
         params={"model_version": MODEL_VERSION},

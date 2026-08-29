@@ -26,9 +26,19 @@ precision 71.4%->76.1% and profit factor 4.99->6.35. 0.60 was picked over
 more aggressive values (e.g. 0.70, precision 79.5%/profit factor 7.75) as
 the more robust, less overfit-to-the-sweep-itself choice that still keeps a
 usable number of live BUY signals rather than making them vanishingly rare.
+
+Raised again to 0.65 for v5 (scripts/tune_v5.py's pooled out-of-sample
+sweep, same 4-fold walk-forward methodology). v5's sweep behaves
+differently from v4's: it does NOT improve monotonically all the way to
+0.70 -- 0.65 is the actual peak (precision 84.5%, profit factor 11.98, max
+drawdown -6.7%), with 0.70 slightly worse on profit factor and drawdown
+despite fewer trades. Picking 0.70 anyway (as "more conservative must be
+better") would have meant choosing a worse point on v5's curve, not a more
+robust one -- 0.65 is both the empirical peak AND avoids the extreme-value
+overfit concern that ruled out 0.70 for v4.
 """
 
-BUY_THRESHOLD = 0.60
+BUY_THRESHOLD = 0.65
 
 # IDX's practical price floor ("gocap") -- confirmed by checking real Home
 # output: PNBS/MDLN/HDIT/CPRO were all parked exactly at Rp50, BTEK at Rp10,
