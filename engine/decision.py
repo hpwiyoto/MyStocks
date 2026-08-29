@@ -36,9 +36,20 @@ despite fewer trades. Picking 0.70 anyway (as "more conservative must be
 better") would have meant choosing a worse point on v5's curve, not a more
 robust one -- 0.65 is both the empirical peak AND avoids the extreme-value
 overfit concern that ruled out 0.70 for v4.
+
+Brought back down to 0.60 shortly after, at the user's explicit request:
+0.65 meant ~2.9 BUY signals/day on average across ~900 tickers (measured
+via scripts/random_baseline_check.py over the most recent 250 trading
+days), which is an AVERAGE -- the daily count varies enough that several
+consecutive days can land at zero, which is exactly what the user hit and
+flagged. 0.60 raises that to ~4.2 signals/day at a real but modest
+precision cost (78.1% -> 76.5% in that same 250-day check; walk-forward
+win_rate 78.1% pooled, not the 84.5% headline number, which was the
+stricter 4-fold walk-forward figure) -- a deliberate trade of a few points
+of precision for a usable BUY tier that isn't empty on a routine basis.
 """
 
-BUY_THRESHOLD = 0.65
+BUY_THRESHOLD = 0.60
 
 # IDX's practical price floor ("gocap") -- confirmed by checking real Home
 # output: PNBS/MDLN/HDIT/CPRO were all parked exactly at Rp50, BTEK at Rp10,

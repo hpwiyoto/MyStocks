@@ -30,6 +30,12 @@ with c1:
     st.markdown(f"<div class='mystocks-metric-value'>{meta['model_version']}</div>", unsafe_allow_html=True)
 c2.metric("Dilatih pada", meta["trained_at"], delta=f"{age_days} hari lalu", delta_color="off")
 c3.metric("Baseline win rate (base_rate)", f"{meta['base_rate']*100:.1f}%")
+st.caption(
+    "Ini angka **pembanding acak** (kalau asal pilih saham tanpa strategi apa pun, kira-kira segini "
+    "sering yang naik ≥5% sebelum -2.5% dalam 10 hari) -- bukan skor performa model. Model dianggap "
+    "bekerja kalau bisa MENGGESER probabilitas jauh dari angka ini: BUY seharusnya jauh di atas, "
+    "AVOID jauh di bawah. Lihat halaman Home untuk win rate sesungguhnya per keputusan."
+)
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
