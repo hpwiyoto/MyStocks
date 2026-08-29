@@ -24,7 +24,10 @@ REGIME_COLORS = {
     "overextended": "#F97316",
 }
 
-DECISION_COLORS = {"BUY": COLOR_BUY, "WATCH": COLOR_WATCH, "AVOID": COLOR_AVOID}
+DECISION_COLORS = {
+    "BUY": COLOR_BUY, "WATCH": COLOR_WATCH, "AVOID": COLOR_AVOID,
+    "POTENSIAL": COLOR_BUY, "BELUM": COLOR_WATCH,  # turnaround screener's own decision tiers
+}
 
 
 def inject_base_css():

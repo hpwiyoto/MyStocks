@@ -14,6 +14,7 @@ import yfinance as yf
 from sqlalchemy import inspect
 
 from engine.predict import MODEL_VERSION
+from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 from features.news import fetch_news_headlines
 from pipeline.db import get_engine
 from pipeline.logging_config import get_logger
@@ -77,6 +78,39 @@ def load_latest_predictions() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_latest_turnaround_predictions() -> pd.DataFrame:
+    """Same shape/joins as load_latest_predictions, separate function (not
+    a parameterized shared one) because the decision tiers are genuinely
+    different -- POTENSIAL/BELUM here, not BUY/WATCH/AVOID -- and the
+    turnaround model only ever scores tickers currently in bearish/
+    bottoming regime (see engine.predict_turnaround), so this is always a
+    small subset of the full universe, not a parallel ranking of everyone."""
+    engine = get_engine()
+    if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
+        return pd.DataFrame()
+    df = pd.read_sql(
+        """
+        SELECT p.stock_code, s.name, s.sector, s.industry, p.date, p.probability, p.decision,
+               p.entry_price, fd.regime
+        FROM predictions p
+        LEFT JOIN stocks s ON p.stock_code = s.code
+        LEFT JOIN feature_daily fd ON p.stock_code = fd.stock_code AND p.date = fd.date
+        INNER JOIN (
+            SELECT stock_code, MAX(date) AS max_date
+            FROM predictions
+            WHERE model_version = %(model_version)s
+            GROUP BY stock_code
+        ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
+        WHERE p.model_version = %(model_version)s
+        ORDER BY CASE p.decision WHEN 'POTENSIAL' THEN 0 ELSE 1 END, p.probability DESC
+        """,
+        engine,
+        params={"model_version": TURNAROUND_MODEL_VERSION},
+    )
+    return df
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
     engine = get_engine()
     if _missing_tables(engine, ["price_history"]):
@@ -133,8 +167,8 @@ def load_latest_fundamental(stock_code: str) -> dict | None:
 def load_stock_list() -> pd.DataFrame:
     engine = get_engine()
     if _missing_tables(engine, ["stocks"]):
-        return pd.DataFrame(columns=["code", "name", "sector"])
-    return pd.read_sql("SELECT code, name, sector FROM stocks ORDER BY code", engine)
+        return pd.DataFrame(columns=["code", "name", "sector", "industry"])
+    return pd.read_sql("SELECT code, name, sector, industry FROM stocks ORDER BY code", engine)
 
 
 @st.cache_data(ttl=CACHE_TTL)
@@ -146,8 +180,8 @@ def feature_daily_row_count() -> int:
     return int(df["c"].iloc[0])
 
 
-def load_model_metadata() -> dict:
-    path = os.path.join(MODEL_DIR, f"{MODEL_VERSION}_metadata.json")
+def load_model_metadata(model_version: str = MODEL_VERSION) -> dict:
+    path = os.path.join(MODEL_DIR, f"{model_version}_metadata.json")
     with open(path) as f:
         return json.load(f)
 

@@ -31,6 +31,10 @@ models/*.json
 !models/.gitkeep
 !models/direction_xgboost_v5.json
 !models/direction_xgboost_v5_metadata.json
+# Separate menu (Turnaround Screener), not a superseded version of the
+# swing model above -- both stay un-ignored together.
+!models/turnaround_xgboost_v1.json
+!models/turnaround_xgboost_v1_metadata.json
 
 # OS / editor
 .DS_Store

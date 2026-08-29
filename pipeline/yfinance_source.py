@@ -49,13 +49,14 @@ def fetch_profile(symbol: str) -> dict:
         return {
             "name": info.get("longName") or info.get("shortName"),
             "sector": info.get("sector"),
+            "industry": info.get("industry"),
         }
 
     try:
         return with_retry(_fetch, f"fetch_profile({symbol})")
     except Exception:
         # Profile metadata is a nice-to-have; missing it should not block price ingestion.
-        return {"name": None, "sector": None}
+        return {"name": None, "sector": None, "industry": None}
 
 
 def fetch_full_info(symbol: str) -> dict:

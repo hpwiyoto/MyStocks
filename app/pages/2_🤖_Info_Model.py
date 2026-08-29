@@ -7,6 +7,8 @@ import streamlit as st
 
 from app.data import days_since, feature_daily_row_count, load_model_metadata
 from app.style import inject_base_css, render_developer_footer
+from engine.decision import BUY_THRESHOLD
+from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 
 st.set_page_config(page_title="MyStocks — Info Model", page_icon="🤖", layout="wide")
 inject_base_css()
@@ -69,10 +71,11 @@ t2.metric("Stop loss", f"{meta['stop_pct']*100:.1f}%")
 t3.metric("Horizon", f"{meta['horizon_days']} hari trading")
 
 st.markdown(
-    """
-    - **BUY** — probabilitas ≥ 50%
-    - **WATCH** — probabilitas ≥ base rate historis model, tapi < 50%
-    - **AVOID** — probabilitas di bawah base rate (tidak ada edge)
+    f"""
+    - **BUY** — probabilitas ≥ {BUY_THRESHOLD*100:.0f}%
+    - **WATCH** — probabilitas ≥ base rate historis model, tapi < {BUY_THRESHOLD*100:.0f}%
+    - **AVOID** — probabilitas di bawah base rate (tidak ada edge), atau harga saham ≤ Rp50 (floor gocap,
+      lihat `engine.decision.GOCAP_PRICE_FLOOR` — dipaksa AVOID apa pun probabilitasnya)
     """
 )
 
@@ -88,3 +91,34 @@ st.dataframe(
 
 st.subheader("🏢 Ticker dalam data training")
 st.write(", ".join(meta.get("tickers") or []))
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+st.subheader("🔄 Model Turnaround Screener")
+try:
+    ta_meta = load_model_metadata(TURNAROUND_MODEL_VERSION)
+    ta_wf = ta_meta.get("walk_forward_validation") or {}
+    ta_ml = ta_wf.get("avg_ml_metrics") or {}
+
+    ta1, ta2, ta3 = st.columns(3)
+    ta1.markdown("<span class='mystocks-muted'>Model</span>", unsafe_allow_html=True)
+    ta1.markdown(f"<div class='mystocks-metric-value'>{ta_meta['model_version']}</div>", unsafe_allow_html=True)
+    ta2.metric("Dilatih pada", ta_meta["trained_at"], delta=f"{days_since(ta_meta['trained_at'])} hari lalu", delta_color="off")
+    ta3.metric("Threshold POTENSIAL", f"{ta_wf.get('buy_threshold', 0)*100:.0f}%")
+
+    tb1, tb2, tb3 = st.columns(3)
+    tb1.metric("Base rate (semua kandidat bearish/bottoming)", f"{ta_meta['base_rate']*100:.1f}%")
+    tb2.metric("Precision @ threshold (walk-forward)", f"{ta_ml.get('precision', 0)*100:.1f}%" if ta_ml else "-")
+    tb3.metric("ROC-AUC (walk-forward)", f"{ta_ml.get('roc_auc', 0):.3f}" if ta_ml else "-")
+
+    st.caption(
+        "Beda karakter dari model swing di atas: base rate-nya sendiri sudah tinggi (~82%), jadi lift "
+        "di atas base rate lebih kecil (precision ~92% vs base 82%, bukan lompatan besar seperti BUY "
+        "swing vs base rate 30%-nya). Nilainya lebih ke menyisihkan kandidat yang kemungkinan besar "
+        "GAGAL berbalik arah, bukan menemukan yang pasti berhasil. Hanya menyekor ticker yang SAAT INI "
+        f"bearish/bottoming (target: berpindah ke {'/'.join(ta_meta.get('target_regimes', []))} dan "
+        f"bertahan ≥{ta_meta.get('hold_trading_days', '-')} hari dalam {ta_meta.get('horizon_trading_days', '-')} "
+        "hari perdagangan) -- lihat halaman Turnaround."
+    )
+except FileNotFoundError:
+    st.caption("Model turnaround belum dilatih.")

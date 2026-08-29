@@ -25,6 +25,7 @@ stocks = Table(
     Column("code", String(10), primary_key=True),
     Column("name", String(255)),
     Column("sector", String(100)),
+    Column("industry", String(100)),
     Column("created_at", DateTime, server_default=func.now()),
     Column("updated_at", DateTime, server_default=func.now(), onupdate=func.now()),
 )

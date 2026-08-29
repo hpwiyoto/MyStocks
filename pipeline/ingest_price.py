@@ -40,7 +40,9 @@ def upsert_stock(conn, code: str) -> None:
         return
     profile = fetch_profile(to_yfinance_symbol(code))
     conn.execute(
-        mysql_insert(stocks).values(code=code, name=profile["name"], sector=profile["sector"])
+        mysql_insert(stocks).values(
+            code=code, name=profile["name"], sector=profile["sector"], industry=profile["industry"],
+        )
     )
     logger.info("Registered new stock %s (%s)", code, profile["name"])
 

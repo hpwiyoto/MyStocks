@@ -29,6 +29,13 @@ BB_WIDTH_RANK_WINDOW = 100
 ACCUMULATION_BB_RANK_THRESHOLD = 0.30
 FLAT_PRICE_BAND_PCT = 5.0
 
+# Shared with scripts/turnaround_labels.py (label definition) and
+# engine/predict_turnaround.py (candidate filter at serving time) -- one
+# definition of "a stock currently in trouble", not three copies of the
+# same two strings.
+BAD_REGIMES = {"bearish", "bottoming"}
+GOOD_REGIMES = {"early_reversal", "bullish"}
+
 
 def classify_regime(features: pd.DataFrame, close: pd.Series) -> pd.Series:
     sma_50 = features["sma_50"]

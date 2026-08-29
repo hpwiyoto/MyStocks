@@ -217,6 +217,55 @@ with p2:
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
+# --- Sektor & Industri: konteks peer group, plus siapa lagi di industri yang
+# sama sedang bagus sekarang (sector/industry sendiri sudah jadi bagian
+# model lewat sector_relative_strength_20d_pct -- lihat features/build_
+# features.py -- panel ini cuma menampilkannya secara visual). ---
+st.subheader("🏭 Sektor & Industri")
+stock_row = stocks_df[stocks_df["code"] == selected]
+sector = stock_row["sector"].iloc[0] if not stock_row.empty else None
+industry = stock_row["industry"].iloc[0] if not stock_row.empty else None
+
+if sector or industry:
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Sektor", sector or "-")
+    s2.metric("Sub-sektor (industri)", industry or "-")
+    sect_rs = feat.get("sector_relative_strength_20d_pct") if feat else None
+    s3.metric(
+        "Relative Strength vs Sektor (20d)",
+        f"{float(sect_rs):.1f}%" if sect_rs is not None else "-",
+        help="Selisih return 20 hari saham ini vs rata-rata sektornya sendiri -- positif berarti mengungguli teman sesektor, bukan cuma pasar secara umum (lihat metrik 'Relative Strength vs IHSG' di panel Fundamental untuk pembanding pasar).",
+    )
+
+    if industry:
+        peers = stocks_df[(stocks_df["industry"] == industry) & (stocks_df["code"] != selected)]
+        if not peers.empty and not predictions.empty:
+            peer_view = predictions[predictions["stock_code"].isin(peers["code"])][
+                ["stock_code", "name", "decision", "probability", "regime"]
+            ].sort_values("probability", ascending=False).head(8)
+            if not peer_view.empty:
+                st.caption(f"Saham lain di sub-sektor **{industry}** (diurutkan probabilitas):")
+                peer_view = peer_view.copy()
+                peer_view["probability"] = (peer_view["probability"].astype(float) * 100).round(1)
+                st.dataframe(
+                    peer_view, hide_index=True, width="stretch",
+                    column_config={
+                        "stock_code": st.column_config.TextColumn("Kode"),
+                        "name": st.column_config.TextColumn("Nama"),
+                        "decision": st.column_config.TextColumn("Keputusan"),
+                        "probability": st.column_config.ProgressColumn("Probabilitas", format="%.1f%%", min_value=0.0, max_value=100.0),
+                        "regime": st.column_config.TextColumn("Regime"),
+                    },
+                )
+            else:
+                st.caption(f"Belum ada prediksi terbaru untuk saham lain di sub-sektor {industry}.")
+        else:
+            st.caption(f"Tidak ada saham lain yang terdaftar di sub-sektor {industry}.")
+else:
+    st.caption("Data sektor/industri belum tersedia untuk saham ini.")
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
 # --- Berita: panel tampilan saja, TIDAK masuk ke model (lihat features/news.py) ---
 st.subheader("📰 Berita Terkait")
 news_items = load_news(selected, stock_name)
