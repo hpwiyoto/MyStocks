@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+import pandas as pd
 import streamlit as st
 
 from app.data import load_latest_turnaround_predictions
@@ -101,7 +102,10 @@ for row_chunk in rows:
     cols = st.columns(CARDS_PER_ROW)
     for col, (_, r) in zip(cols, row_chunk.iterrows()):
         with col:
-            name = r["name"] or r["stock_code"]
+            # See Home.py's identical guard: NULL from SQL is float NaN, not
+            # None, and NaN is truthy in Python -- `r["name"] or ...` would
+            # silently print "nan" instead of falling back.
+            name = r["stock_code"] if pd.isna(r["name"]) else r["name"]
             prob_pct = float(r["probability"]) * 100
             st.markdown(
                 f"""
@@ -121,7 +125,8 @@ for row_chunk in rows:
             st.progress(min(max(prob_pct / 100, 0.0), 1.0), text=f"Probabilitas: {prob_pct:.1f}%")
             sub1, sub2 = st.columns(2)
             sub1.markdown(f"<span class='mystocks-muted'>Harga Saat Ini</span><br>{float(r['entry_price']):,.0f}", unsafe_allow_html=True)
-            sub2.markdown(f"<span class='mystocks-muted'>Sub-sektor</span><br>{r['industry'] or '-'}", unsafe_allow_html=True)
+            industry_display = "-" if pd.isna(r["industry"]) else r["industry"]
+            sub2.markdown(f"<span class='mystocks-muted'>Sub-sektor</span><br>{industry_display}", unsafe_allow_html=True)
             if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")

@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pandas as pd
 import streamlit as st
 
 from app.data import load_latest_predictions, load_live_prices
@@ -193,7 +194,11 @@ for row_chunk in rows:
     cols = st.columns(CARDS_PER_ROW)
     for col, (_, r) in zip(cols, row_chunk.iterrows()):
         with col:
-            name = r["name"] or r["stock_code"]
+            # NULL from SQL comes back as float NaN, not None -- and NaN is
+            # truthy in Python, so `r["name"] or r["stock_code"]` would
+            # silently print "nan" instead of falling back (found and fixed
+            # for real on Detail Saham's sector panel; guarded here too).
+            name = r["stock_code"] if pd.isna(r["name"]) else r["name"]
             prob_pct = float(r["probability"]) * 100
             st.markdown(
                 f"""

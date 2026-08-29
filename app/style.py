@@ -129,7 +129,13 @@ def safe_ratio(value, fmt: str = "{:.2f}", max_abs: float = 100) -> str:
     tickers (e.g. ADRO: bookValue=0.17 vs price=2630), producing P/B ratios
     like 15470 that are real arithmetic but meaningless to show as-is. Values
     outside a generous sane bound are flagged instead of displayed raw."""
-    if value is None:
+    # SQL NULL comes back from pandas as float NaN, not None -- and NaN
+    # fails every ordinary comparison (`abs(nan) > max_abs` is False, not
+    # an error), so without this check a NULL ratio would silently render
+    # as the literal string "nan" instead of falling back to "-".
+    # `value != value` is the dependency-free NaN test (NaN is the only
+    # float where that's ever True).
+    if value is None or value != value:
         return "-"
     if abs(value) > max_abs:
         return "N/A*"

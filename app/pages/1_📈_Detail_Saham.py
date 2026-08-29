@@ -11,6 +11,16 @@ from plotly.subplots import make_subplots
 from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
+def _notna(value):
+    """`feat`/`fund` here are dicts built from a pandas row via .to_dict()
+    -- a SQL NULL comes back as float NaN, not None, and `x is not None`
+    doesn't catch NaN (it's a distinct float value). Used everywhere this
+    page decides "is this value present" before formatting/displaying it,
+    so a NULL field falls through to its "-" placeholder instead of
+    silently rendering the literal string "nan"."""
+    return value is not None and value == value
+
+
 st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
 inject_base_css()
 render_developer_footer()
@@ -189,11 +199,12 @@ p1, p2 = st.columns(2)
 
 with p1:
     st.subheader("🔁 Historical Pattern Similarity")
-    if feat and feat.get("similarity_score") is not None:
+    if feat and _notna(feat.get("similarity_score")):
         st.metric("Similarity score (pola paling mirip)", f"{float(feat['similarity_score']):.2f}")
-        st.metric("Jumlah pola historis serupa", int(feat.get("similar_pattern_count") or 0))
+        pattern_count = feat.get("similar_pattern_count")
+        st.metric("Jumlah pola historis serupa", int(pattern_count) if _notna(pattern_count) else 0)
         win_rate = feat.get("historical_win_rate")
-        if win_rate is not None:
+        if _notna(win_rate):
             st.metric("Win rate pola serupa (10 hari ke depan)", f"{float(win_rate)*100:.1f}%")
         else:
             st.caption("Belum ada pola historis yang cukup mirip untuk dihitung win rate-nya.")
@@ -206,10 +217,10 @@ with p2:
         f1, f2 = st.columns(2)
         f1.metric("P/E (trailing)", safe_ratio(fund.get("trailing_pe"), "{:.1f}"))
         f1.metric("P/B", safe_ratio(fund.get("price_to_book"), "{:.2f}"))
-        f1.metric("Dividend Yield", f"{fund['dividend_yield']:.2f}%" if fund.get("dividend_yield") is not None else "-")
-        f2.metric("ROE", f"{fund['return_on_equity']*100:.1f}%" if fund.get("return_on_equity") is not None else "-")
-        f2.metric("Relative Strength vs IHSG (20d)", f"{fund['relative_strength_20d_pct']:.1f}%" if fund.get("relative_strength_20d_pct") is not None else "-")
-        f2.metric("Analyst Upside", f"{fund['analyst_upside_pct']:.1f}%" if fund.get("analyst_upside_pct") is not None else "-")
+        f1.metric("Dividend Yield", f"{fund['dividend_yield']:.2f}%" if _notna(fund.get("dividend_yield")) else "-")
+        f2.metric("ROE", f"{fund['return_on_equity']*100:.1f}%" if _notna(fund.get("return_on_equity")) else "-")
+        f2.metric("Relative Strength vs IHSG (20d)", f"{fund['relative_strength_20d_pct']:.1f}%" if _notna(fund.get("relative_strength_20d_pct")) else "-")
+        f2.metric("Analyst Upside", f"{fund['analyst_upside_pct']:.1f}%" if _notna(fund.get("analyst_upside_pct")) else "-")
         if "N/A*" in (safe_ratio(fund.get("trailing_pe"), "{:.1f}"), safe_ratio(fund.get("price_to_book"), "{:.2f}")):
             st.caption("*Data dari yfinance tidak wajar untuk rasio ini (terkonfirmasi: book value/EPS mendekati nol pada sumbernya), disembunyikan daripada menampilkan angka menyesatkan.")
     else:
@@ -223,8 +234,14 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 # features.py -- panel ini cuma menampilkannya secara visual). ---
 st.subheader("🏭 Sektor & Industri")
 stock_row = stocks_df[stocks_df["code"] == selected]
+# A SQL NULL comes back from pandas as float NaN, not None -- and NaN is
+# truthy in Python (bool(float('nan')) is True), so `sector or "-"` below
+# would silently print the literal string "nan" instead of falling back.
+# Normalize to real None right away rather than relying on truthiness.
 sector = stock_row["sector"].iloc[0] if not stock_row.empty else None
 industry = stock_row["industry"].iloc[0] if not stock_row.empty else None
+sector = None if pd.isna(sector) else sector
+industry = None if pd.isna(industry) else industry
 
 if sector or industry:
     s1, s2, s3 = st.columns(3)
@@ -233,7 +250,7 @@ if sector or industry:
     sect_rs = feat.get("sector_relative_strength_20d_pct") if feat else None
     s3.metric(
         "Relative Strength vs Sektor (20d)",
-        f"{float(sect_rs):.1f}%" if sect_rs is not None else "-",
+        f"{float(sect_rs):.1f}%" if _notna(sect_rs) else "-",
         help="Selisih return 20 hari saham ini vs rata-rata sektornya sendiri -- positif berarti mengungguli teman sesektor, bukan cuma pasar secara umum (lihat metrik 'Relative Strength vs IHSG' di panel Fundamental untuk pembanding pasar).",
     )
 
