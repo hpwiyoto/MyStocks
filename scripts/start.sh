@@ -69,7 +69,18 @@ if [ "$code" = "200" ]; then
     echo "== Ready (local: http://localhost:8501) =="
     if [ -n "${CODESPACE_NAME:-}" ]; then
         echo "== Codespaces URL: https://${CODESPACE_NAME}-8501.app.github.dev =="
-        echo "   (kalau belum bisa dibuka: buka panel PORTS di VS Code/browser, forward port 8501 manual sekali)"
+    fi
+    # VS Code Remote sets $BROWSER to a helper that asks the LOCAL client
+    # (your actual machine, not this container) to open a URL in your
+    # default browser -- the terminal itself can't do this directly since
+    # it runs remotely and has no display of its own. Falls through
+    # silently if $BROWSER isn't set/executable (e.g. run outside VS
+    # Code), leaving the printed URL as the fallback.
+    if [ -n "${BROWSER:-}" ] && [ -x "${BROWSER:-}" ]; then
+        echo "-> membuka browser lokal Anda..."
+        "$BROWSER" "http://localhost:8501" >/tmp/browser-open.log 2>&1 &
+    else
+        echo "   (buka manual: panel PORTS di VS Code/browser, forward port 8501 kalau belum)"
     fi
 else
     echo "!! App still not answering (http $code) -- check: docker logs mystocks-app-1"
