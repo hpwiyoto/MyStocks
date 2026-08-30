@@ -43,17 +43,42 @@ option_labels = {
     for _, row in stocks_df.iterrows()
 }
 codes = stocks_df["code"].tolist()
-default_code = st.session_state.get("selected_ticker", codes[0])
-if default_code not in codes:
-    default_code = codes[0]
+
+# Root cause of the "kadang tidak langsung merespon" (sometimes doesn't
+# immediately reflect the typed ticker) complaint, confirmed via Playwright:
+# this selectbox had no explicit `key=`, so its displayed value was
+# re-derived every rerun from `index=`, computed from
+# session_state["selected_ticker"] -- which this same page ALSO wrote back
+# into at the bottom (`st.session_state["selected_ticker"] = selected`).
+# That write only lands AFTER the widget call, so on the very next rerun
+# (the one Streamlit triggers immediately from the user's own pick) the
+# value being read back was still the value from BEFORE that pick --
+# forcibly reverting the widget to the PREVIOUS ticker and clobbering
+# whatever the user had just chosen. One bad fix attempt reproduced the
+# exact same feedback loop with an explicit key, for the identical reason
+# (still reading a same-page value that lags one rerun behind).
+#
+# Correct fix: "selected_ticker" is only ever WRITTEN by *other* pages
+# (Swing/Turnaround/Home's "Lihat Detail" buttons) right before
+# switch_page() here -- a one-shot navigation signal, not a live mirror of
+# this page's own state. Consume it exactly once via pop() to seed the
+# widget's OWN key, then never touch either session_state entry again on
+# this page -- Streamlit's own keyed-widget machinery is the sole source
+# of truth for every subsequent interaction, so there is nothing left for
+# this page to race against.
+WIDGET_KEY = "detail_saham_ticker_select"
+incoming = st.session_state.pop("selected_ticker", None)
+if incoming in codes:
+    st.session_state[WIDGET_KEY] = incoming
+elif WIDGET_KEY not in st.session_state or st.session_state[WIDGET_KEY] not in codes:
+    st.session_state[WIDGET_KEY] = codes[0]
 
 selected = st.selectbox(
     "Pilih saham (bebas dari seluruh saham yang sudah di-ingest)",
     codes,
-    index=codes.index(default_code),
     format_func=lambda c: option_labels.get(c, c),
+    key=WIDGET_KEY,
 )
-st.session_state["selected_ticker"] = selected
 
 pred_match = predictions[predictions["stock_code"] == selected] if not predictions.empty else predictions
 row = pred_match.iloc[0] if len(pred_match) else None
