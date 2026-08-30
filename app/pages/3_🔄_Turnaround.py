@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.data import load_latest_turnaround_predictions
+from app.data import load_latest_turnaround_predictions, load_stock_list
 from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
 
 st.set_page_config(page_title="MyStocks — Turnaround", page_icon="🔄", layout="wide")
@@ -47,7 +47,11 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 with st.sidebar:
     st.header("🔎 Filter")
     decision_filter = st.multiselect("Keputusan", ["POTENSIAL", "BELUM"], default=["POTENSIAL", "BELUM"])
-    search = st.text_input("Cari kode/nama saham", placeholder="mis. ANTM atau bank")
+    search = st.text_input(
+        "Cari kode/nama saham", placeholder="mis. ANTM atau bank",
+        help="Hanya mencari di antara kandidat yang SEDANG bearish/bottoming di bawah -- "
+             "beda dari pencarian di Swing yang mencakup hampir seluruh saham.",
+    )
 
 filtered = df[df["decision"].isin(decision_filter)]
 if search:
@@ -58,7 +62,34 @@ if search:
     ]
 
 if filtered.empty:
-    st.info("Tidak ada saham yang cocok dengan filter saat ini.")
+    if search:
+        # Distinguish "typo / doesn't exist at all" from "exists, but isn't
+        # a CURRENT bearish/bottoming candidate" -- the latter is the
+        # expected, common case here (unlike Swing, which scores nearly
+        # every ticker) and looked like a broken search without this
+        # explanation. See app/pages/1_📈_Detail_Saham.py for where to
+        # actually check any ticker's current regime.
+        universe = load_stock_list()
+        q = search.strip().lower()
+        exists = universe[
+            universe["code"].str.lower().str.contains(q)
+            | universe["name"].fillna("").str.lower().str.contains(q)
+        ]
+        if not exists.empty:
+            match_codes = ", ".join(exists["code"].head(10).tolist())
+            st.info(
+                f"**{match_codes}** ada di database tapi sedang TIDAK di regime bearish/bottoming, jadi "
+                "tidak dinilai model Turnaround saat ini (model ini hanya menyekor kandidat yang SEDANG "
+                "bearish/bottoming, bukan seluruh saham seperti di Swing). Buka halaman **Detail Saham** "
+                "untuk cek regime-nya saat ini."
+            )
+            if len(exists) == 1 and st.button(f"Lihat Detail {exists.iloc[0]['code']} →"):
+                st.session_state["selected_ticker"] = exists.iloc[0]["code"]
+                st.switch_page("pages/1_📈_Detail_Saham.py")
+        else:
+            st.info(f"Tidak ditemukan saham dengan kode/nama mengandung \"{search}\".")
+    else:
+        st.info("Tidak ada saham yang cocok dengan filter saat ini.")
     st.stop()
 
 st.subheader(f"📋 {len(filtered)} Kandidat — urut berdasarkan probabilitas")
