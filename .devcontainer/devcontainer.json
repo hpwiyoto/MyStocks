@@ -2,6 +2,7 @@
   "name": "MyStocks",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
   "postCreateCommand": "pip install -r requirements.txt",
+  "postStartCommand": "grep -q 'MyStocks: start shortcut' ~/.bashrc 2>/dev/null || printf '\\n# MyStocks: start shortcut (added by .devcontainer)\\nstart() { bash \"%s/scripts/start.sh\"; }\\n' \"$(pwd)\" >> ~/.bashrc",
   "customizations": {
     "vscode": {
       "extensions": [
