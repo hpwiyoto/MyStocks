@@ -1,6 +1,6 @@
-"""Read-only data access for the Streamlit app. Only queries MySQL and reads
-the committed model metadata file -- no pipeline/feature/training logic here
-(that belongs in /pipeline, /features, /engine)."""
+"""Read-only data access for the Streamlit app. Only queries the database and
+reads the committed model metadata file -- no pipeline/feature/training logic
+here (that belongs in /pipeline, /features, /engine)."""
 import datetime as dt
 import json
 import os
@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from engine.predict import MODEL_VERSION
 from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
@@ -46,7 +46,7 @@ def load_latest_predictions() -> pd.DataFrame:
     if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
         return pd.DataFrame()
     df = pd.read_sql(
-        """
+        text("""
         SELECT p.stock_code, s.name, s.sector, p.date, p.probability, p.decision,
                p.entry_price, p.stop_loss_price, p.take_profit_price, p.risk_reward_ratio,
                fd.regime
@@ -56,10 +56,10 @@ def load_latest_predictions() -> pd.DataFrame:
         INNER JOIN (
             SELECT stock_code, MAX(date) AS max_date
             FROM predictions
-            WHERE model_version = %(model_version)s
+            WHERE model_version = :model_version
             GROUP BY stock_code
         ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
-        WHERE p.model_version = %(model_version)s
+        WHERE p.model_version = :model_version
         ORDER BY
             -- Decision tier first (BUY, then WATCH, then AVOID), probability
             -- only as the tiebreaker within a tier -- NOT probability alone.
@@ -70,7 +70,7 @@ def load_latest_predictions() -> pd.DataFrame:
             -- genuine opportunities at the top of Home's ranked table.
             CASE p.decision WHEN 'BUY' THEN 0 WHEN 'WATCH' THEN 1 ELSE 2 END,
             p.probability DESC
-        """,
+        """),
         engine,
         params={"model_version": MODEL_VERSION},
     )
@@ -89,7 +89,7 @@ def load_latest_turnaround_predictions() -> pd.DataFrame:
     if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
         return pd.DataFrame()
     df = pd.read_sql(
-        """
+        text("""
         SELECT p.stock_code, s.name, s.sector, s.industry, p.date, p.probability, p.decision,
                p.entry_price, fd.regime
         FROM predictions p
@@ -98,12 +98,12 @@ def load_latest_turnaround_predictions() -> pd.DataFrame:
         INNER JOIN (
             SELECT stock_code, MAX(date) AS max_date
             FROM predictions
-            WHERE model_version = %(model_version)s
+            WHERE model_version = :model_version
             GROUP BY stock_code
         ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
-        WHERE p.model_version = %(model_version)s
+        WHERE p.model_version = :model_version
         ORDER BY CASE p.decision WHEN 'POTENSIAL' THEN 0 ELSE 1 END, p.probability DESC
-        """,
+        """),
         engine,
         params={"model_version": TURNAROUND_MODEL_VERSION},
     )
@@ -116,13 +116,13 @@ def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
     if _missing_tables(engine, ["price_history"]):
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
     df = pd.read_sql(
-        """
+        text("""
         SELECT date, open, high, low, close, volume
         FROM price_history
-        WHERE stock_code = %(code)s AND source_provider = 'yfinance'
+        WHERE stock_code = :code AND source_provider = 'yfinance'
         ORDER BY date DESC
-        LIMIT %(days)s
-        """,
+        LIMIT :days
+        """),
         engine,
         params={"code": stock_code, "days": days},
     )
@@ -135,11 +135,11 @@ def load_latest_feature_row(stock_code: str) -> dict | None:
     if _missing_tables(engine, ["feature_daily"]):
         return None
     df = pd.read_sql(
-        """
+        text("""
         SELECT * FROM feature_daily
-        WHERE stock_code = %(code)s
+        WHERE stock_code = :code
         ORDER BY date DESC LIMIT 1
-        """,
+        """),
         engine,
         params={"code": stock_code},
     )
@@ -152,11 +152,11 @@ def load_latest_fundamental(stock_code: str) -> dict | None:
     if _missing_tables(engine, ["feature_fundamental_snapshot"]):
         return None
     df = pd.read_sql(
-        """
+        text("""
         SELECT * FROM feature_fundamental_snapshot
-        WHERE stock_code = %(code)s
+        WHERE stock_code = :code
         ORDER BY snapshot_date DESC LIMIT 1
-        """,
+        """),
         engine,
         params={"code": stock_code},
     )

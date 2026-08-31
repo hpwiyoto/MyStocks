@@ -17,10 +17,14 @@ metadata = MetaData()
 
 FEATURE_VERSION = "v1"
 
+# See pipeline/db.py's _ID_TYPE comment -- SQLite only auto-populates a
+# PRIMARY KEY on INSERT when its declared type is literally "INTEGER".
+_ID_TYPE = BigInteger().with_variant(Integer(), "sqlite")
+
 feature_daily = Table(
     "feature_daily",
     metadata,
-    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("id", _ID_TYPE, primary_key=True, autoincrement=True),
     Column("stock_code", String(10), nullable=False),
     Column("date", Date, nullable=False),
     Column("feature_version", String(10), nullable=False),
@@ -96,7 +100,7 @@ feature_daily = Table(
 feature_fundamental_snapshot = Table(
     "feature_fundamental_snapshot",
     metadata,
-    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("id", _ID_TYPE, primary_key=True, autoincrement=True),
     Column("stock_code", String(10), nullable=False),
     Column("snapshot_date", Date, nullable=False),
     Column("trailing_pe", Numeric(10, 4)),

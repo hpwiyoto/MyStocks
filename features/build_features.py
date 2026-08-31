@@ -1,5 +1,6 @@
-"""Fase 2 orchestrator: reads price_history from MySQL, computes technical +
-fundamental features, writes to feature_daily / feature_fundamental_snapshot.
+"""Fase 2 orchestrator: reads price_history from the database, computes
+technical + fundamental features, writes to feature_daily /
+feature_fundamental_snapshot.
 
 Usage:
     python -m features.build_features
@@ -9,7 +10,6 @@ import math
 
 import pandas as pd
 from sqlalchemy import select, text
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from features.db import FEATURE_VERSION, feature_daily, feature_fundamental_snapshot, init_schema
 from features.fundamental import IHSG_SYMBOL, compute_relative_strength, fetch_fundamental_snapshot
@@ -18,7 +18,7 @@ from features.regime import classify_regime
 from features.structure import compute_structure
 from features.technical import MIN_ROWS_FOR_TECHNICAL_FEATURES
 from features.technical import compute_all as compute_technical
-from pipeline.db import get_engine, price_history
+from pipeline.db import get_engine, price_history, upsert
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS, to_yfinance_symbol
 from pipeline.yfinance_source import fetch_history
@@ -153,10 +153,11 @@ def upsert_feature_daily(conn, code: str, features: pd.DataFrame) -> int:
                 record[col] = _safe_float(value)
         rows.append(record)
 
-    stmt = mysql_insert(feature_daily).values(rows)
-    update_cols = {c: stmt.inserted[c] for c in features.columns}
-    stmt = stmt.on_duplicate_key_update(**update_cols)
-    conn.execute(stmt)
+    upsert(
+        conn, feature_daily, rows,
+        update_columns=list(features.columns),
+        index_elements=["stock_code", "date", "feature_version"],
+    )
     return len(rows)
 
 
@@ -165,10 +166,11 @@ def upsert_fundamental_snapshot(conn, code: str, snapshot: dict) -> None:
     for key, value in snapshot.items():
         row[key] = _safe_int(value) if key == "market_cap" else _safe_float(value)
 
-    stmt = mysql_insert(feature_fundamental_snapshot).values([row])
-    update_cols = {c: stmt.inserted[c] for c in row if c not in ("stock_code", "snapshot_date")}
-    stmt = stmt.on_duplicate_key_update(**update_cols)
-    conn.execute(stmt)
+    upsert(
+        conn, feature_fundamental_snapshot, [row],
+        update_columns=[c for c in row if c not in ("stock_code", "snapshot_date")],
+        index_elements=["stock_code", "snapshot_date"],
+    )
 
 
 def _load_ihsg_close(period: str = "max") -> pd.Series:

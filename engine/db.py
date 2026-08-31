@@ -3,6 +3,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Integer,
     MetaData,
     Numeric,
     String,
@@ -13,10 +14,14 @@ from sqlalchemy import (
 
 metadata = MetaData()
 
+# See pipeline/db.py's _ID_TYPE comment -- SQLite only auto-populates a
+# PRIMARY KEY on INSERT when its declared type is literally "INTEGER".
+_ID_TYPE = BigInteger().with_variant(Integer(), "sqlite")
+
 predictions = Table(
     "predictions",
     metadata,
-    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("id", _ID_TYPE, primary_key=True, autoincrement=True),
     Column("stock_code", String(10), nullable=False),
     Column("date", Date, nullable=False),
     Column("model_version", String(30), nullable=False),

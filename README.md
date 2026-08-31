@@ -38,8 +38,26 @@ Python 3.12 (dikunci lewat `.devcontainer/devcontainer.json` saat dibuka di Code
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # isi kredensial MySQL
+cp .env.example .env  # opsional -- lihat catatan database di bawah
 ```
+
+**Database**: local/dev (baik di sini maupun di Codespaces) memakai **SQLite** secara default (`data/mystocks.db`, dibuat otomatis, tanpa instalasi/service terpisah) -- `.env` tidak perlu diisi sama sekali untuk ini. Production (VPS, lihat "Production Deployment" di bawah) tetap MySQL lewat `docker-compose.yml`, tidak berubah -- `pipeline/db.py` otomatis memilih MySQL hanya jika `MYSQL_HOST` di-set di environment, jadi kode yang sama jalan di kedua tempat tanpa perlu disunting.
+
+### Windows tanpa Docker: cukup ketik `start`
+
+Kalau bekerja di Windows secara native (bukan Codespaces/WSL) dan ingin lepas dari Docker sepenuhnya, `scripts/start.ps1` menyiapkan semuanya otomatis: membuat `.venv` kalau belum ada, `pip install`, lalu menjalankan scheduler + aplikasi Streamlit masing-masing di jendela PowerShell tersendiri (jadi log tetap terlihat & masing-masing bisa ditutup sendiri), menunggu sampai aplikasi benar-benar merespon, lalu membuka browser otomatis.
+
+Sekali setup (menambahkan fungsi `start` ke PowerShell `$PROFILE`, hanya aktif saat direktori kerja ada di dalam folder repo ini -- di luar itu `start` tetap alias bawaan `Start-Process` seperti biasa):
+```powershell
+# jalankan sekali dari root repo ini
+.\scripts\start.ps1
+```
+Setelah itu, di terminal PowerShell BARU manapun (yang otomatis memuat `$PROFILE`), cukup:
+```powershell
+cd "path\ke\MyStocks"
+start
+```
+Menjalankannya lagi saat semuanya sudah jalan itu aman (idempotent) -- terdeteksi otomatis dan dilewati, bukan dijalankan dobel.
 
 ## Data pipeline
 
@@ -63,7 +81,7 @@ Butuh minimal 60 hari price_history per ticker (indikator seperti ATR/RSI butuh 
 
 ## ML Research (Fase 3, di Google Colab)
 
-Colab tidak bisa menjangkau MySQL lokal/dev, jadi datanya diekspor dulu ke Parquet:
+Colab tidak bisa menjangkau database lokal/dev (SQLite atau MySQL, keduanya), jadi datanya diekspor dulu ke Parquet:
 
 ```bash
 python -m scripts.export_for_colab
@@ -97,7 +115,7 @@ streamlit run app/Home.py
 - **Detail Saham** — candlestick chart (Plotly, overlay SMA20/50/200 + volume), Entry/SL/TP, panel pattern similarity & fundamental.
 - **Info Model** — indikator umur model & jumlah data baru sejak training terakhir (pengingat retrain manual, bukan tombol aksi — lihat catatan Fase 5 di `docs/BUILD_PROMPTS.md`).
 
-Tema warna diatur di `.streamlit/config.toml` (dark mode) + `app/style.py` (badge/kartu). `/app` murni presentation layer — hanya query MySQL & baca `models/*_metadata.json`, tidak ada logic pipeline/training di dalamnya.
+Tema warna diatur di `.streamlit/config.toml` (dark mode) + `app/style.py` (badge/kartu). `/app` murni presentation layer — hanya query database (SQLite lokal atau MySQL production, lihat catatan di "Setup") & baca `models/*_metadata.json`, tidak ada logic pipeline/training di dalamnya.
 
 ## Production Deployment (Fase 6)
 

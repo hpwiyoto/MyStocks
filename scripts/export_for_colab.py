@@ -67,9 +67,15 @@ def export(output_path: str = DEFAULT_OUTPUT) -> None:
     engine = get_engine()
     features_cols = [c.name for c in feature_daily.columns if c.name not in ("id", "created_at")]
     price_cols = ["stock_code", "date", "high", "low", "close"]
-    features_sql = _select_sql(feature_daily, features_cols) + " WHERE stock_code = %(code)s"
-    prices_sql = (
-        _select_sql(price_history, price_cols) + " WHERE stock_code = %(code)s AND source_provider='yfinance'"
+    # text(...) here (not a plain string) so SQLAlchemy translates the
+    # :code placeholder to whatever paramstyle the active backend's DBAPI
+    # actually needs -- pd.read_sql sends a plain string straight to the
+    # driver unmodified (pyformat for pymysql/MySQL, but sqlite3 doesn't
+    # understand pyformat at all), while a text() clause goes through
+    # SQLAlchemy's own dialect-aware compiler first.
+    features_sql = text(_select_sql(feature_daily, features_cols) + " WHERE stock_code = :code")
+    prices_sql = text(
+        _select_sql(price_history, price_cols) + " WHERE stock_code = :code AND source_provider='yfinance'"
     )
     features_schema = _pyarrow_schema(feature_daily, features_cols)
     prices_schema = _pyarrow_schema(price_history, price_cols)
