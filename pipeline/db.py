@@ -1,3 +1,4 @@
+import datetime as dt
 import os
 
 from dotenv import load_dotenv
@@ -98,6 +99,22 @@ def get_engine():
 
 def init_schema(engine):
     metadata.create_all(engine)
+
+
+def coerce_date(value):
+    """A raw text()-wrapped query bypasses SQLAlchemy's normal Column-type
+    result processing, which is where a DATE column's string form would
+    otherwise get parsed back into a real date automatically. MySQL's
+    pymysql driver happens to hand back a native datetime.date regardless
+    (driver-level, not SQLAlchemy), so this was never exercised there --
+    but SQLite's stdlib sqlite3 driver returns the stored value exactly as
+    written, a plain ISO string, which then fails a `date > str` comparison
+    the moment one is attempted (found for real: features/build_features.py's
+    incremental-update check). Callers use this on any date/None value
+    fetched via `text(...)` rather than a Table/Column select."""
+    if value is None or isinstance(value, dt.date):
+        return value
+    return dt.date.fromisoformat(value)
 
 
 # A single SQLite statement caps its total bound parameters (999 pre-3.32,

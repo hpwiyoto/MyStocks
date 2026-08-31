@@ -1,4 +1,5 @@
-"""Fase 6: daily orchestration -- ingest -> features -> predict -> monitor.
+"""Fase 6: daily orchestration -- ingest -> features -> predict (swing +
+turnaround) -> monitor.
 
 Meant to be triggered once per day (after IDX market close) by the
 scheduler service in docker-compose.yml. Each step is isolated: a failure
@@ -35,6 +36,17 @@ def run():
         predict_run()
     except Exception:
         logger.exception("predict step raised unexpectedly")
+
+    # Was missing entirely until found via a user report ("Turnaround
+    # kosong") -- the scheduler ran ingest/features/swing-predict daily but
+    # never re-scored the turnaround model, so its predictions table only
+    # ever reflected whichever candidates were bearish/bottoming on
+    # whatever date someone last ran engine.predict_turnaround by hand.
+    try:
+        from engine.predict_turnaround import run as predict_turnaround_run
+        predict_turnaround_run()
+    except Exception:
+        logger.exception("predict_turnaround step raised unexpectedly")
 
     try:
         from scripts.monitor import check_and_alert

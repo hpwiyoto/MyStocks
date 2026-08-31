@@ -18,7 +18,7 @@ from features.regime import classify_regime
 from features.structure import compute_structure
 from features.technical import MIN_ROWS_FOR_TECHNICAL_FEATURES
 from features.technical import compute_all as compute_technical
-from pipeline.db import get_engine, price_history, upsert
+from pipeline.db import coerce_date, get_engine, price_history, upsert
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS, to_yfinance_symbol
 from pipeline.yfinance_source import fetch_history
@@ -232,9 +232,10 @@ def run(tickers=None):
     # index-only lookups (~0.1s) on every single call, including this
     # button's.
     with engine.connect() as conn:
-        last_feature_date = dict(conn.execute(text(
-            "SELECT stock_code, MAX(date) FROM feature_daily GROUP BY stock_code"
-        )).fetchall())
+        last_feature_date = {
+            code: coerce_date(date) for code, date in
+            conn.execute(text("SELECT stock_code, MAX(date) FROM feature_daily GROUP BY stock_code")).fetchall()
+        }
 
     # Short-circuit before the expensive IHSG fetch (a "max"-period yfinance
     # call, ~25s regardless of scope) when every requested ticker is already
