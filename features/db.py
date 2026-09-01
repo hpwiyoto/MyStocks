@@ -93,6 +93,12 @@ feature_daily = Table(
     Column("trailing_pe", Numeric(10, 4)),
     Column("price_to_book", Numeric(10, 4)),
     Column("market_cap_log", Numeric(10, 4)),
+    # External source (RapidAPI IDX, not yfinance -- see
+    # pipeline/idx_rapidapi_source.py and scripts/backfill_foreign_flow.py).
+    # Rupiah, net foreign buy (positive) / sell (negative) for that trading
+    # day. NULL wherever the ticker hasn't been backfilled/refreshed yet --
+    # same NULL-is-normal convention as trailing_pe above, not an error.
+    Column("net_foreign_flow", Numeric(18, 2)),
     Column("created_at", DateTime, server_default=func.now()),
     UniqueConstraint("stock_code", "date", "feature_version", name="uq_feature_daily_code_date_version"),
 )

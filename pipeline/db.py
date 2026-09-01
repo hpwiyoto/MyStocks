@@ -61,6 +61,23 @@ price_history = Table(
     UniqueConstraint("stock_code", "date", "source_provider", name="uq_price_history_code_date_source"),
 )
 
+# Persisted, cross-process request budget for paid/rate-limited third-party
+# APIs (currently: RapidAPI's IDX data, see pipeline/idx_rapidapi_source.py)
+# -- one row per (provider, calendar month), incremented via reserve_requests()
+# BEFORE each real call so a run that crashes partway through never loses
+# track of what it already spent. Not a log -- this is what actually stops
+# the app from running past a free-tier quota into overage charges.
+api_usage = Table(
+    "api_usage",
+    metadata,
+    Column("id", _ID_TYPE, primary_key=True, autoincrement=True),
+    Column("provider", String(50), nullable=False),
+    Column("billing_period", String(7), nullable=False),  # "YYYY-MM"
+    Column("request_count", Integer, nullable=False, default=0),
+    Column("updated_at", DateTime, server_default=func.now(), onupdate=func.now()),
+    UniqueConstraint("provider", "billing_period", name="uq_api_usage_provider_period"),
+)
+
 
 # Two backends, chosen by whether MYSQL_HOST is set:
 # - Local/dev (this Windows checkout): no MYSQL_HOST -> a local SQLite file,
