@@ -14,6 +14,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     create_engine,
+    event,
     func,
 )
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -94,7 +95,32 @@ def get_engine():
     # default same-thread restriction is a blanket check on the raw
     # connection object, not an actual guard against real concurrent use,
     # and SQLAlchemy's pooling already keeps checkouts thread-safe.
-    return create_engine(url, connect_args={"check_same_thread": False}, pool_pre_ping=True)
+    engine = create_engine(url, connect_args={"check_same_thread": False}, pool_pre_ping=True)
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, _record):
+        # Real, not theoretical: this app runs a long-lived reader
+        # (Streamlit, many small queries throughout the day) alongside a
+        # periodic writer (the daily scheduler, or a manual pipeline run --
+        # the exact case that started this file's SQLite support). SQLite's
+        # default rollback-journal mode takes an exclusive lock at COMMIT,
+        # which blocks (and past busy_timeout, fails with "database is
+        # locked") any reader active at that moment -- not hypothetical, MySQL
+        # never had this constraint. WAL mode lets readers and a writer
+        # proceed concurrently, the standard fix for exactly this shape of
+        # workload. Set on every new connection (idempotent/cheap once
+        # already WAL -- the setting is persisted in the db file itself, not
+        # per-connection, but PRAGMA has no "if not already" form). NORMAL
+        # synchronous is the documented safe pairing with WAL (still durable
+        # against application/OS crashes, only risks the last transaction on
+        # an actual power loss -- an acceptable tradeoff here for the write
+        # speed back).
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
+    return engine
 
 
 def init_schema(engine):
