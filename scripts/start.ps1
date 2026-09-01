@@ -1,11 +1,15 @@
 # One-command native-Windows bring-up (no Docker): ensures the venv exists
 # and dependencies are installed, launches the scheduler + Streamlit app
-# each in their own visible PowerShell window (so logs stay visible and
-# either can be closed/Ctrl+C'd independently, same idea as `docker compose
-# logs` per-service), waits for the app to actually answer, then opens the
-# browser. Meant to be run as the bare `start` command -- see the `start`
-# function installed into $PROFILE by scripts\install_start_shortcut.ps1,
-# which special-cases the alias only while the cwd is inside this repo.
+# each in their own MINIMIZED PowerShell window (so logs are still there to
+# check via the taskbar, and either can be closed to stop that process
+# independently, same idea as `docker compose logs` per-service) -- started
+# as a normal foreground window first, confirmed by a user report: it kept
+# popping up in front of and covering the browser on every `start`, which
+# defeats the point of a one-command launcher. Waits for the app to
+# actually answer, then opens the browser. Meant to be run as the bare
+# `start` command -- see the `start` function installed into $PROFILE by
+# scripts\install_start_shortcut.ps1, which special-cases the alias only
+# while the cwd is inside this repo.
 #
 # Database is local SQLite (pipeline/db.py, zero-config) -- unlike the
 # Codespaces/VPS setup (scripts/start.sh, docker-compose.yml), there's no
@@ -42,8 +46,8 @@ $schedulerRunning = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" 
 if ($schedulerRunning) {
     Write-Host "-> scheduler sudah berjalan (PID $($schedulerRunning.ProcessId)), tidak dijalankan ulang"
 } else {
-    Write-Host "-> menjalankan scheduler di jendela baru..."
-    Start-Process powershell -ArgumentList @(
+    Write-Host "-> menjalankan scheduler (diminimalkan, cek taskbar kalau perlu lihat log)..."
+    Start-Process powershell -WindowStyle Minimized -ArgumentList @(
         "-NoExit", "-Command",
         "`$host.UI.RawUI.WindowTitle = 'MyStocks - Scheduler'; Set-Location '$RepoRoot'; & '$VenvPython' -m scripts.scheduler_loop"
     )
@@ -65,8 +69,8 @@ function Test-Port8501 {
 if (Test-Port8501) {
     Write-Host "-> ada yang sudah jalan di :8501, tidak dijalankan ulang"
 } else {
-    Write-Host "-> menjalankan aplikasi Streamlit di jendela baru..."
-    Start-Process powershell -ArgumentList @(
+    Write-Host "-> menjalankan aplikasi Streamlit (diminimalkan, cek taskbar kalau perlu lihat log)..."
+    Start-Process powershell -WindowStyle Minimized -ArgumentList @(
         "-NoExit", "-Command",
         "`$host.UI.RawUI.WindowTitle = 'MyStocks - App'; Set-Location '$RepoRoot'; & '$VenvPython' -m streamlit run app/Home.py --server.port=8501 --server.address=0.0.0.0"
     )
