@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_news, load_price_history, load_stock_list
+from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
 def _notna(value):
@@ -43,17 +43,39 @@ option_labels = {
     for _, row in stocks_df.iterrows()
 }
 codes = stocks_df["code"].tolist()
-default_code = st.session_state.get("selected_ticker", codes[0])
-if default_code not in codes:
-    default_code = codes[0]
+
+# Root cause of the "kadang tidak langsung merespon" (sometimes doesn't
+# immediately reflect the typed ticker) complaint, confirmed via Playwright:
+# this selectbox had no explicit `key=`, so its displayed value was
+# re-derived every rerun from `index=`, computed from
+# session_state["selected_ticker"] -- which this same page ALSO wrote back
+# into at the bottom. That write only lands AFTER the widget call, so on
+# the very next rerun (the one Streamlit triggers immediately from the
+# user's own pick) the value being read back was still the value from
+# BEFORE that pick -- forcibly reverting the widget to the PREVIOUS ticker
+# and clobbering whatever the user had just chosen.
+#
+# Correct fix: "selected_ticker" is only ever WRITTEN by *other* pages
+# (Swing/Turnaround/Home's "Lihat Detail" buttons) right before
+# switch_page() here -- a one-shot navigation signal, not a live mirror of
+# this page's own state. Consume it exactly once via pop() to seed the
+# widget's OWN key, then never touch either session_state entry again on
+# this page -- Streamlit's own keyed-widget machinery is the sole source
+# of truth for every subsequent interaction, so there is nothing left for
+# this page to race against.
+WIDGET_KEY = "detail_saham_ticker_select"
+incoming = st.session_state.pop("selected_ticker", None)
+if incoming in codes:
+    st.session_state[WIDGET_KEY] = incoming
+elif WIDGET_KEY not in st.session_state or st.session_state[WIDGET_KEY] not in codes:
+    st.session_state[WIDGET_KEY] = codes[0]
 
 selected = st.selectbox(
     "Pilih saham (bebas dari seluruh saham yang sudah di-ingest)",
     codes,
-    index=codes.index(default_code),
     format_func=lambda c: option_labels.get(c, c),
+    key=WIDGET_KEY,
 )
-st.session_state["selected_ticker"] = selected
 
 pred_match = predictions[predictions["stock_code"] == selected] if not predictions.empty else predictions
 row = pred_match.iloc[0] if len(pred_match) else None
@@ -65,8 +87,19 @@ with st.spinner("Memuat data harga..."):
 
 stock_name = stocks_df.loc[stocks_df["code"] == selected, "name"].iloc[0] if selected in stocks_df["code"].values else ""
 
+# Current price shown unconditionally, unlike the "Entry" metric below which
+# only appears when this ticker has a swing prediction row -- a
+# turnaround-only or unscored ticker previously showed no price at all here.
+# Live quote reuses the same cheap per-ticker yfinance fast_info fetch as
+# Swing's overlay (~0.3s, single ticker here); falls back to the last known
+# close from price_df if the live fetch fails or the market's closed with no
+# cached quote.
+live_price = load_live_prices((selected,)).get(selected)
+last_close = float(price_df["close"].iloc[-1]) if not price_df.empty else None
+current_price = live_price if live_price is not None else last_close
+
 # --- Header ---
-h1, h2 = st.columns([3, 1])
+h1, h2, h3 = st.columns([2.2, 1, 1])
 with h1:
     badges = f"{decision_badge(row['decision'])} &nbsp; {regime_badge(row['regime'])}" if row is not None else ""
     st.markdown(
@@ -77,6 +110,13 @@ with h1:
         unsafe_allow_html=True,
     )
 with h2:
+    st.markdown("<div class='mystocks-muted'>Harga Saat Ini</div>", unsafe_allow_html=True)
+    if current_price is not None:
+        st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{current_price:,.0f}</div>", unsafe_allow_html=True)
+        st.caption("💹 Live" if live_price is not None else "Penutupan terakhir")
+    else:
+        st.markdown("<div class='mystocks-metric-value' style='font-size:2.2rem;'>-</div>", unsafe_allow_html=True)
+with h3:
     if row is not None:
         st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
