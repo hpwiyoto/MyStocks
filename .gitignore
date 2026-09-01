@@ -39,3 +39,6 @@ models/*.json
 # OS / editor
 .DS_Store
 .vscode/
+
+# Claude Code personal settings (permission mode etc.) -- not for the team
+.claude/settings.local.json
