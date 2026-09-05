@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 import ta
 from plotly.subplots import make_subplots
 
@@ -354,30 +355,61 @@ else:
         )
         fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=6, col=1)
 
+    CHART_HEIGHT = 1080
     fig.update_layout(
-        height=1080,
+        height=CHART_HEIGHT,
         template="plotly_dark",
         paper_bgcolor="#0B1120",
         plot_bgcolor="#0B1120",
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
         xaxis_rangeslider_visible=False,
-        # "x" only groups hover/spikes for traces on the exact same x-axis id
-        # (x, x2, x3, ...) -- shared_xaxes=True links their RANGE (so zoom/pan
-        # move together) via the `matches` attribute, but that's a separate
-        # mechanism from hover grouping, so with plain "x" only the one panel
-        # under the cursor got a spike line. "x unified" is what actually
-        # broadcasts the hover/spike across every matched x-axis at once --
-        # confirmed via Plotly's own multi-subplot unified-hover recipe.
+        # "x unified" still groups the value readout (the little box listing
+        # every trace's value) across all 6 matched x-axes -- kept for that.
         hovermode="x unified",
+        # A single shape (added below, driven by JS) draws the actual
+        # crosshair line -- native per-axis spikes (xaxis.showspikes) were
+        # tried first but rendered as several short, slightly misaligned
+        # segments instead of one straight line: each subplot's "nearest
+        # point" can land on a different date when a trace has its own gap
+        # (RSI/MACD warm-up, missing foreign-flow days, etc.), so the spikes
+        # only ever lined up when every panel happened to have data on the
+        # same date. A shape spanning the full figure height (yref="paper")
+        # at one shared x position sidesteps that entirely.
     )
-    # Vertical guide line that follows the cursor across all 6 stacked panels
-    # at once (shared_xaxes=True already keeps their x-ranges in sync -- this
-    # makes that alignment visible) -- lets you line up e.g. a price spike
-    # with what RSI/MACD/CMF/Foreign Flow were doing on that same date,
-    # without having to eyeball the same x position across separate panels.
-    fig.update_xaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikecolor="rgba(255,255,255,0.5)", spikethickness=1, spikedash="solid")
-    st.plotly_chart(fig, width="stretch")
+    fig.add_shape(
+        type="line", xref="x", yref="paper", x0=0, x1=0, y0=0, y1=1,
+        line=dict(color="rgba(255,255,255,0.55)", width=1, dash="solid"),
+        visible=False, name="crosshair",
+    )
+    fig.update_xaxes(showspikes=False)
+    # Rendered via components.html (not st.plotly_chart) specifically to get
+    # a 'plotly_hover' JS callback that repositions the shape above on every
+    # mouse move -- st.plotly_chart has no hook for that. include_plotlyjs
+    # embeds the exact plotly.js build matching the installed plotly package
+    # (guaranteed compatible, and works even if this machine's proxy blocks
+    # a CDN fetch -- see mystocks-sqlite-migration memory re: the Zscaler
+    # TLS-inspecting proxy already causing trouble for other outbound calls).
+    chart_html = fig.to_html(
+        full_html=False,
+        include_plotlyjs=True,
+        div_id="detail-saham-chart",
+        config={"displayModeBar": True, "responsive": True},
+        post_script="""
+        (function() {
+            var gd = document.getElementById('detail-saham-chart');
+            gd.on('plotly_hover', function(evt) {
+                if (!evt.points || !evt.points.length) return;
+                var x = evt.points[0].x;
+                Plotly.relayout(gd, {'shapes[0].x0': x, 'shapes[0].x1': x, 'shapes[0].visible': true});
+            });
+            gd.on('plotly_unhover', function() {
+                Plotly.relayout(gd, {'shapes[0].visible': false});
+            });
+        })();
+        """,
+    )
+    components.html(chart_html, height=CHART_HEIGHT + 40, scrolling=False)
     if foreign_flow_df.empty:
         st.caption(
             "Foreign flow: data belum tersedia (RapidAPI key belum diset, atau "
