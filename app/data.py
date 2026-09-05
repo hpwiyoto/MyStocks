@@ -225,6 +225,40 @@ def load_latest_fundamental(stock_code: str) -> dict | None:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
+    """Bulk per-(ticker, date) panel across the WHOLE universe for the last
+    ~`lookback_days` TRADING days, feeding features.momentum_screener's
+    MACD-status classification and RSI/MACD divergence detection on the
+    Momentum Screener page. Unlike load_price_history (one ticker), this
+    scores the whole universe at once -- same shape as load_latest_predictions.
+
+    Cutoff is a plain calendar-date WHERE clause (lookback_days*2 days back,
+    a generous buffer for weekends/holidays) computed in Python rather than
+    DATE_SUB/julianday SQL -- this project runs on SQLite locally and MySQL
+    in production (see pipeline.db.get_engine), and a literal date string
+    compares correctly on both without dialect-specific date arithmetic.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily", "price_history"]):
+        return pd.DataFrame()
+    cutoff = (dt.date.today() - dt.timedelta(days=lookback_days * 2)).isoformat()
+    df = pd.read_sql(
+        text("""
+        SELECT fd.stock_code, fd.date, ph.close, ph.volume,
+               fd.rsi_14, fd.macd, fd.macd_signal, fd.macd_hist, fd.macd_hist_slope_3d,
+               fd.cmf_20, fd.rvol_20, fd.regime
+        FROM feature_daily fd
+        JOIN price_history ph ON ph.stock_code = fd.stock_code AND ph.date = fd.date AND ph.source_provider = 'yfinance'
+        WHERE fd.date >= :cutoff
+        ORDER BY fd.stock_code, fd.date
+        """),
+        engine,
+        params={"cutoff": cutoff},
+    )
+    return df
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_stock_list() -> pd.DataFrame:
     engine = get_engine()
     if _missing_tables(engine, ["stocks"]):
