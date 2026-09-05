@@ -30,9 +30,9 @@ if st.button("← Kembali ke Home"):
 st.title("📡 Momentum Screener")
 st.caption(
     "Filter manual berbasis RSI, status MACD, harga, volume, dan money flow (CMF) -- "
-    "BUKAN skor model. Prioritas utama diberikan ke saham dengan divergence bullish "
-    "(harga lower low, indikator higher low); probabilitas model Swing ditampilkan "
-    "cuma sebagai referensi tambahan, bukan penentu urutan."
+    "BUKAN skor model. Urutan: (1) tingkat divergence bullish (Ganda RSI+MACD > Tunggal > "
+    "tidak ada), (2) di dalam tingkat yang sama, divergence yang lebih baru diutamakan, "
+    "(3) probabilitas model Swing cuma sebagai tiebreaker terakhir -- bukan penentu urutan."
 )
 st.info(
     "**Beda dari Swing/Turnaround**: dua screener lain di aplikasi ini diurutkan oleh "
@@ -162,12 +162,19 @@ if search:
         | filtered["name"].fillna("").str.lower().str.contains(q)
     ]
 
-# Priority is the filter/divergence result, NOT the model -- divergence tier
-# (0=double, 1=single, 2=none) sorts first; probability only breaks ties
-# within a tier, exactly the "prioritas screening, probabilitas cuma
-# pertimbangan" ordering the user asked for.
+# Priority is the filter/divergence result, NOT the model. Three levels:
+# 1. divergence_tier (0=double, 1=single, 2=none) -- the main priority the
+#    user asked for.
+# 2. divergence_age_days ascending -- WITHIN a tier, a divergence spotted a
+#    few days ago is a fresher, more actionable setup than one from 18 days
+#    ago (near RECENT_LOW_MAX_AGE's cutoff) that may have already played out
+#    unnoticed. Always NaN for tier 2 (no divergence to date), so this is a
+#    no-op there and only discriminates within tiers 0/1.
+# 3. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
+#    cuma pertimbangan tambahan" ordering the user asked for, not a driver.
 filtered = filtered.sort_values(
-    ["divergence_tier", "probability"], ascending=[True, False], na_position="last",
+    ["divergence_tier", "divergence_age_days", "probability"],
+    ascending=[True, True, False], na_position="last",
 ).reset_index(drop=True)
 
 c1, c2, c3 = st.columns(3)
