@@ -161,7 +161,12 @@ else:
     price_df["bb_lower"] = price_df["bb_mid"] - 2 * bb_std
     price_df["sma50"] = price_df["close"].rolling(50).mean()
     price_df["sma200"] = price_df["close"].rolling(200).mean()
-    price_df["volume_ma20"] = price_df["volume"].rolling(20).mean()
+    # Naming note: this is the exact same computation (rolling(20).mean(),
+    # a simple moving average) as sma50/sma200 above and sma_20/50/200 in
+    # features/technical.py -- named "sma" (not "ma") for consistency with
+    # every other moving average in this codebase; it was previously called
+    # volume_ma20 with no functional difference, just an inconsistent label.
+    price_df["volume_sma20"] = price_df["volume"].rolling(20).mean()
     # Same computation (ta library, window=20) the model itself uses for
     # cmf_20 -- see features/technical.py's compute_money_flow -- so this
     # panel matches exactly what the model sees, not a lookalike recomputed
@@ -249,7 +254,7 @@ else:
         row=2, col=1,
     )
     fig.add_trace(
-        go.Scatter(x=price_df["date"], y=price_df["volume_ma20"], name="MA20 Volume", line=dict(color="#F59E0B", width=1.3)),
+        go.Scatter(x=price_df["date"], y=price_df["volume_sma20"], name="SMA20 Volume", line=dict(color="#F59E0B", width=1.3)),
         row=2, col=1,
     )
 
