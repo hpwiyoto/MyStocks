@@ -33,8 +33,10 @@ st.caption(
     "Filter manual berbasis RSI, status MACD, harga, volume, dan money flow (CMF) -- "
     "BUKAN skor model. Urutan: (1) tingkat divergence bullish (Ganda RSI+MACD > Tunggal > "
     "tidak ada), (2) regime dengan momentum paling terkonfirmasi (early_reversal > bullish > "
-    "accumulation > sideways > bottoming > bearish > overextended), (3) divergence yang lebih "
-    "baru, (4) probabilitas model Swing cuma sebagai tiebreaker terakhir -- bukan penentu urutan."
+    "accumulation > sideways > bottoming > bearish > overextended), (3) RSI paling dekat ke "
+    "titik pivot 50 (RSI terbukti lebih menentukan daripada MACD untuk kedua model prediksi), "
+    "(4) divergence yang lebih baru, (5) probabilitas model Swing cuma sebagai tiebreaker "
+    "terakhir -- bukan penentu urutan."
 )
 st.info(
     "**Beda dari Swing/Turnaround**: dua screener lain di aplikasi ini diurutkan oleh "
@@ -170,7 +172,7 @@ if search:
         | filtered["name"].fillna("").str.lower().str.contains(q)
     ]
 
-# Priority is the filter/divergence result, NOT the model. Four levels:
+# Priority is the filter/divergence result, NOT the model. Five levels:
 # 1. divergence_tier (0=double, 1=single, 2=none) -- the main priority the
 #    user asked for.
 # 2. regime_priority -- how much confirmed bullish momentum the regime
@@ -178,15 +180,21 @@ if search:
 #    see features.momentum_screener.REGIME_PRIORITY for the full reasoning
 #    behind that order, incl. why early_reversal outranks bullish and
 #    accumulation outranks neither).
-# 3. divergence_age_days ascending -- WITHIN the same tier+regime, a
-#    divergence spotted a few days ago is fresher/more actionable than one
-#    from 18 days ago (near RECENT_LOW_MAX_AGE's cutoff) that may have
+# 3. rsi_pivot_distance ascending -- RSI outranks MACD as a ranking signal
+#    (rsi_distance_50 is top-3 in both models' own feature-gain ranking;
+#    MACD z-score tested and moved nothing, see
+#    scripts/test_macd_zscore_feature.py), so a stock sitting right at the
+#    50 pivot (fresh momentum shift) is preferred over one still deep in
+#    oversold territory or already near this screener's overbought edge.
+# 4. divergence_age_days ascending -- WITHIN the same tier+regime+RSI zone,
+#    a divergence spotted a few days ago is fresher/more actionable than
+#    one from 18 days ago (near RECENT_LOW_MAX_AGE's cutoff) that may have
 #    already played out unnoticed. Always NaN for tier 2, a no-op there.
-# 4. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
+# 5. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
 #    cuma pertimbangan tambahan" ordering the user asked for, not a driver.
 filtered = filtered.sort_values(
-    ["divergence_tier", "regime_priority", "divergence_age_days", "probability"],
-    ascending=[True, True, True, False], na_position="last",
+    ["divergence_tier", "regime_priority", "rsi_pivot_distance", "divergence_age_days", "probability"],
+    ascending=[True, True, True, True, False], na_position="last",
 ).reset_index(drop=True)
 
 c1, c2, c3 = st.columns(3)

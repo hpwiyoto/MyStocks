@@ -149,4 +149,18 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
         [0, 1], default=2,
     )
     out["regime_priority"] = out["regime"].map(REGIME_PRIORITY).fillna(DEFAULT_REGIME_PRIORITY).astype(int)
+    # RSI beats MACD as a ranking signal here, backed by two independent
+    # findings elsewhere in this project: rsi_distance_50 is a top-3
+    # contributor in BOTH the Swing and Turnaround models' own feature-gain
+    # ranking, while MACD -- even correctly z-score normalized -- moved
+    # ROC-AUC by less than fold-to-fold noise when tested directly (see
+    # scripts/test_macd_zscore_feature.py). Consistent with RSI being a
+    # leading oscillator and MACD a lagging one. Distance from 50 (not
+    # signed, and NOT the model's own rsi_distance_50 -- this is a display/
+    # ranking-only value) rewards a stock sitting right at the pivot
+    # (crossing out of weakness, the same 45-65-with-rising-slope zone
+    # features.regime's early_reversal itself looks for) over one still
+    # deep in oversold territory with no confirmed turn yet, or one already
+    # closer to this screener's overbought filter edge.
+    out["rsi_pivot_distance"] = (out["rsi_14"] - 50).abs()
     return out
