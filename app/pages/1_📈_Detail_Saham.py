@@ -232,16 +232,19 @@ else:
         subplot_titles=("Harga", "Volume", "RSI(14)", "MACD", "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
     )
 
-    # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top
+    # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top.
+    # hoverinfo="skip" on both: now that hovermode is "x unified" (see below),
+    # every trace would otherwise add a line to the unified hover box -- these
+    # two are pure shading, not something worth a numeric readout there.
     if "Bollinger Band(20)" in selected_indicators:
         fig.add_trace(
-            go.Scatter(x=price_df["date"], y=price_df["bb_upper"], name="BB Upper", line=dict(color="rgba(139,92,246,0.35)", width=1), showlegend=False),
+            go.Scatter(x=price_df["date"], y=price_df["bb_upper"], name="BB Upper", line=dict(color="rgba(139,92,246,0.35)", width=1), showlegend=False, hoverinfo="skip"),
             row=1, col=1,
         )
         fig.add_trace(
             go.Scatter(
                 x=price_df["date"], y=price_df["bb_lower"], name="Bollinger Band(20)", line=dict(color="rgba(139,92,246,0.35)", width=1),
-                fill="tonexty", fillcolor="rgba(139,92,246,0.08)",
+                fill="tonexty", fillcolor="rgba(139,92,246,0.08)", hoverinfo="skip",
             ),
             row=1, col=1,
         )
@@ -359,7 +362,14 @@ else:
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
         xaxis_rangeslider_visible=False,
-        hovermode="x",
+        # "x" only groups hover/spikes for traces on the exact same x-axis id
+        # (x, x2, x3, ...) -- shared_xaxes=True links their RANGE (so zoom/pan
+        # move together) via the `matches` attribute, but that's a separate
+        # mechanism from hover grouping, so with plain "x" only the one panel
+        # under the cursor got a spike line. "x unified" is what actually
+        # broadcasts the hover/spike across every matched x-axis at once --
+        # confirmed via Plotly's own multi-subplot unified-hover recipe.
+        hovermode="x unified",
     )
     # Vertical guide line that follows the cursor across all 6 stacked panels
     # at once (shared_xaxes=True already keeps their x-ranges in sync -- this
