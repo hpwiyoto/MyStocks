@@ -229,7 +229,7 @@ else:
     fig = make_subplots(
         rows=6, cols=1, shared_xaxes=True,
         row_heights=[0.30, 0.10, 0.13, 0.13, 0.14, 0.20], vertical_spacing=0.02,
-        subplot_titles=(None, None, "RSI(14)", "MACD", "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
+        subplot_titles=("Harga", "Volume", "RSI(14)", "MACD", "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
     )
 
     # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top
@@ -359,7 +359,14 @@ else:
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
         xaxis_rangeslider_visible=False,
+        hovermode="x",
     )
+    # Vertical guide line that follows the cursor across all 6 stacked panels
+    # at once (shared_xaxes=True already keeps their x-ranges in sync -- this
+    # makes that alignment visible) -- lets you line up e.g. a price spike
+    # with what RSI/MACD/CMF/Foreign Flow were doing on that same date,
+    # without having to eyeball the same x position across separate panels.
+    fig.update_xaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikecolor="rgba(255,255,255,0.5)", spikethickness=1, spikedash="solid")
     st.plotly_chart(fig, width="stretch")
     if foreign_flow_df.empty:
         st.caption(
