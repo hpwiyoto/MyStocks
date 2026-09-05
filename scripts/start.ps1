@@ -21,15 +21,16 @@ Set-Location $RepoRoot
 
 Write-Host "== MyStocks: starting (native, no Docker) ==" -ForegroundColor Cyan
 
-# --- 0. Sync with GitHub: only fast-forward (never auto-merge/create a
-# merge commit), and only when the working tree is clean (never pull over
-# uncommitted local edits -- ask first, don't guess). Surfaced by a real
-# gap: work pushed from this PC wasn't visible in a different environment
-# (a GitHub Codespace) until pulled there explicitly -- this makes THIS
-# machine self-sync on every `start` instead of relying on remembering to
-# `git pull` by hand. Never fatal: git's own exit code (not a PowerShell
-# exception) on failure just prints a warning and `start` continues with
-# whatever code is already on disk.
+# --- 0. Sync with GitHub. This PC is the MAIN copy -- GitHub is just a
+# backup/mirror, not a shared main branch other people push to -- so the
+# direction that actually matters is PUSH (make sure every commit made
+# here reliably lands in the backup), with pull kept only as a cheap
+# safety net for the rare case something else (another machine, a
+# Codespace, editing directly on github.com) got ahead of this checkout.
+#
+# Pull: fast-forward only (never auto-merge/create a merge commit), and
+# only when the working tree is clean (never pull over uncommitted local
+# edits -- warn and skip, don't guess).
 Write-Host "-> menyamakan dengan GitHub (git pull)..."
 $gitStatus = git status --porcelain 2>$null
 if ($gitStatus) {
@@ -38,6 +39,19 @@ if ($gitStatus) {
     git pull --ff-only 2>&1 | ForEach-Object { Write-Host "   $_" }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "!! git pull gagal (offline, atau riwayat lokal & remote sudah bercabang) -- lanjut pakai kode yang ada di disk." -ForegroundColor Yellow
+    }
+}
+
+# Push: anything already COMMITTED here that GitHub doesn't have yet gets
+# backed up automatically. Deliberately never touches uncommitted changes
+# (git add/commit stays a manual, deliberate step with a real commit
+# message) -- this only ships commits that already exist.
+$ahead = (git rev-list --count 'origin/main..HEAD' 2>$null)
+if ($ahead -and [int]$ahead -gt 0) {
+    Write-Host "-> ada $ahead commit lokal yang belum ter-backup ke GitHub, push sekarang..."
+    git push origin main 2>&1 | ForEach-Object { Write-Host "   $_" }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "!! git push gagal (offline?) -- backup GitHub belum ter-update, coba lagi nanti." -ForegroundColor Yellow
     }
 }
 
