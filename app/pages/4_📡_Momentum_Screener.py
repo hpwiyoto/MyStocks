@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import numpy as np
 import pandas as pd
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from app.data import load_data_freshness, load_latest_predictions, load_screener_raw_panel, load_stock_list
 from app.style import (
@@ -209,7 +210,10 @@ if filtered.empty:
     st.stop()
 
 st.subheader(f"📋 {len(filtered)} Saham -- diurutkan divergence dulu, probabilitas Swing sebagai tiebreaker")
-st.caption("Klik satu baris untuk buka halaman detail saham itu.")
+st.caption(
+    "Klik ikon corong di header kolom untuk filter ala Excel (per kolom, independen dari filter "
+    "sidebar), klik judul kolom untuk sortir. Klik satu baris untuk buka halaman detail saham itu."
+)
 
 table_df = filtered.copy()
 table_df["divergence_label"] = table_df.apply(divergence_detail, axis=1)
@@ -217,39 +221,73 @@ table_df["momentum"] = table_df.apply(lambda r: momentum_label(r["macd_hist"], r
 table_df["money_flow"] = table_df["cmf_20"].apply(
     lambda v: "-" if pd.isna(v) else ("Akumulasi" if v > 0 else "Distribusi")
 )
-table_df["rvol_display"] = table_df["rvol_20"].apply(lambda v: "-" if pd.isna(v) else f"{v:.1f}x")
 table_df["probability_pct"] = table_df["probability"].astype(float) * 100
 
 display_cols = [
     "stock_code", "name", "close", "rsi_14", "macd_status", "momentum",
-    "money_flow", "rvol_display", "divergence_label", "probability_pct", "regime",
+    "money_flow", "rvol_20", "divergence_label", "probability_pct", "regime",
 ]
 
-event = st.dataframe(
+# AG-Grid instead of st.dataframe specifically for its per-column Excel-style
+# filter menu (funnel icon + floating filter row) -- st.dataframe has no
+# equivalent, only whole-table search. Numeric columns (harga/RSI/volume/
+# probabilitas) are kept as real numbers with a JS valueFormatter for
+# display, not pre-formatted strings, so ">"/"<"/"between" filters on them
+# actually compare numerically instead of lexically on formatted text.
+# defaultOption="greaterThanOrEqual" so the floating filter's plain typed
+# value (e.g. RSI "55") means ">=55" -- a useful default for a continuous
+# reading; "equals" (AG-Grid's own default) almost never matches anything
+# for a float column. The funnel icon still opens the full menu to pick a
+# different operator (<, between, etc.) per column.
+NUM_FILTER_PARAMS = {"defaultOption": "greaterThanOrEqual"}
+gb = GridOptionsBuilder.from_dataframe(table_df[display_cols])
+gb.configure_default_column(filter=True, sortable=True, resizable=True, floatingFilter=True)
+gb.configure_column("stock_code", header_name="Kode", filter="agTextColumnFilter", pinned="left", width=100)
+gb.configure_column("name", header_name="Nama", filter="agTextColumnFilter", width=200)
+gb.configure_column(
+    "close", header_name="Harga", type=["numericColumn"], filter="agNumberColumnFilter", filterParams=NUM_FILTER_PARAMS,
+    valueFormatter=JsCode("function(p){return p.value==null?'-':Math.round(p.value).toLocaleString('id-ID');}"),
+)
+gb.configure_column(
+    "rsi_14", header_name="RSI", type=["numericColumn"], filter="agNumberColumnFilter", filterParams=NUM_FILTER_PARAMS,
+    valueFormatter=JsCode("function(p){return p.value==null?'-':p.value.toFixed(1);}"),
+)
+# Text filter (contains-match), not Set filter, for the categorical columns
+# below -- agSetColumnFilter's checkbox-list-of-distinct-values UI is an
+# AG-Grid ENTERPRISE-only feature (confirmed via testing: the funnel menu
+# silently did nothing without enable_enterprise_modules + a license key).
+# agTextColumnFilter is free/Community and still lets you type e.g.
+# "sideways" or "crossover" to narrow the column -- not a checkbox list,
+# but genuinely functional without a paid license.
+gb.configure_column("macd_status", header_name="Status MACD", filter="agTextColumnFilter")
+gb.configure_column("momentum", header_name="Momentum Histogram", filter="agTextColumnFilter", width=170)
+gb.configure_column("money_flow", header_name="Money Flow", filter="agTextColumnFilter")
+gb.configure_column(
+    "rvol_20", header_name="Volume Relatif", type=["numericColumn"], filter="agNumberColumnFilter", filterParams=NUM_FILTER_PARAMS,
+    valueFormatter=JsCode("function(p){return p.value==null?'-':p.value.toFixed(1)+'x';}"),
+)
+gb.configure_column("divergence_label", header_name="Divergence", filter="agTextColumnFilter", width=150)
+gb.configure_column(
+    "probability_pct", header_name="Probabilitas Swing", type=["numericColumn"], filter="agNumberColumnFilter", filterParams=NUM_FILTER_PARAMS,
+    valueFormatter=JsCode("function(p){return p.value==null?'-':p.value.toFixed(1)+'%';}"),
+)
+gb.configure_column("regime", header_name="Regime", filter="agTextColumnFilter")
+gb.configure_selection(selection_mode="single", use_checkbox=False, suppressRowClickSelection=False)
+grid_options = gb.build()
+
+grid_response = AgGrid(
     table_df[display_cols].reset_index(drop=True),
-    width="stretch",
-    hide_index=True,
-    height=min(36 * (len(table_df) + 1) + 3, 600),
-    column_config={
-        "stock_code": st.column_config.TextColumn("Kode"),
-        "name": st.column_config.TextColumn("Nama"),
-        "close": st.column_config.NumberColumn("Harga", format="%.0f"),
-        "rsi_14": st.column_config.NumberColumn("RSI", format="%.1f"),
-        "macd_status": st.column_config.TextColumn("Status MACD"),
-        "momentum": st.column_config.TextColumn("Momentum Histogram"),
-        "money_flow": st.column_config.TextColumn("Money Flow"),
-        "rvol_display": st.column_config.TextColumn("Volume Relatif"),
-        "divergence_label": st.column_config.TextColumn("Divergence"),
-        "probability_pct": st.column_config.ProgressColumn("Probabilitas Swing", format="%.1f%%", min_value=0.0, max_value=100.0),
-        "regime": st.column_config.TextColumn("Regime"),
-    },
-    on_select="rerun",
-    selection_mode="single-row",
+    gridOptions=grid_options,
+    height=min(36 * (len(table_df) + 1) + 40, 600),
+    theme="streamlit",
+    allow_unsafe_jscode=True,
+    update_on=["selectionChanged"],
+    fit_columns_on_grid_load=False,
 )
 
-selected_rows = event.selection.rows if event and event.selection else []
-if selected_rows:
-    picked_code = table_df.iloc[selected_rows[0]]["stock_code"]
+selected = grid_response.selected_data
+if selected is not None and not selected.empty:
+    picked_code = selected.iloc[0]["stock_code"]
     st.session_state["selected_ticker"] = picked_code
     st.switch_page("pages/1_📈_Detail_Saham.py")
 
