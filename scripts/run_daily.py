@@ -10,9 +10,21 @@ predictions at all.
 Usage:
     python -m scripts.run_daily
 """
+import datetime as dt
+import os
+import zoneinfo
+
 from pipeline.logging_config import get_logger
 
 logger = get_logger("scripts.run_daily")
+
+WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
+# Read by scripts.scheduler_loop on startup to decide whether a day (or
+# several -- e.g. a laptop left off/asleep over a weekend, the exact scenario
+# that surfaced this) was missed entirely and needs an immediate catch-up run
+# rather than silently waiting for tomorrow's scheduled slot. WIB date, not
+# server-local, to stay consistent with the scheduler's own WIB-based clock.
+LAST_RUN_MARKER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "last_daily_run.txt")
 
 
 def run():
@@ -53,6 +65,12 @@ def run():
         check_and_alert(ingest_failures=ingest_result.get("failures"))
     except Exception:
         logger.exception("monitor step raised unexpectedly")
+
+    try:
+        with open(LAST_RUN_MARKER, "w") as f:
+            f.write(dt.datetime.now(WIB).date().isoformat())
+    except OSError:
+        logger.warning("Could not write last-run marker (non-fatal, only affects scheduler catch-up detection)")
 
     logger.info("=== Daily run: done ===")
 

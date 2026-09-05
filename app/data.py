@@ -225,6 +225,26 @@ def load_latest_fundamental(stock_code: str) -> dict | None:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_data_freshness() -> dt.date | None:
+    """Most recent date present in feature_daily -- i.e. how current the
+    prices/RSI/MACD/CMF everyone reads actually are. Surfaced directly in
+    the UI (rather than silently trusted) after a real incident: the
+    scheduler process was asleep for 4 days (laptop off/asleep over that
+    stretch, see scripts/scheduler_loop.py's catch-up fix) and every page
+    kept quietly showing Sept-1 data with no indication anything was stale.
+    Returns None if feature_daily doesn't exist yet or is empty.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily"]):
+        return None
+    df = pd.read_sql("SELECT MAX(date) AS max_date FROM feature_daily", engine)
+    value = df["max_date"].iloc[0] if not df.empty else None
+    if value is None or value != value:  # NaT/NaN guard, same pattern as safe_ratio's NaN check
+        return None
+    return pd.to_datetime(value).date()
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
     """Bulk per-(ticker, date) panel across the WHOLE universe for the last
     ~`lookback_days` TRADING days, feeding features.momentum_screener's

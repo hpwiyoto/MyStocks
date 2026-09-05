@@ -1,3 +1,4 @@
+import datetime as dt
 import os
 import sys
 
@@ -6,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.data import load_latest_predictions, load_screener_raw_panel, load_stock_list
+from app.data import load_data_freshness, load_latest_predictions, load_screener_raw_panel, load_stock_list
 from app.style import (
     ACCENT,
     COLOR_AVOID,
@@ -41,6 +42,27 @@ st.info(
     "supaya Anda bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
     icon="ℹ️",
 )
+
+# Harga & semua indikator (RSI/MACD/CMF) di halaman ini datang dari
+# feature_daily, yang cuma seaktual scheduler harian (lihat
+# scripts/scheduler_loop.py) -- kalau mesin yang menjalankan scheduler
+# sempat mati/tidur, datanya bisa diam-diam basi tanpa tanda apa pun.
+# Ditampilkan eksplisit di sini setelah kejadian nyata: 4 hari basi tanpa
+# ada yang sadar sampai ditanyakan langsung.
+_freshness = load_data_freshness()
+if _freshness is not None:
+    _age_days = (dt.date.today() - _freshness).days
+    if _age_days >= 2:
+        st.warning(
+            f"⚠️ Data harga & indikator terakhir per **{_freshness.strftime('%d %b %Y')}** "
+            f"({_age_days} hari lalu) -- scheduler kemungkinan sempat tidak jalan (mis. laptop "
+            "mati/tidur). Sedang di-update otomatis di background; refresh halaman ini beberapa "
+            "menit lagi untuk data terbaru.",
+        )
+    elif _age_days == 1:
+        st.caption(f"🕒 Data per {_freshness.strftime('%d %b %Y')} (kemarin) -- normal untuk pagi hari sebelum jadwal update sore ini.")
+    else:
+        st.caption(f"✅ Data per {_freshness.strftime('%d %b %Y')} (hari ini).")
 
 DIVERGENCE_LABELS = {0: "🔥 Ganda (RSI+MACD)", 1: "Tunggal", 2: "-"}
 DIVERGENCE_COLORS = {0: "#A855F7", 1: ACCENT, 2: TEXT_MUTED}
