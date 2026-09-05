@@ -174,6 +174,14 @@ else:
     price_df["cmf_20"] = ta.volume.ChaikinMoneyFlowIndicator(
         price_df["high"], price_df["low"], price_df["close"], price_df["volume"], window=20
     ).chaikin_money_flow()
+    # RSI(14) and MACD -- same ta library calls/params as
+    # features/technical.py's compute_momentum, for the same reason as CMF
+    # above: this panel should show exactly what the model sees.
+    price_df["rsi_14"] = ta.momentum.RSIIndicator(price_df["close"], window=14).rsi()
+    macd_ind = ta.trend.MACD(price_df["close"])
+    price_df["macd"] = macd_ind.macd()
+    price_df["macd_signal"] = macd_ind.macd_signal()
+    price_df["macd_hist"] = macd_ind.macd_diff()
     # Foreign flow isn't derivable from OHLCV -- merge in whatever's stored
     # in feature_daily.net_foreign_flow (kept current by load_foreign_flow's
     # on-demand fetch earlier on this page). Left join: a date with no
@@ -214,14 +222,14 @@ else:
         plot_open, plot_high, plot_low, plot_close = price_df["open"], price_df["high"], price_df["low"], price_df["close"]
         candle_name = "Harga"
 
-    # Row 3 (CMF) and row 4 (Foreign Flow) are always-on context panels, same
-    # treatment as Volume (row 2) already gets -- not folded into the
-    # INDICATOR_OPTIONS multiselect, since both are meant to be a permanent
+    # Rows 3-6 (RSI, MACD, CMF, Foreign Flow) are always-on context panels,
+    # same treatment as Volume (row 2) already gets -- not folded into the
+    # INDICATOR_OPTIONS multiselect, since they're meant to be a permanent
     # complement to the price action rather than an optional overlay.
     fig = make_subplots(
-        rows=4, cols=1, shared_xaxes=True,
-        row_heights=[0.40, 0.15, 0.20, 0.25], vertical_spacing=0.03,
-        subplot_titles=(None, None, "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
+        rows=6, cols=1, shared_xaxes=True,
+        row_heights=[0.30, 0.10, 0.13, 0.13, 0.14, 0.20], vertical_spacing=0.02,
+        subplot_titles=(None, None, "RSI(14)", "MACD", "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
     )
 
     # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top
@@ -268,6 +276,38 @@ else:
         row=2, col=1,
     )
 
+    # RSI(14) -- bounded [0, 100]; 70/30 reference lines mark the
+    # conventional overbought/oversold thresholds (tinted with the same
+    # AVOID/BUY colors used everywhere else in this app for that framing).
+    fig.add_trace(
+        go.Scatter(
+            x=price_df["date"], y=price_df["rsi_14"], name="RSI(14)",
+            line=dict(color="#A78BFA", width=1.3), showlegend=False,
+        ),
+        row=3, col=1,
+    )
+    fig.add_hline(y=70, line=dict(color="rgba(239,68,68,0.4)", width=1, dash="dot"), row=3, col=1)
+    fig.add_hline(y=30, line=dict(color="rgba(34,197,94,0.4)", width=1, dash="dot"), row=3, col=1)
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
+
+    # MACD -- MACD line + signal line + histogram (their difference), the
+    # standard three-part presentation. Histogram bars colored the same
+    # up/down convention as every other bar panel on this chart.
+    macd_hist_colors = [COLOR_BUY if v >= 0 else COLOR_AVOID for v in price_df["macd_hist"].fillna(0)]
+    fig.add_trace(
+        go.Bar(x=price_df["date"], y=price_df["macd_hist"], name="MACD Hist", marker_color=macd_hist_colors, opacity=0.55, showlegend=False),
+        row=4, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=price_df["date"], y=price_df["macd"], name="MACD", line=dict(color="#22D3EE", width=1.3), showlegend=False),
+        row=4, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=price_df["date"], y=price_df["macd_signal"], name="Signal", line=dict(color="#F59E0B", width=1.3), showlegend=False),
+        row=4, col=1,
+    )
+    fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=4, col=1)
+
     # CMF(20) -- oscillates roughly [-1, 1] around a zero line; zero-line
     # reference makes the buying/selling-pressure sign readable at a glance.
     fig.add_trace(
@@ -275,9 +315,9 @@ else:
             x=price_df["date"], y=price_df["cmf_20"], name="CMF(20)",
             line=dict(color="#22D3EE", width=1.3), showlegend=False,
         ),
-        row=3, col=1,
+        row=5, col=1,
     )
-    fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=3, col=1)
+    fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=5, col=1)
 
     # Foreign Flow -- net foreign buy(+)/sell(-) in Rupiah, same up/down
     # bar-color convention as the Volume panel above. price_df only carries
@@ -286,7 +326,7 @@ else:
     if foreign_flow_df.empty:
         fig.add_annotation(
             text="Data foreign flow belum tersedia untuk emiten ini",
-            xref="x domain", yref="y domain", x=0.5, y=0.5, row=4, col=1,
+            xref="x domain", yref="y domain", x=0.5, y=0.5, row=6, col=1,
             showarrow=False, font=dict(color="rgba(255,255,255,0.45)", size=11),
         )
     else:
@@ -296,7 +336,7 @@ else:
                 x=price_df["date"], y=price_df["net_foreign_flow"], name="Foreign Flow",
                 marker_color=ff_colors, opacity=0.55, showlegend=False,
             ),
-            row=4, col=1,
+            row=6, col=1,
         )
         # MA20 trend line on top of the daily bars -- same idea as CMF's
         # line: smooths out single-day noise so the current buy/sell trend
@@ -307,12 +347,12 @@ else:
                 x=price_df["date"], y=price_df["foreign_flow_ma20"], name="MA20 Foreign Flow",
                 line=dict(color="#F59E0B", width=1.6), showlegend=False,
             ),
-            row=4, col=1,
+            row=6, col=1,
         )
-        fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=4, col=1)
+        fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=6, col=1)
 
     fig.update_layout(
-        height=820,
+        height=1080,
         template="plotly_dark",
         paper_bgcolor="#0B1120",
         plot_bgcolor="#0B1120",
