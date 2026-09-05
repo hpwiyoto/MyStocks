@@ -181,7 +181,12 @@ else:
     # stays NaN, which Plotly simply skips/gaps rather than erroring on.
     price_df = price_df.merge(foreign_flow_df, on="date", how="left")
 
-    INDICATOR_OPTIONS = ["EMA5", "EMA9", "SMA20", "SMA50", "SMA200", "Bollinger Band(20)"]
+    # Labeled "MA" (not "SMA") to match common retail-platform convention
+    # (Stockbit/RTI/etc. show plain "MA" for the simple moving average and
+    # reserve "EMA" for the exponential one) -- display label only, the
+    # underlying values and internal column/feature names (sma_20/50/200 in
+    # features/technical.py) are unchanged.
+    INDICATOR_OPTIONS = ["EMA5", "EMA9", "MA20", "MA50", "MA200", "Bollinger Band(20)"]
     ctrl1, ctrl2 = st.columns([1, 2])
     with ctrl1:
         chart_type = st.radio("Tipe candle", ["Normal", "Heikin-Ashi"], horizontal=True, key="chart_type")
@@ -239,9 +244,9 @@ else:
     for col, color, label in [
         ("ema5", "#FFFFFF", "EMA5"),
         ("ema9", "#EC4899", "EMA9"),
-        ("bb_mid", "#F59E0B", "SMA20"),
-        ("sma50", ACCENT, "SMA50"),
-        ("sma200", "#8B5CF6", "SMA200"),
+        ("bb_mid", "#F59E0B", "MA20"),
+        ("sma50", ACCENT, "MA50"),
+        ("sma200", "#8B5CF6", "MA200"),
     ]:
         if label in selected_indicators:
             fig.add_trace(
@@ -254,7 +259,7 @@ else:
         row=2, col=1,
     )
     fig.add_trace(
-        go.Scatter(x=price_df["date"], y=price_df["volume_sma20"], name="SMA20 Volume", line=dict(color="#F59E0B", width=1.3)),
+        go.Scatter(x=price_df["date"], y=price_df["volume_sma20"], name="MA20 Volume", line=dict(color="#F59E0B", width=1.3)),
         row=2, col=1,
     )
 
