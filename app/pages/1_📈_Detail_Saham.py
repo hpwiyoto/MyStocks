@@ -370,6 +370,15 @@ else:
         # broadcasts the hover/spike across every matched x-axis at once --
         # confirmed via Plotly's own multi-subplot unified-hover recipe.
         hovermode="x unified",
+        # "x unified" is what makes the crosshair line span all 6 panels
+        # (see comment above) -- but it also draws a value-readout box next
+        # to the cursor, which sits on top of whichever panel it lands on
+        # and can cover the very candles/bars it's meant to help compare.
+        # Making the box fully transparent keeps "x unified"'s cross-panel
+        # line behavior (governed separately by xaxis.showspikes below) while
+        # dropping the box itself, since a fully-transparent bg/border/font
+        # simply paints nothing rather than occupying visible space.
+        hoverlabel=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", font=dict(color="rgba(0,0,0,0)")),
     )
     # Vertical guide line that follows the cursor across all 6 stacked panels
     # at once (shared_xaxes=True already keeps their x-ranges in sync -- this
