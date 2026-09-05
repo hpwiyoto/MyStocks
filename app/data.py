@@ -11,12 +11,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-from sqlalchemy import inspect, text
+from sqlalchemy import bindparam, inspect, text, update
 
 from engine.predict import MODEL_VERSION
 from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
+from features.db import feature_daily
 from features.news import fetch_news_headlines
 from pipeline.db import get_engine
+from pipeline.idx_rapidapi_source import RAPIDAPI_KEY, fetch_foreign_flow_all
 from pipeline.logging_config import get_logger
 from pipeline.tickers import to_yfinance_symbol
 
@@ -28,6 +30,10 @@ CACHE_TTL = 300  # seconds
 LIVE_PRICE_TTL = 30  # seconds -- short on purpose, this is the "what's it doing right now" overlay
 NEWS_TTL = 1800  # seconds -- headlines don't need 30s freshness like price does, and this is one
                  # extra outbound HTTP call per Detail Saham page load, no need to repeat it often
+FOREIGN_FLOW_TTL = 21600  # 6h -- IDX foreign flow only changes once per trading session, no reason
+                          # to refetch more often than this; also keeps RapidAPI's free-tier monthly
+                          # quota (see pipeline/idx_rapidapi_source.py's reserve_requests) safe from a
+                          # single ticker being viewed repeatedly in one sitting.
 
 
 def _missing_tables(engine, required: list[str]) -> list[str]:
@@ -120,6 +126,61 @@ def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
         SELECT date, open, high, low, close, volume
         FROM price_history
         WHERE stock_code = :code AND source_provider = 'yfinance'
+        ORDER BY date DESC
+        LIMIT :days
+        """),
+        engine,
+        params={"code": stock_code, "days": days},
+    )
+    return df.sort_values("date").reset_index(drop=True)
+
+
+@st.cache_data(ttl=FOREIGN_FLOW_TTL)
+def load_foreign_flow(stock_code: str) -> pd.DataFrame:
+    """On-demand fetch (RapidAPI IDX, see pipeline/idx_rapidapi_source.py)
+    for ONE ticker, triggered the first time its Detail Saham page loads
+    each cache window -- not a bulk daily job, so quota only gets spent on
+    tickers someone actually looks at. Persists into
+    feature_daily.net_foreign_flow (same UPDATE-only, never-insert-a-bare-
+    row convention as scripts/backfill_foreign_flow.py) so the data stays
+    available for the empirical/analysis use the user asked for even
+    though it deliberately does NOT feed any model (see
+    scripts/test_foreign_flow_feature.py -- tested, didn't help Swing).
+    Returns [] gracefully (never raises) if RAPIDAPI_KEY isn't configured
+    or the fetch fails -- this is a best-effort display complement, same
+    contract as load_news."""
+    if not RAPIDAPI_KEY:
+        return pd.DataFrame(columns=["date", "value"])
+    flows = fetch_foreign_flow_all([stock_code], timeframe="1y")
+    df = flows.get(stock_code, pd.DataFrame(columns=["date", "value"]))
+    if not df.empty:
+        engine = get_engine()
+        with engine.begin() as conn:
+            stmt = (
+                update(feature_daily)
+                .where(feature_daily.c.stock_code == bindparam("code"), feature_daily.c.date == bindparam("d"))
+                .values(net_foreign_flow=bindparam("val"))
+            )
+            conn.execute(stmt, [{"code": stock_code, "d": r["date"], "val": float(r["value"])} for _, r in df.iterrows()])
+    return df.sort_values("date").reset_index(drop=True)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_foreign_flow_history(stock_code: str, days: int = 260) -> pd.DataFrame:
+    """Reads whatever's already stored in feature_daily.net_foreign_flow --
+    the chart-ready counterpart to load_foreign_flow above, which is what
+    actually keeps that column current. Deliberately separate (DB read vs
+    API fetch+write) so the chart doesn't wait on a live API call every
+    render -- load_foreign_flow already ran earlier in the same page load
+    and cached its result for FOREIGN_FLOW_TTL."""
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily"]):
+        return pd.DataFrame(columns=["date", "net_foreign_flow"])
+    df = pd.read_sql(
+        text("""
+        SELECT date, net_foreign_flow
+        FROM feature_daily
+        WHERE stock_code = :code AND net_foreign_flow IS NOT NULL
         ORDER BY date DESC
         LIMIT :days
         """),

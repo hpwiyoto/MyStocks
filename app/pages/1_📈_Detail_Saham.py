@@ -6,9 +6,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import ta
 from plotly.subplots import make_subplots
 
-from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_news, load_price_history, load_stock_list
+from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
 def _notna(value):
@@ -85,6 +86,15 @@ fund = load_latest_fundamental(selected)
 with st.spinner("Memuat data harga..."):
     price_df = load_price_history(selected, days=260)
 
+# On-demand foreign-flow fetch+persist for whichever ticker is being
+# viewed right now (see app/data.py's load_foreign_flow) -- display-only
+# complement, deliberately NOT a model input (scripts/test_foreign_flow_feature.py
+# found it doesn't help Swing's predictions). No-ops quietly if RAPIDAPI_KEY
+# isn't configured. Cached FOREIGN_FLOW_TTL (6h), so this is cheap on repeat
+# views of the same ticker in one sitting.
+load_foreign_flow(selected)
+foreign_flow_df = load_foreign_flow_history(selected, days=260)
+
 stock_name = stocks_df.loc[stocks_df["code"] == selected, "name"].iloc[0] if selected in stocks_df["code"].values else ""
 
 # Current price shown unconditionally, unlike the "Entry" metric below which
@@ -152,6 +162,19 @@ else:
     price_df["sma50"] = price_df["close"].rolling(50).mean()
     price_df["sma200"] = price_df["close"].rolling(200).mean()
     price_df["volume_ma20"] = price_df["volume"].rolling(20).mean()
+    # Same computation (ta library, window=20) the model itself uses for
+    # cmf_20 -- see features/technical.py's compute_money_flow -- so this
+    # panel matches exactly what the model sees, not a lookalike recomputed
+    # differently.
+    price_df["cmf_20"] = ta.volume.ChaikinMoneyFlowIndicator(
+        price_df["high"], price_df["low"], price_df["close"], price_df["volume"], window=20
+    ).chaikin_money_flow()
+    # Foreign flow isn't derivable from OHLCV -- merge in whatever's stored
+    # in feature_daily.net_foreign_flow (kept current by load_foreign_flow's
+    # on-demand fetch earlier on this page). Left join: a date with no
+    # foreign-flow value (RAPIDAPI_KEY unset, or just not backfilled yet)
+    # stays NaN, which Plotly simply skips/gaps rather than erroring on.
+    price_df = price_df.merge(foreign_flow_df, on="date", how="left")
 
     INDICATOR_OPTIONS = ["EMA5", "EMA9", "SMA20", "SMA50", "SMA200", "Bollinger Band(20)"]
     ctrl1, ctrl2 = st.columns([1, 2])
@@ -176,7 +199,15 @@ else:
         plot_open, plot_high, plot_low, plot_close = price_df["open"], price_df["high"], price_df["low"], price_df["close"]
         candle_name = "Harga"
 
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
+    # Row 3 (CMF) and row 4 (Foreign Flow) are always-on context panels, same
+    # treatment as Volume (row 2) already gets -- not folded into the
+    # INDICATOR_OPTIONS multiselect, since both are meant to be a permanent
+    # complement to the price action rather than an optional overlay.
+    fig = make_subplots(
+        rows=4, cols=1, shared_xaxes=True,
+        row_heights=[0.40, 0.15, 0.20, 0.25], vertical_spacing=0.03,
+        subplot_titles=(None, None, "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
+    )
 
     # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top
     if "Bollinger Band(20)" in selected_indicators:
@@ -221,8 +252,41 @@ else:
         go.Scatter(x=price_df["date"], y=price_df["volume_ma20"], name="MA20 Volume", line=dict(color="#F59E0B", width=1.3)),
         row=2, col=1,
     )
+
+    # CMF(20) -- oscillates roughly [-1, 1] around a zero line; zero-line
+    # reference makes the buying/selling-pressure sign readable at a glance.
+    fig.add_trace(
+        go.Scatter(
+            x=price_df["date"], y=price_df["cmf_20"], name="CMF(20)",
+            line=dict(color="#22D3EE", width=1.3), showlegend=False,
+        ),
+        row=3, col=1,
+    )
+    fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=3, col=1)
+
+    # Foreign Flow -- net foreign buy(+)/sell(-) in Rupiah, same up/down
+    # bar-color convention as the Volume panel above. price_df only carries
+    # a value on dates load_foreign_flow_history actually has (left-joined
+    # above), so this naturally gaps rather than errors on missing days.
+    if foreign_flow_df.empty:
+        fig.add_annotation(
+            text="Data foreign flow belum tersedia untuk emiten ini",
+            xref="x domain", yref="y domain", x=0.5, y=0.5, row=4, col=1,
+            showarrow=False, font=dict(color="rgba(255,255,255,0.45)", size=11),
+        )
+    else:
+        ff_colors = [COLOR_BUY if v >= 0 else COLOR_AVOID for v in price_df["net_foreign_flow"].fillna(0)]
+        fig.add_trace(
+            go.Bar(
+                x=price_df["date"], y=price_df["net_foreign_flow"], name="Foreign Flow",
+                marker_color=ff_colors, opacity=0.75, showlegend=False,
+            ),
+            row=4, col=1,
+        )
+        fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=4, col=1)
+
     fig.update_layout(
-        height=560,
+        height=820,
         template="plotly_dark",
         paper_bgcolor="#0B1120",
         plot_bgcolor="#0B1120",
@@ -231,6 +295,12 @@ else:
         xaxis_rangeslider_visible=False,
     )
     st.plotly_chart(fig, width="stretch")
+    if foreign_flow_df.empty:
+        st.caption(
+            "Foreign flow: data belum tersedia (RapidAPI key belum diset, atau "
+            "belum pernah diambil untuk emiten ini). Data akan otomatis diambil "
+            "saat halaman ini dibuka jika key sudah dikonfigurasi."
+        )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
