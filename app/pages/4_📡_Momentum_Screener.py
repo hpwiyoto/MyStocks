@@ -82,6 +82,7 @@ MACD_STATUS_COLORS = {
     "Netral": TEXT_MUTED, "Tidak diketahui": TEXT_MUTED,
 }
 PRICE_FILTER_OPTIONS = ["Semua", "Di bawah 50", "50 - 100", "100 - 1.000", "Di atas 1.000"]
+DIVERGENCE_TIER_OPTIONS = {"🔥 Ganda (RSI+MACD)": 0, "Tunggal": 1, "Tidak ada": 2}
 
 
 def divergence_detail(row) -> str:
@@ -133,6 +134,12 @@ with st.sidebar:
     macd_default = [o for o in ["Bullish Crossover", "Bullish"] if o in macd_options] or macd_options
     macd_filter = st.multiselect("Status MACD", macd_options, default=macd_default)
 
+    momentum_dir_filter = st.radio(
+        "Arah Momentum Histogram", ["Semua", "Menguat ↑", "Melemah ↓"], index=0,
+        help="Berdasarkan macd_hist_slope_3d -- independen dari Status MACD di atas (bullish/bearish "
+             "bisa sama-sama sedang menguat atau melemah).",
+    )
+
     money_flow_filter = st.radio(
         "Money Flow (CMF 20 hari)", ["Semua", "Akumulasi (CMF > 0)", "Distribusi (CMF < 0)"],
         index=1,
@@ -143,11 +150,23 @@ with st.sidebar:
     price_filter = st.selectbox("Harga saham", PRICE_FILTER_OPTIONS, index=0)
     st.caption("⚠️ Saham di bawah Rp50 (gocap) tidak dikecualikan di sini seperti di Swing -- likuiditas & tick-size-nya perlu ekstra hati-hati.")
 
-    divergence_only = st.checkbox("Hanya yang ada divergence bullish", value=False)
+    divergence_tier_filter = st.multiselect(
+        "Divergence", list(DIVERGENCE_TIER_OPTIONS.keys()), default=list(DIVERGENCE_TIER_OPTIONS.keys()),
+    )
+
+    regime_options = sorted(df["regime"].dropna().unique().tolist())
+    regime_filter = st.multiselect("Regime", regime_options, default=regime_options)
+
+    prob_range = st.slider("Probabilitas Swing (%)", 0, 100, (0, 100), 5)
+    include_unscored = st.checkbox("Sertakan yang belum ada prediksi Swing", value=True)
 
 filtered = df[df["rsi_14"].between(rsi_range[0], rsi_range[1])]
 if macd_filter:
     filtered = filtered[filtered["macd_status"].isin(macd_filter)]
+if momentum_dir_filter == "Menguat ↑":
+    filtered = filtered[filtered["macd_hist_slope_3d"] > 0]
+elif momentum_dir_filter == "Melemah ↓":
+    filtered = filtered[filtered["macd_hist_slope_3d"] < 0]
 if money_flow_filter == "Akumulasi (CMF > 0)":
     filtered = filtered[filtered["cmf_20"] > 0]
 elif money_flow_filter == "Distribusi (CMF < 0)":
@@ -163,8 +182,16 @@ elif price_filter == "100 - 1.000":
     filtered = filtered[(price >= 100) & (price < 1000)]
 elif price_filter == "Di atas 1.000":
     filtered = filtered[price >= 1000]
-if divergence_only:
-    filtered = filtered[filtered["divergence_tier"] < 2]
+if len(divergence_tier_filter) < len(DIVERGENCE_TIER_OPTIONS):
+    allowed_tiers = [DIVERGENCE_TIER_OPTIONS[k] for k in divergence_tier_filter]
+    filtered = filtered[filtered["divergence_tier"].isin(allowed_tiers)]
+if len(regime_filter) < len(regime_options):
+    filtered = filtered[filtered["regime"].isin(regime_filter)]
+if prob_range != (0, 100):
+    prob_mask = (filtered["probability"] * 100).between(prob_range[0], prob_range[1])
+    if include_unscored:
+        prob_mask = prob_mask | filtered["probability"].isna()
+    filtered = filtered[prob_mask]
 if search:
     q = search.strip().lower()
     filtered = filtered[
