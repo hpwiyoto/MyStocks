@@ -180,6 +180,11 @@ else:
     # foreign-flow value (RAPIDAPI_KEY unset, or just not backfilled yet)
     # stays NaN, which Plotly simply skips/gaps rather than erroring on.
     price_df = price_df.merge(foreign_flow_df, on="date", how="left")
+    # Raw daily net_foreign_flow is noisy (one big print can dominate the
+    # bars) -- a trailing 20-day average smooths it into a readable trend
+    # line, same role CMF's smoothing plays for money flow: is the last few
+    # weeks net accumulation (line above zero) or distribution (below)?
+    price_df["foreign_flow_ma20"] = price_df["net_foreign_flow"].rolling(20, min_periods=5).mean()
 
     # Labeled "MA" (not "SMA") to match common retail-platform convention
     # (Stockbit/RTI/etc. show plain "MA" for the simple moving average and
@@ -289,7 +294,18 @@ else:
         fig.add_trace(
             go.Bar(
                 x=price_df["date"], y=price_df["net_foreign_flow"], name="Foreign Flow",
-                marker_color=ff_colors, opacity=0.75, showlegend=False,
+                marker_color=ff_colors, opacity=0.55, showlegend=False,
+            ),
+            row=4, col=1,
+        )
+        # MA20 trend line on top of the daily bars -- same idea as CMF's
+        # line: smooths out single-day noise so the current buy/sell trend
+        # (line above/below zero) reads at a glance instead of having to
+        # eyeball a wall of red/green bars.
+        fig.add_trace(
+            go.Scatter(
+                x=price_df["date"], y=price_df["foreign_flow_ma20"], name="MA20 Foreign Flow",
+                line=dict(color="#F59E0B", width=1.6), showlegend=False,
             ),
             row=4, col=1,
         )
@@ -311,6 +327,22 @@ else:
             "belum pernah diambil untuk emiten ini). Data akan otomatis diambil "
             "saat halaman ini dibuka jika key sudah dikonfigurasi."
         )
+    else:
+        # Read the trend straight off the same MA20 line just plotted --
+        # dropna() rather than .iloc[-1] because the trailing rows of
+        # price_df's 260-day window can be newer than the latest foreign-
+        # flow data actually available (RapidAPI lags a day or so).
+        ma20_recent = price_df["foreign_flow_ma20"].dropna()
+        if not ma20_recent.empty:
+            latest_ma20 = ma20_recent.iloc[-1]
+            trend_label = "NET BUY (akumulasi asing)" if latest_ma20 >= 0 else "NET SELL (distribusi asing)"
+            trend_color = COLOR_BUY if latest_ma20 >= 0 else COLOR_AVOID
+            st.caption(
+                f"Tren foreign flow (rata-rata 20 hari terakhir): "
+                f"<span style='color:{trend_color}; font-weight:600;'>{trend_label}</span>, "
+                f"Rp {latest_ma20 / 1e9:,.1f} miliar/hari.",
+                unsafe_allow_html=True,
+            )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
