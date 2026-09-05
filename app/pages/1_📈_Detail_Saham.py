@@ -374,11 +374,13 @@ else:
         # (see comment above) -- but it also draws a value-readout box next
         # to the cursor, which sits on top of whichever panel it lands on
         # and can cover the very candles/bars it's meant to help compare.
-        # Making the box fully transparent keeps "x unified"'s cross-panel
-        # line behavior (governed separately by xaxis.showspikes below) while
-        # dropping the box itself, since a fully-transparent bg/border/font
-        # simply paints nothing rather than occupying visible space.
-        hoverlabel=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", font=dict(color="rgba(0,0,0,0)")),
+        # First attempt made this box fully transparent (rgba alpha=0) to
+        # hide it -- that broke the cross-panel spike propagation itself
+        # (line stopped extending past whichever row was hovered), so this
+        # instead paints the box the exact same solid color as the chart
+        # background (#0B1120): still a real, opaque, normally-computed
+        # hover label -- just visually blended away rather than skipped.
+        hoverlabel=dict(bgcolor="#0B1120", bordercolor="#0B1120", font=dict(color="#0B1120", size=1)),
     )
     # Vertical guide line that follows the cursor across all 6 stacked panels
     # at once (shared_xaxes=True already keeps their x-ranges in sync -- this
