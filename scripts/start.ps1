@@ -21,6 +21,26 @@ Set-Location $RepoRoot
 
 Write-Host "== MyStocks: starting (native, no Docker) ==" -ForegroundColor Cyan
 
+# --- 0. Sync with GitHub: only fast-forward (never auto-merge/create a
+# merge commit), and only when the working tree is clean (never pull over
+# uncommitted local edits -- ask first, don't guess). Surfaced by a real
+# gap: work pushed from this PC wasn't visible in a different environment
+# (a GitHub Codespace) until pulled there explicitly -- this makes THIS
+# machine self-sync on every `start` instead of relying on remembering to
+# `git pull` by hand. Never fatal: git's own exit code (not a PowerShell
+# exception) on failure just prints a warning and `start` continues with
+# whatever code is already on disk.
+Write-Host "-> menyamakan dengan GitHub (git pull)..."
+$gitStatus = git status --porcelain 2>$null
+if ($gitStatus) {
+    Write-Host "!! ada perubahan lokal yang belum di-commit -- git pull dilewati, sinkronkan manual (git status)." -ForegroundColor Yellow
+} else {
+    git pull --ff-only 2>&1 | ForEach-Object { Write-Host "   $_" }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "!! git pull gagal (offline, atau riwayat lokal & remote sudah bercabang) -- lanjut pakai kode yang ada di disk." -ForegroundColor Yellow
+    }
+}
+
 # --- 1. venv: create once, reused on every subsequent `start`. ---
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $VenvPython)) {
