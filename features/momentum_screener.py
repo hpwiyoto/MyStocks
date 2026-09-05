@@ -16,6 +16,32 @@ SWING_WINDOW = 4          # a close must be the lowest within +/-4 trading days 
 MIN_GAP_BETWEEN_LOWS = 5  # trading days -- avoid picking two lows out of the same dip
 RECENT_LOW_MAX_AGE = 20   # trading days -- a divergence only counts if its most recent leg is this fresh
 
+# How much confirmed bullish momentum each features.regime.classify_regime()
+# state represents, lowest = most advanced/actionable -- used as a secondary
+# sort key on the Momentum Screener page (after divergence_tier, before
+# divergence freshness). early_reversal ranks ABOVE bullish deliberately:
+# this screener's whole spirit (like divergence-age priority above it) is
+# catching a stock AS it turns, not after it's already had its run --
+# early_reversal has a real, just-happened trigger (EMA20 reclaim + RSI
+# crossing above 50, see features/regime.py) with more upside runway left,
+# while bullish is already a mature, sustained uptrend. accumulation sits
+# below both: it's a quiet, low-volatility phase with NO confirmed
+# directional trigger yet (could resolve either way), so it's a weaker
+# signal than either regime that already shows real upward momentum --
+# directly answers the "accumulation vs early_reversal" question asked
+# when this was built. overextended ranks last among non-bad regimes since
+# it's a pullback warning, not a buy setup.
+REGIME_PRIORITY = {
+    "early_reversal": 0,
+    "bullish": 1,
+    "accumulation": 2,
+    "sideways": 3,
+    "bottoming": 4,
+    "bearish": 5,
+    "overextended": 6,
+}
+DEFAULT_REGIME_PRIORITY = len(REGIME_PRIORITY)  # unknown/missing regime sorts last
+
 
 def classify_macd_status(macd_hist: pd.Series, fresh_days: int = FRESH_CROSSOVER_DAYS) -> str:
     """Crossover status (method 1 of the MACD reading): Bullish Crossover
@@ -122,4 +148,5 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
         [out["divergence_rsi"] & out["divergence_macd"], out["divergence_rsi"] | out["divergence_macd"]],
         [0, 1], default=2,
     )
+    out["regime_priority"] = out["regime"].map(REGIME_PRIORITY).fillna(DEFAULT_REGIME_PRIORITY).astype(int)
     return out

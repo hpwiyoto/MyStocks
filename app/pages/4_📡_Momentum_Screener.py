@@ -4,6 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -31,8 +32,9 @@ st.title("📡 Momentum Screener")
 st.caption(
     "Filter manual berbasis RSI, status MACD, harga, volume, dan money flow (CMF) -- "
     "BUKAN skor model. Urutan: (1) tingkat divergence bullish (Ganda RSI+MACD > Tunggal > "
-    "tidak ada), (2) di dalam tingkat yang sama, divergence yang lebih baru diutamakan, "
-    "(3) probabilitas model Swing cuma sebagai tiebreaker terakhir -- bukan penentu urutan."
+    "tidak ada), (2) regime dengan momentum paling terkonfirmasi (early_reversal > bullish > "
+    "accumulation > sideways > bottoming > bearish > overextended), (3) divergence yang lebih "
+    "baru, (4) probabilitas model Swing cuma sebagai tiebreaker terakhir -- bukan penentu urutan."
 )
 st.info(
     "**Beda dari Swing/Turnaround**: dua screener lain di aplikasi ini diurutkan oleh "
@@ -51,7 +53,13 @@ st.info(
 # ada yang sadar sampai ditanyakan langsung.
 _freshness = load_data_freshness()
 if _freshness is not None:
-    _age_days = (dt.date.today() - _freshness).days
+    # Business days elapsed, not calendar days -- IDX doesn't trade on
+    # weekends, so a plain calendar diff falsely accuses the scheduler of
+    # having missed a run every single Sunday (2 calendar days since
+    # Friday's close) even when nothing is wrong. np.busday_count excludes
+    # Sat/Sun by default (doesn't know IDX public holidays specifically,
+    # but that's a much rarer false positive than every weekend).
+    _age_days = int(np.busday_count(_freshness, dt.date.today()))
     if _age_days >= 2:
         st.warning(
             f"⚠️ Data harga & indikator terakhir per **{_freshness.strftime('%d %b %Y')}** "
@@ -162,19 +170,23 @@ if search:
         | filtered["name"].fillna("").str.lower().str.contains(q)
     ]
 
-# Priority is the filter/divergence result, NOT the model. Three levels:
+# Priority is the filter/divergence result, NOT the model. Four levels:
 # 1. divergence_tier (0=double, 1=single, 2=none) -- the main priority the
 #    user asked for.
-# 2. divergence_age_days ascending -- WITHIN a tier, a divergence spotted a
-#    few days ago is a fresher, more actionable setup than one from 18 days
-#    ago (near RECENT_LOW_MAX_AGE's cutoff) that may have already played out
-#    unnoticed. Always NaN for tier 2 (no divergence to date), so this is a
-#    no-op there and only discriminates within tiers 0/1.
-# 3. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
+# 2. regime_priority -- how much confirmed bullish momentum the regime
+#    itself already shows (early_reversal > bullish > accumulation > ...,
+#    see features.momentum_screener.REGIME_PRIORITY for the full reasoning
+#    behind that order, incl. why early_reversal outranks bullish and
+#    accumulation outranks neither).
+# 3. divergence_age_days ascending -- WITHIN the same tier+regime, a
+#    divergence spotted a few days ago is fresher/more actionable than one
+#    from 18 days ago (near RECENT_LOW_MAX_AGE's cutoff) that may have
+#    already played out unnoticed. Always NaN for tier 2, a no-op there.
+# 4. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
 #    cuma pertimbangan tambahan" ordering the user asked for, not a driver.
 filtered = filtered.sort_values(
-    ["divergence_tier", "divergence_age_days", "probability"],
-    ascending=[True, True, False], na_position="last",
+    ["divergence_tier", "regime_priority", "divergence_age_days", "probability"],
+    ascending=[True, True, True, False], na_position="last",
 ).reset_index(drop=True)
 
 c1, c2, c3 = st.columns(3)
