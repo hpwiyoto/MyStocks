@@ -84,6 +84,35 @@ st.caption(
     "AVOID jauh di bawah. Lihat halaman **Swing** untuk win rate sesungguhnya per keputusan."
 )
 
+swing_wf = meta.get("walk_forward_validation") or {}
+swing_ml = swing_wf.get("avg_ml_metrics") or {}
+swing_wf_threshold = swing_wf.get("buy_threshold")
+sp1, sp2, sp3 = st.columns(3)
+sp1.metric(
+    f"Precision @ threshold {swing_wf_threshold*100:.0f}% (walk-forward)" if swing_wf_threshold else "Precision (walk-forward)",
+    f"{swing_ml.get('precision', 0)*100:.1f}%" if swing_ml else "-",
+)
+sp2.metric("ROC-AUC (walk-forward)", f"{swing_ml.get('roc_auc', 0):.3f}" if swing_ml else "-")
+sp3.metric("BUY threshold saat ini (live)", f"{BUY_THRESHOLD*100:.0f}%")
+if swing_wf_threshold and abs(swing_wf_threshold - BUY_THRESHOLD) > 1e-6:
+    st.caption(
+        f"⚠️ Angka precision di atas diukur saat threshold BUY masih {swing_wf_threshold*100:.0f}% -- "
+        f"threshold LIVE sekarang {BUY_THRESHOLD*100:.0f}% (diturunkan atas permintaan eksplisit "
+        "supaya sinyal BUY tidak kosong berhari-hari berturut-turut, lihat `engine/decision.py`). "
+        "Konsekuensinya: precision BUY yang sesungguhnya sedikit lebih rendah dari angka di atas -- "
+        "berdasarkan pengecekan 250 hari perdagangan terakhir, sekitar 76-78%, bukan turun drastis, "
+        "tapi tetap bukan angka yang sama persis."
+    )
+st.caption(
+    "**Kenapa satu saham WATCH bisa menampilkan probabilitas serendah 30%an di Detail Saham**: "
+    "probabilitas mentah dari model itu terus-menerus (0-100%), bukan skor keyakinan model pada "
+    "dirinya sendiri. Angka precision di atas HANYA berlaku untuk saham yang probabilitasnya sudah "
+    "melewati ambang BUY -- bukan klaim bahwa SETIAP angka yang ditampilkan seharusnya tinggi. "
+    "Base rate historis (tanpa strategi apa pun) sekitar 30%, jadi probabilitas 30%an persis ada di "
+    "wilayah WATCH (di atas base rate, belum cukup tinggi untuk BUY) -- itu model bekerja sesuai "
+    "rancangannya, bukan tanda model gagal atau tidak akurat."
+)
+
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 render_retrain_reminder(meta, current_rows)
 st.caption(RETRAIN_DISCLAIMER)

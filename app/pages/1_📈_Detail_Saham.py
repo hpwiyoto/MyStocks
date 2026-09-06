@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 import ta
 from plotly.subplots import make_subplots
 
-from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_news, load_price_history, load_stock_list
+from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
 def _notna(value):
@@ -131,6 +131,23 @@ with h3:
     if row is not None:
         st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
+        # Angka mentah (0-100%) sengaja BUKAN skor keyakinan model pada
+        # dirinya sendiri -- ini probabilitas dari data historis, dan base
+        # rate acaknya sendiri cuma ~30%. Tanpa konteks ini, angka "30%an"
+        # untuk saham WATCH gampang disalahartikan sebagai "model ragu/tidak
+        # akurat", padahal itu justru wilayah kerja normal WATCH (di atas
+        # acak, belum cukup untuk BUY) -- lihat halaman Info Model untuk
+        # angka precision walk-forward per tingkat keputusan.
+        try:
+            swing_base_rate = load_model_metadata()["base_rate"]
+            above_below = "di atas" if float(row["probability"]) >= swing_base_rate else "di bawah"
+            st.caption(
+                f"Base rate acak: {swing_base_rate*100:.0f}% -- angka ini {above_below} itu, makanya "
+                f"**{row['decision']}**. Bukan skor 0-100 yang harus tinggi, tapi seberapa jauh dari acak "
+                "(lihat halaman Info Model untuk detail)."
+            )
+        except (FileNotFoundError, KeyError):
+            pass
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
