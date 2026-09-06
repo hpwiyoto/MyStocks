@@ -73,7 +73,7 @@ c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(
         """
-        <div class="mystocks-card">
+        <div class="mystocks-card" style="min-height:104px;">
             <div class="mystocks-ticker" style="font-size:1.3rem;">🎯 Swing (10 hari)</div>
             <div class="mystocks-muted">Cari peluang naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.</div>
         </div>
@@ -92,7 +92,7 @@ with c1:
 with c2:
     st.markdown(
         """
-        <div class="mystocks-card">
+        <div class="mystocks-card" style="min-height:104px;">
             <div class="mystocks-ticker" style="font-size:1.3rem;">🔄 Turnaround</div>
             <div class="mystocks-muted">Saham bearish/bottoming yang berpotensi berbalik arah dalam 6 bulan.</div>
         </div>
@@ -111,7 +111,7 @@ with c2:
 with c3:
     st.markdown(
         """
-        <div class="mystocks-card">
+        <div class="mystocks-card" style="min-height:104px;">
             <div class="mystocks-ticker" style="font-size:1.3rem;">📡 Momentum Screener</div>
             <div class="mystocks-muted">Filter RSI/MACD/volume/money flow -- aturan teknikal, bukan model ML.</div>
         </div>
@@ -134,7 +134,7 @@ d1, d2 = st.columns(2)
 with d1:
     st.markdown(
         """
-        <div class="mystocks-card">
+        <div class="mystocks-card" style="min-height:104px;">
             <div class="mystocks-ticker" style="font-size:1.3rem;">🏆 Rekomendasi Emitten</div>
             <div class="mystocks-muted">Saham yang disepakati lebih dari satu alat (Swing + Turnaround + Momentum) sekaligus.</div>
         </div>
@@ -153,7 +153,7 @@ with d1:
 with d2:
     st.markdown(
         """
-        <div class="mystocks-card" style="opacity:0.6;">
+        <div class="mystocks-card" style="opacity:0.6; min-height:104px;">
             <div class="mystocks-ticker" style="font-size:1.3rem;">📈 Long-term Investment</div>
             <div class="mystocks-muted">Cari perusahaan yang mengungguli IHSG dalam 12 bulan. Segera hadir.</div>
         </div>
