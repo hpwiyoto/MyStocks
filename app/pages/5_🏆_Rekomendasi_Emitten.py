@@ -204,12 +204,18 @@ for row_chunk in rows:
             # filter, any interpolated value that goes empty splits the
             # block at that blank line and everything after it (still
             # carrying its own nested indentation) falls into the same trap.
+            # min-height on the name reserves room for a 2-line company name
+            # (e.g. "PT MNC Digital Entertainment Tbk") so a row where only
+            # ONE card has a long name doesn't end up taller than its
+            # siblings -- caught from a real screenshot: MSIN's card grew
+            # past BUKA/RATU's in the same row, throwing off their "Lihat
+            # Detail" buttons below.
             card_html = textwrap.dedent(f"""
                 <div class="mystocks-card">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
                             <div class="mystocks-ticker">{r['stock_code']}</div>
-                            <div class="mystocks-muted">{name}</div>
+                            <div class="mystocks-muted" style="min-height:2.6em; line-height:1.3em;">{name}</div>
                         </div>
                         {tier_badge}
                     </div>

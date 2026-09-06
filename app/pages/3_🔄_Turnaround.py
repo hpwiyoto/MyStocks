@@ -152,7 +152,7 @@ for row_chunk in rows:
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
                             <div class="mystocks-ticker">{r['stock_code']}</div>
-                            <div class="mystocks-muted">{name}</div>
+                            <div class="mystocks-muted" style="min-height:2.6em; line-height:1.3em;">{name}</div>
                         </div>
                         {decision_badge(r['decision'])}
                     </div>

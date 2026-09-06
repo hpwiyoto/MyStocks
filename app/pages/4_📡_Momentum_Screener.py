@@ -379,16 +379,24 @@ for row_chunk in rows:
             # enough to be misread as a code block. Dropping every blank
             # line keeps the whole card as one unbroken HTML block no matter
             # which optional badges are empty.
+            # Fixed-height slots for the two variable-length parts (company
+            # name can wrap to 2 lines; the Tervalidasi badge line is only
+            # ever present for SOME cards in a row) -- same technique as
+            # Home.py's mode cards, and for the same reason: without a
+            # reserved height, a row of 3 cards where only one has a long
+            # name or a validated badge renders at 3 different heights, and
+            # the "Lihat Detail" buttons below them fall out of alignment
+            # (caught from a real screenshot, not a guess).
             card_html = textwrap.dedent(f"""
                 <div class="mystocks-card">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
                             <div class="mystocks-ticker">{r['stock_code']}</div>
-                            <div class="mystocks-muted">{name}</div>
+                            <div class="mystocks-muted" style="min-height:2.6em; line-height:1.3em;">{name}</div>
                         </div>
                         {div_badge}
                     </div>
-                    {f'<div style="margin-top:0.5rem;">{validated_badge}</div>' if validated_badge else ''}
+                    <div style="margin-top:0.5rem; min-height:1.7em;">{validated_badge}</div>
                     <div style="margin-top:0.7rem;">
                         <span class="mystocks-muted" style="font-size:0.72rem;">MACD</span> {macd_badge}
                         &nbsp;&nbsp;
