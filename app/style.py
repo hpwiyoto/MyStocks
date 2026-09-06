@@ -60,6 +60,7 @@ def inject_base_css():
             font-weight: 600;
             letter-spacing: 0.03em;
             text-transform: uppercase;
+            white-space: nowrap;
         }}
         .mystocks-ticker {{
             font-size: 1.35rem;
