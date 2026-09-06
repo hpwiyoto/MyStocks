@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -381,6 +382,15 @@ else:
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
         xaxis_rangeslider_visible=False,
+        # -1 = no cutoff: without this, Plotly only fires 'plotly_hover' when
+        # the cursor is within a small pixel radius of an actual data point,
+        # so hovering at, say, the vertical middle of the Volume or CMF row
+        # (nowhere near that day's bar/line height) fires NOTHING -- caught
+        # via Playwright hovering at each row's own domain center and seeing
+        # zero response on some rows while others worked. Every panel should
+        # respond anywhere inside it, matching how the full-height crosshair
+        # line already behaves.
+        hoverdistance=-1,
     )
     # Real cross-panel crosshair, verified end-to-end with Playwright (real
     # browser, real mouse-hover, inspected the actual rendered SVG) before
@@ -412,6 +422,72 @@ else:
         y0=0, y1=1, line=dict(color="rgba(255,255,255,0.6)", width=1.5, dash="solid"),
         visible=False, name="crosshair",
     )
+
+    # Compact per-panel value label shown next to the crosshair on hover --
+    # "nilai yang penting saja" (RSI panel shows only the RSI number, MACD
+    # panel shows only its histogram, etc.), not a full multi-trace
+    # readout, and small enough (tucked at the top edge of each panel's own
+    # domain, semi-transparent background) that it never sits over the
+    # middle of the candles/lines. One annotation per row, all invisible
+    # until the JS hover handler below fills in text and flips it visible.
+    # Index tracked the SAME way the crosshair shape's index is tracked
+    # above (comment at the add_shape call for the reasoning): make_subplots'
+    # own subplot_titles already occupy annotations[0..5], so hardcoding a
+    # 0-based index here would silently animate the wrong (title) annotation
+    # -- read the actual count instead of assuming it.
+    value_label_base_idx = len(fig.layout.annotations)
+    for panel_row in range(1, 7):
+        axis_name = "yaxis" if panel_row == 1 else f"yaxis{panel_row}"
+        domain_top = getattr(fig.layout, axis_name).domain[1]
+        fig.add_annotation(
+            xref="x", yref="paper", x=price_df["date"].iloc[0], y=domain_top - 0.006,
+            xanchor="left", yanchor="top", text="", showarrow=False,
+            font=dict(size=11, color="#E2E8F0"), bgcolor="rgba(15,23,42,0.85)",
+            bordercolor="rgba(255,255,255,0.25)", borderwidth=1, borderpad=3,
+            visible=False,
+        )
+
+    def _fmt_volume_id(v: float) -> str:
+        if v >= 1e9:
+            return f"{v / 1e9:.2f} M"
+        if v >= 1e6:
+            return f"{v / 1e6:.1f} Jt"
+        if v >= 1e3:
+            return f"{v / 1e3:.0f} rb"
+        return f"{v:.0f}"
+
+    # Hover label text is precomputed HERE in Python, keyed by date, rather
+    # than read out of the rendered Plotly trace objects in JS. Tried the
+    # JS-side approach first -- it failed even after fixing an unrelated
+    # Date-vs-string mismatch, because this Plotly version serializes
+    # numeric trace arrays as a compact {dtype, bdata} binary-encoded
+    # object (confirmed by inspecting gd.data in a real browser), not a
+    # plain JS array -- so `trace.y[idx]` was silently undefined for every
+    # single panel, always, regardless of which date was hovered. A plain
+    # JSON dict built from price_df sidesteps that representation
+    # entirely and is robust to however Plotly's own JS happens to encode
+    # its traces internally.
+    hover_lookup: dict[str, list[str | None]] = {}
+    for _, hr in price_df.iterrows():
+        if pd.isna(hr["date"]):
+            continue
+        # pd.Timestamp(...) normalizes either case -- this app runs SQLite
+        # in dev (no native DATE type, so price_df["date"] comes back as a
+        # plain string like "2025-08-11") and MySQL in production (where it
+        # comes back as a real Timestamp) -- calling .strftime() directly
+        # crashed dev with "'str' object has no attribute 'strftime'".
+        date_key = pd.Timestamp(hr["date"]).strftime("%Y-%m-%d")
+        ff_val = hr.get("net_foreign_flow")
+        hover_lookup[date_key] = [
+            None if pd.isna(hr["close"]) else f"Harga: Rp {hr['close']:,.0f}",
+            None if pd.isna(hr["volume"]) else f"Vol: {_fmt_volume_id(hr['volume'])}",
+            None if pd.isna(hr["rsi_14"]) else f"RSI: {hr['rsi_14']:.1f}",
+            None if pd.isna(hr["macd_hist"]) else f"MACD Hist: {hr['macd_hist']:.2f}",
+            None if pd.isna(hr["cmf_20"]) else f"CMF: {hr['cmf_20']:.3f}",
+            None if pd.isna(ff_val) else f"FF: Rp {ff_val / 1e9:.1f} M",
+        ]
+    hover_lookup_json = json.dumps(hover_lookup, ensure_ascii=False)
+
     chart_html = fig.to_html(
         full_html=False,
         include_plotlyjs=True,
@@ -441,8 +517,58 @@ else:
                 upd['shapes[' + crosshairIdx + '].visible'] = false;
                 Plotly.relayout(gd, upd);
             });
+
+            // Per-panel value labels (separate listeners, same 'gd' and
+            // 'crosshairIdx' above -- both this and the crosshair listener
+            // fire together on every hover/unhover, JS allows multiple
+            // handlers on one event). Text comes from a lookup dict built
+            // in PYTHON (keyed by date), not by reading gd.data -- see the
+            // comment on hover_lookup in the Python source for why: this
+            // Plotly version encodes trace y-arrays as a compact binary
+            // {dtype, bdata} object client-side, not a plain JS array.
+            var valueLabelBaseIdx = __VALUE_LABEL_BASE_IDX__;
+            var hoverLookup = __HOVER_LOOKUP_JSON__;
+            function dateKeyUTC(x) {
+                // UTC getters, not local (getFullYear/getMonth/getDate) --
+                // a date-only ISO string parses to midnight UTC, and a
+                // negative-offset timezone would read that back as the
+                // PREVIOUS calendar day, silently missing every lookup for
+                // viewers outside UTC+.
+                var d = new Date(x);
+                var y = d.getUTCFullYear();
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                return y + '-' + m + '-' + day;
+            }
+            gd.on('plotly_hover', function(evt) {
+                if (!evt.points || !evt.points.length) return;
+                var x = evt.points[0].x;
+                // Flip the label to the other side of the crosshair once the
+                // line gets close to the right edge of the CURRENTLY VISIBLE
+                // range (so it keeps working after zoom/pan, not just on the
+                // full 260-day view) -- otherwise the label would render
+                // partly off-chart instead of just "beside" the line.
+                var xr = gd._fullLayout.xaxis.range;
+                var t0 = new Date(xr[0]).getTime(), t1 = new Date(xr[1]).getTime(), tx = new Date(x).getTime();
+                var anchor = (t1 > t0 && (tx - t0) / (t1 - t0) > 0.65) ? 'right' : 'left';
+                var texts = hoverLookup[dateKeyUTC(x)] || [null, null, null, null, null, null];
+                var labelUpd = {};
+                texts.forEach(function(text, i) {
+                    var annIdx = valueLabelBaseIdx + i;
+                    labelUpd['annotations[' + annIdx + '].x'] = x;
+                    labelUpd['annotations[' + annIdx + '].xanchor'] = anchor;
+                    labelUpd['annotations[' + annIdx + '].text'] = text || '';
+                    labelUpd['annotations[' + annIdx + '].visible'] = !!text;
+                });
+                Plotly.relayout(gd, labelUpd);
+            });
+            gd.on('plotly_unhover', function() {
+                var labelUpd = {};
+                for (var i = 0; i < 6; i++) { labelUpd['annotations[' + (valueLabelBaseIdx + i) + '].visible'] = false; }
+                Plotly.relayout(gd, labelUpd);
+            });
         })();
-        """,
+        """.replace("__VALUE_LABEL_BASE_IDX__", str(value_label_base_idx)).replace("__HOVER_LOOKUP_JSON__", hover_lookup_json),
     )
     # Hides Plotly's native hover box AND its (single-panel-only) spikelines
     # -- both confirmed to live inside g.hoverlayer -- without touching our
