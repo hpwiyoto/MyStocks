@@ -59,7 +59,7 @@ def load_full_panel() -> pd.DataFrame:
         """
         SELECT ph.stock_code, ph.date, ph.close, ph.high, ph.low, ph.volume,
                fd.rsi_14, fd.macd, fd.macd_signal, fd.macd_hist, fd.macd_hist_slope_3d,
-               fd.cmf_20, fd.rvol_20, fd.regime
+               fd.cmf_20, fd.cmf_slope_5d, fd.rvol_20, fd.regime
         FROM price_history ph
         JOIN feature_daily fd ON fd.stock_code = ph.stock_code AND fd.date = ph.date
         WHERE ph.source_provider = 'yfinance'
@@ -107,7 +107,8 @@ def build_dataset() -> pd.DataFrame:
                 "as_of": as_of, "stock_code": code, "close": latest["close"],
                 "rsi_14": latest["rsi_14"], "macd_status": macd_status,
                 "macd_hist_slope_3d": latest["macd_hist_slope_3d"],
-                "cmf_20": latest["cmf_20"], "rvol_20": latest["rvol_20"], "regime": latest["regime"],
+                "cmf_20": latest["cmf_20"], "cmf_slope_5d": latest["cmf_slope_5d"],
+                "rvol_20": latest["rvol_20"], "regime": latest["regime"],
                 "outcome": outcome, **div,
             })
         if (n_done + 1) % 20 == 0:
@@ -239,6 +240,19 @@ def run():
     candidates.append(("bottoming+momentum + CMF>0", bottoming_momentum & (df["cmf_20"] > 0)))
     candidates.append(("bottoming+momentum + RSI 30-50", bottoming_momentum & df["rsi_14"].between(30, 50)))
     candidates.append(("bottoming+momentum + RVOL>=1.2 + CMF>0", bottoming_momentum & (df["rvol_20"] >= 1.2) & (df["cmf_20"] > 0)))
+
+    # --- Currently shipped rule, for reference, and the user's proposed
+    # refinement: CMF<0 (distribution) alone doesn't distinguish "still
+    # getting worse" from "already easing back toward zero" -- same idea
+    # as macd_hist_slope_3d>0 already applied to momentum, just applied to
+    # money flow itself via cmf_slope_5d. ---
+    shipped_v2 = bottoming_momentum & (df["cmf_20"] < 0) & (df["rvol_20"] >= 0.8)
+    candidates.append(("SHIPPED v2: bottoming+momentum+CMF<0+RVOL>=0.8", shipped_v2))
+    candidates.append(("SHIPPED v2 + CMF slope>0 (easing toward 0)", shipped_v2 & (df["cmf_slope_5d"] > 0)))
+    candidates.append(("SHIPPED v2 + CMF slope<0 (still worsening)", shipped_v2 & (df["cmf_slope_5d"] < 0)))
+    candidates.append(("bottoming+momentum + CMF<0 + CMF slope>0 (no RVOL)", bottoming_momentum & (df["cmf_20"] < 0) & (df["cmf_slope_5d"] > 0)))
+    candidates.append(("CMF<0 + CMF slope>0 alone (no regime/momentum)", (df["cmf_20"] < 0) & (df["cmf_slope_5d"] > 0)))
+    candidates.append(("CMF slope>0 alone", df["cmf_slope_5d"] > 0))
 
     results = [evaluate(df, mask, label, null_rate) for label, mask in candidates]
     results_df = pd.DataFrame(results).sort_values("wilson_lb", ascending=False)
