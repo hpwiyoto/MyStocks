@@ -43,9 +43,10 @@ def run():
     except Exception:
         logger.exception("build_features step raised unexpectedly")
 
+    predict_result = {"failures": []}
     try:
         from engine.predict import run as predict_run
-        predict_run()
+        predict_result = predict_run()
     except Exception:
         logger.exception("predict step raised unexpectedly")
 
@@ -54,15 +55,25 @@ def run():
     # never re-scored the turnaround model, so its predictions table only
     # ever reflected whichever candidates were bearish/bottoming on
     # whatever date someone last ran engine.predict_turnaround by hand.
+    turnaround_result = {"failures": []}
     try:
         from engine.predict_turnaround import run as predict_turnaround_run
-        predict_turnaround_run()
+        turnaround_result = predict_turnaround_run()
     except Exception:
         logger.exception("predict_turnaround step raised unexpectedly")
 
     try:
         from scripts.monitor import check_and_alert
-        check_and_alert(ingest_failures=ingest_result.get("failures"))
+        # predict/turnaround failures weren't wired in until a real incident
+        # (a missing DB column failed every prediction, but check_and_alert
+        # only ever looked at ingest_failures + price_history staleness --
+        # both fine, since ingest itself worked -- so this reported "all
+        # good" the whole time predictions were completely broken).
+        check_and_alert(
+            ingest_failures=ingest_result.get("failures"),
+            predict_failures=predict_result.get("failures"),
+            turnaround_failures=turnaround_result.get("failures"),
+        )
     except Exception:
         logger.exception("monitor step raised unexpectedly")
 

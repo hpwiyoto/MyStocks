@@ -15,9 +15,13 @@ restart afterwards just rescheduled to TOMORROW instead of catching up),
 the plain "wait for the next clock time" loop silently leaves data stale
 for however long the machine was off. `main()` now checks
 run_daily.LAST_RUN_MARKER on startup and runs an immediate catch-up if
-today's slot has already passed and no run has completed yet today --
-run_daily() is fully idempotent (see its own docstring), so this is safe
-even if it ends up racing a normal run.
+either today's slot has already passed with no run today, OR the last
+successful run is more than one day behind regardless of the clock (a
+Codespace idle for 9 days and restarted mid-morning, well before today's
+slot, is a real case the first condition alone missed entirely --
+confirmed live, it just sat waiting several more hours for data that was
+already over a week stale). run_daily() is fully idempotent (see its own
+docstring), so this is safe even if it ends up racing a normal run.
 """
 import datetime as dt
 import os
@@ -51,17 +55,35 @@ def last_run_date() -> dt.date | None:
 
 
 def catch_up_if_missed(now: dt.datetime) -> None:
-    target_today = now.replace(hour=RUN_HOUR, minute=RUN_MINUTE, second=0, microsecond=0)
-    if now < target_today:
-        return  # today's slot hasn't arrived yet -- the normal loop below will handle it
+    today = now.date()
     last_run = last_run_date()
-    if last_run == now.date():
+    if last_run == today:
         return  # already ran today (this is just an ordinary process restart)
+
+    # Two independent reasons to catch up right now instead of waiting for
+    # the loop below:
+    # 1. Today's slot has already passed with no successful run today -- the
+    #    original check. Handles "machine was off exactly through today's
+    #    16:30 WIB".
+    # 2. last_run is MORE than one day behind, regardless of whether today's
+    #    slot has arrived yet. Before today's slot, last_run == yesterday (or
+    #    the last trading day) is the NORMAL, expected state -- that run
+    #    simply hasn't happened yet today. But if it's further behind than
+    #    that (confirmed via a real incident: a Codespace idle for 9 days,
+    #    restarted mid-morning well before 16:30 WIB -- reason 1 alone left
+    #    this scenario waiting several more hours for data that was already
+    #    over a week stale), there's no reason to wait for the clock at all.
+    target_today = now.replace(hour=RUN_HOUR, minute=RUN_MINUTE, second=0, microsecond=0)
+    missed_todays_slot = now >= target_today
+    missed_a_prior_day = last_run is None or (today - last_run).days > 1
+    if not (missed_todays_slot or missed_a_prior_day):
+        return  # normal pre-slot state, the loop below will handle it on time
+
     logger.info(
-        "Slot %02d:%02d WIB hari ini sudah lewat dan belum ada run sukses hari ini "
-        "(terakhir: %s) -- kemungkinan mesin ini mati/tidur saat jadwal terlewat. "
-        "Menjalankan catch-up run_daily sekarang.",
-        RUN_HOUR, RUN_MINUTE, last_run.isoformat() if last_run else "belum pernah",
+        "Belum ada run sukses hari ini (terakhir: %s, target slot %02d:%02d WIB) -- "
+        "kemungkinan mesin ini mati/tidur saat satu atau lebih jadwal terlewat. "
+        "Menjalankan catch-up run_daily sekarang, tidak menunggu slot berikutnya.",
+        last_run.isoformat() if last_run else "belum pernah", RUN_HOUR, RUN_MINUTE,
     )
     try:
         run_daily()
