@@ -6,10 +6,9 @@ Usage:
 import datetime as dt
 
 import pandas as pd
-from sqlalchemy import select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy import insert, select
 
-from pipeline.db import get_engine, init_schema, price_history, stocks
+from pipeline.db import get_engine, init_schema, price_history, stocks, upsert
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS, to_yfinance_symbol
 from pipeline.yfinance_source import fetch_history, fetch_profile
@@ -26,9 +25,10 @@ def _safe_int(value) -> int | None:
 
 
 def _safe_float(value) -> float | None:
-    # NaN can appear on data gaps (e.g. suspended trading days) and MySQL
-    # rejects it outright ("nan can not be used with MySQL"), which would
-    # otherwise fail the whole multi-row INSERT for that ticker.
+    # NaN can appear on data gaps (e.g. suspended trading days) -- stored as
+    # None/NULL rather than a literal NaN so it round-trips cleanly through
+    # pandas/JSON downstream (app/data.py's `_notna` helper etc. already
+    # assume SQL NULL, not float NaN, as the "missing" representation).
     if value is None or pd.isna(value):
         return None
     return float(value)
@@ -40,7 +40,7 @@ def upsert_stock(conn, code: str) -> None:
         return
     profile = fetch_profile(to_yfinance_symbol(code))
     conn.execute(
-        mysql_insert(stocks).values(
+        insert(stocks).values(
             code=code, name=profile["name"], sector=profile["sector"], industry=profile["industry"],
         )
     )
@@ -94,12 +94,11 @@ def ingest_one(conn, code: str) -> int:
             }
         )
 
-    stmt = mysql_insert(price_history).values(rows)
-    update_cols = {c: stmt.inserted[c] for c in (
-        "open", "high", "low", "close", "volume", "dividends", "stock_splits"
-    )}
-    stmt = stmt.on_duplicate_key_update(**update_cols)
-    conn.execute(stmt)
+    upsert(
+        conn, price_history, rows,
+        update_columns=["open", "high", "low", "close", "volume", "dividends", "stock_splits"],
+        index_elements=["stock_code", "date", "source_provider"],
+    )
     logger.info("%s: upserted %d rows", code, len(rows))
     return len(rows)
 

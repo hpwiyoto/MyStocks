@@ -1,0 +1,409 @@
+import datetime as dt
+import os
+import sys
+import textwrap
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+from app.data import load_data_freshness, load_latest_predictions, load_screener_raw_panel, load_stock_list
+from app.style import (
+    ACCENT,
+    COLOR_AVOID,
+    COLOR_BUY,
+    TEXT_MUTED,
+    badge_html,
+    inject_base_css,
+    regime_badge,
+    render_developer_footer,
+)
+from features.momentum_screener import compute_screener_panel
+
+st.set_page_config(page_title="MyStocks — Momentum Screener", page_icon="📡", layout="wide")
+inject_base_css()
+render_developer_footer()
+
+if st.button("← Kembali ke Home"):
+    st.switch_page("Home.py")
+
+st.title("📡 Momentum Screener")
+st.caption(
+    "Filter manual berbasis RSI, status MACD, harga, volume, dan money flow (CMF) -- "
+    "BUKAN skor model. Urutan: (1) ✅ Sinyal Tervalidasi (terbukti lewat backtest 5 tahun, "
+    "lihat info di bawah), (2) tingkat divergence bullish (Ganda RSI+MACD > Tunggal > tidak "
+    "ada), (3) regime berdasarkan win rate historis (bottoming > bearish > sideways > "
+    "accumulation > bullish > early_reversal > overextended), (4) RSI paling dekat ke titik "
+    "pivot 50, (5) divergence yang lebih baru, (6) probabilitas model Swing cuma sebagai "
+    "tiebreaker terakhir -- bukan penentu urutan."
+)
+st.success(
+    "**✅ Sinyal Tervalidasi** (diperbarui): `scripts/search_momentum_rules.py` + lanjutan grid "
+    "search 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`) menguji terhadap 76.442 "
+    "kejadian historis nyata (5 tahun, target sama seperti Swing: naik ≥5% sebelum turun -2,5% "
+    "dalam 10 hari). Baseline acak menang **30,6%**. Kombinasi **regime bottoming + momentum "
+    "histogram menguat + money flow negatif (distribusi, BUKAN akumulasi) + volume relatif "
+    "≥0,8x** terbukti menang **39,8%** (batas bawah keyakinan 95%: 36,7%, dari 958 kejadian -- "
+    "dipilih karena cakupannya lebih luas DAN sedikit lebih baik dari versi sebelumnya, bukan "
+    "cuma peringkat #1 dari 5.880 kombinasi yang diuji, karena mencoba sebanyak itu berisiko "
+    "'menang kebetulan' pada sampel kecil). Money flow negatif terdengar aneh untuk sinyal "
+    "'naik' tapi konsisten dengan pola lain di sini: saham yang secara permukaan masih terlihat "
+    "lemah justru punya ruang lebih besar untuk mengejutkan naik. Ini satu-satunya kombinasi di "
+    "halaman ini yang terbukti lebih baik dari acak secara statistik -- kriteria lain "
+    "(termasuk divergence & regime priority) murni heuristik yang masuk akal tapi belum terbukti.",
+    icon="✅",
+)
+st.info(
+    "**Beda dari Swing/Turnaround**: dua screener lain di aplikasi ini diurutkan oleh "
+    "probabilitas model machine learning. Screener ini sebaliknya -- urutannya murni "
+    "dari aturan teknikal, sebagian besar masih heuristik (masuk akal tapi belum diuji), "
+    "kecuali kategori Tervalidasi di atas. Kolom probabilitas tetap ditampilkan supaya Anda "
+    "bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
+    icon="ℹ️",
+)
+
+# Harga & semua indikator (RSI/MACD/CMF) di halaman ini datang dari
+# feature_daily, yang cuma seaktual scheduler harian (lihat
+# scripts/scheduler_loop.py) -- kalau mesin yang menjalankan scheduler
+# sempat mati/tidur, datanya bisa diam-diam basi tanpa tanda apa pun.
+# Ditampilkan eksplisit di sini setelah kejadian nyata: 4 hari basi tanpa
+# ada yang sadar sampai ditanyakan langsung.
+_freshness = load_data_freshness()
+if _freshness is not None:
+    # Business days elapsed, not calendar days -- IDX doesn't trade on
+    # weekends, so a plain calendar diff falsely accuses the scheduler of
+    # having missed a run every single Sunday (2 calendar days since
+    # Friday's close) even when nothing is wrong. np.busday_count excludes
+    # Sat/Sun by default (doesn't know IDX public holidays specifically,
+    # but that's a much rarer false positive than every weekend).
+    _age_days = int(np.busday_count(_freshness, dt.date.today()))
+    if _age_days >= 2:
+        st.warning(
+            f"⚠️ Data harga & indikator terakhir per **{_freshness.strftime('%d %b %Y')}** "
+            f"({_age_days} hari lalu) -- scheduler kemungkinan sempat tidak jalan (mis. laptop "
+            "mati/tidur). Sedang di-update otomatis di background; refresh halaman ini beberapa "
+            "menit lagi untuk data terbaru.",
+        )
+    elif _age_days == 1:
+        st.caption(f"🕒 Data per {_freshness.strftime('%d %b %Y')} (kemarin) -- normal untuk pagi hari sebelum jadwal update sore ini.")
+    else:
+        st.caption(f"✅ Data per {_freshness.strftime('%d %b %Y')} (hari ini).")
+
+DIVERGENCE_LABELS = {0: "🔥 Ganda (RSI+MACD)", 1: "Tunggal", 2: "-"}
+DIVERGENCE_COLORS = {0: "#A855F7", 1: ACCENT, 2: TEXT_MUTED}
+MACD_STATUS_COLORS = {
+    "Bullish Crossover": COLOR_BUY, "Bullish": COLOR_BUY,
+    "Bearish Crossover": COLOR_AVOID, "Bearish": COLOR_AVOID,
+    "Netral": TEXT_MUTED, "Tidak diketahui": TEXT_MUTED,
+}
+PRICE_FILTER_OPTIONS = ["Semua", "Di bawah 50", "50 - 100", "100 - 1.000", "Di atas 1.000"]
+DIVERGENCE_TIER_OPTIONS = {"🔥 Ganda (RSI+MACD)": 0, "Tunggal": 1, "Tidak ada": 2}
+
+
+def divergence_detail(row) -> str:
+    if row["divergence_tier"] == 2:
+        return "-"
+    parts = []
+    if row["divergence_rsi"]:
+        parts.append("RSI")
+    if row["divergence_macd"]:
+        parts.append("MACD")
+    age = row["divergence_age_days"]
+    age_txt = f", {int(age)}h lalu" if pd.notna(age) else ""
+    return f"{'+'.join(parts)}{age_txt}"
+
+
+def momentum_label(macd_hist, slope) -> str:
+    if pd.isna(macd_hist) or pd.isna(slope):
+        return "-"
+    if macd_hist >= 0:
+        return "Momentum menguat ↑" if slope > 0 else "Momentum melemah ↓"
+    return "Tekanan jual melemah ↑" if slope > 0 else "Tekanan jual menguat ↓"
+
+
+with st.spinner("Menghitung status RSI/MACD/divergence untuk seluruh saham..."):
+    raw_panel = load_screener_raw_panel(lookback_days=60)
+
+if raw_panel.empty:
+    st.warning("Belum ada data harga/fitur yang cukup. Jalankan pipeline & features terlebih dahulu.")
+    st.stop()
+
+screener_df = compute_screener_panel(raw_panel)
+stocks_df = load_stock_list()
+predictions = load_latest_predictions()
+
+df = screener_df.merge(stocks_df, left_on="stock_code", right_on="code", how="left")
+df = df.merge(
+    predictions[["stock_code", "probability"]] if not predictions.empty
+    else pd.DataFrame(columns=["stock_code", "probability"]),
+    on="stock_code", how="left",
+)
+
+with st.sidebar:
+    st.header("🔎 Filter")
+    search = st.text_input("Cari kode/nama saham", placeholder="mis. BBCA atau bank")
+
+    # Default filter di seluruh sidebar ini SENGAJA disetel mengikuti satu-
+    # satunya kombinasi yang terbukti lewat backtest (kotak hijau di atas):
+    # regime bottoming + momentum menguat + CMF<0 -- BUKAN "Bullish MACD +
+    # Akumulasi (CMF>0)" seperti sebelumnya, yang justru kombinasi yang
+    # SUDAH terbukti kalah dari acak (24,8% vs baseline 30,6%). RSI dan
+    # Status MACD dibiarkan mencakup semua pilihan (bukan disempitkan ke
+    # yang "terlihat" bullish) karena is_validated_signal() sama sekali
+    # tidak mensyaratkan keduanya -- saham bottoming yang valid justru
+    # biasanya MASIH terlihat bearish/netral secara RSI & MACD di permukaan.
+    rsi_range = st.slider("Rentang RSI", 0, 100, (0, 100))
+
+    macd_options = sorted(df["macd_status"].dropna().unique().tolist())
+    macd_filter = st.multiselect("Status MACD", macd_options, default=macd_options)
+
+    momentum_dir_filter = st.radio(
+        "Arah Momentum Histogram", ["Semua", "Menguat ↑", "Melemah ↓"], index=1,
+        help="Berdasarkan macd_hist_slope_3d -- independen dari Status MACD di atas (bullish/bearish "
+             "bisa sama-sama sedang menguat atau melemah). Default 'Menguat ↑' mengikuti kombinasi "
+             "tervalidasi di atas.",
+    )
+
+    money_flow_filter = st.radio(
+        "Money Flow (CMF 20 hari)", ["Semua", "Akumulasi (CMF > 0)", "Distribusi (CMF < 0)"],
+        index=2,
+        help="Default 'Distribusi (CMF < 0)' mengikuti kombinasi tervalidasi di atas -- kounter-"
+             "intuitif untuk sinyal 'naik', tapi itu justru temuannya.",
+    )
+
+    volume_filter = st.checkbox("Hanya volume di atas rata-rata (RVOL ≥ 1)", value=False)
+
+    price_filter = st.selectbox("Harga saham", PRICE_FILTER_OPTIONS, index=0)
+    st.caption("⚠️ Saham di bawah Rp50 (gocap) tidak dikecualikan di sini seperti di Swing -- likuiditas & tick-size-nya perlu ekstra hati-hati.")
+
+    divergence_tier_filter = st.multiselect(
+        "Divergence", list(DIVERGENCE_TIER_OPTIONS.keys()), default=list(DIVERGENCE_TIER_OPTIONS.keys()),
+    )
+
+    regime_options = sorted(df["regime"].dropna().unique().tolist())
+    regime_default = ["bottoming"] if "bottoming" in regime_options else regime_options
+    regime_filter = st.multiselect(
+        "Regime", regime_options, default=regime_default,
+        help="Default hanya 'bottoming' mengikuti kombinasi tervalidasi di atas -- regime lain "
+             "boleh dicentang tapi belum terbukti lewat backtest yang sama.",
+    )
+
+    prob_range = st.slider("Probabilitas Swing (%)", 0, 100, (0, 100), 5)
+    include_unscored = st.checkbox("Sertakan yang belum ada prediksi Swing", value=True)
+
+    validated_only = st.checkbox(
+        "✅ Hanya Sinyal Tervalidasi", value=False,
+        help="regime bottoming + momentum histogram menguat + money flow negatif + volume relatif "
+             "≥0,8x -- satu-satunya kombinasi di halaman ini yang terbukti menang lebih sering dari "
+             "baseline acak lewat backtest 5 tahun + grid search (39,8% vs 30,6%, lihat kotak hijau "
+             "di atas).",
+    )
+
+# True count regardless of any sidebar filter below -- shown in its own
+# metric so it's never silently hidden by an unrelated filter default
+# (found via testing: the ORIGINAL default filters -- Bullish MACD status,
+# CMF>0 -- actively excluded every validated_signal stock today, because a
+# bottoming-regime stock naturally still LOOKS bearish/distribution on the
+# surface; that's exactly the "not yet confirmed, still room to run"
+# characteristic the validated combination is built on).
+validated_total = int(df["validated_signal"].sum())
+
+if validated_only:
+    # Deliberately bypasses every other filter below -- RSI/MACD/CMF/Volume
+    # were tuned around the ORIGINAL (pre-backtest) idea of what a good
+    # setup looks like, and per the same backtest a couple of them (Bullish
+    # MACD status, CMF>0) actually score BELOW the null baseline on their
+    # own. Gating the one PROVEN combination behind unproven-or-worse
+    # filters defeats the point of it.
+    filtered = df[df["validated_signal"]]
+else:
+    filtered = df[df["rsi_14"].between(rsi_range[0], rsi_range[1])]
+    if macd_filter:
+        filtered = filtered[filtered["macd_status"].isin(macd_filter)]
+    if momentum_dir_filter == "Menguat ↑":
+        filtered = filtered[filtered["macd_hist_slope_3d"] > 0]
+    elif momentum_dir_filter == "Melemah ↓":
+        filtered = filtered[filtered["macd_hist_slope_3d"] < 0]
+    if money_flow_filter == "Akumulasi (CMF > 0)":
+        filtered = filtered[filtered["cmf_20"] > 0]
+    elif money_flow_filter == "Distribusi (CMF < 0)":
+        filtered = filtered[filtered["cmf_20"] < 0]
+    if volume_filter:
+        filtered = filtered[filtered["rvol_20"] >= 1]
+    price = filtered["close"].astype(float)
+    if price_filter == "Di bawah 50":
+        filtered = filtered[price < 50]
+    elif price_filter == "50 - 100":
+        filtered = filtered[(price >= 50) & (price < 100)]
+    elif price_filter == "100 - 1.000":
+        filtered = filtered[(price >= 100) & (price < 1000)]
+    elif price_filter == "Di atas 1.000":
+        filtered = filtered[price >= 1000]
+    if len(divergence_tier_filter) < len(DIVERGENCE_TIER_OPTIONS):
+        allowed_tiers = [DIVERGENCE_TIER_OPTIONS[k] for k in divergence_tier_filter]
+        filtered = filtered[filtered["divergence_tier"].isin(allowed_tiers)]
+    if len(regime_filter) < len(regime_options):
+        filtered = filtered[filtered["regime"].isin(regime_filter)]
+    if prob_range != (0, 100):
+        prob_mask = (filtered["probability"] * 100).between(prob_range[0], prob_range[1])
+        if include_unscored:
+            prob_mask = prob_mask | filtered["probability"].isna()
+        filtered = filtered[prob_mask]
+    if search:
+        q = search.strip().lower()
+        filtered = filtered[
+            filtered["stock_code"].str.lower().str.contains(q)
+            | filtered["name"].fillna("").str.lower().str.contains(q)
+        ]
+
+# Priority is the filter/divergence result, NOT the model. Six levels:
+# 1. validated_signal DESC -- the ONE combination actually proven to beat
+#    doing nothing (scripts/search_momentum_rules.py, 40.2% win rate vs a
+#    30.6% null baseline across 76,442 historical instances). Ranks above
+#    everything else because it's the only tier here backed by real
+#    evidence rather than a reasonable-sounding guess.
+# 2. divergence_tier (0=double, 1=single, 2=none) -- the main heuristic
+#    priority the user originally asked for. NOTE: the backtest found this
+#    tier alone does NOT beat the null baseline either (29.1%/28.8% vs
+#    30.6%) -- kept as a secondary sort for the stocks that don't have a
+#    validated_signal, not because it's proven, but because no evidence
+#    says it hurts either and it's still the requested organizing idea.
+# 3. regime_priority -- ordered by ACTUAL historical win rate per regime
+#    (see features.momentum_screener.REGIME_PRIORITY's docstring for the
+#    full backtest numbers behind this order -- revised from an earlier,
+#    theory-only ordering that turned out backwards).
+# 4. rsi_pivot_distance ascending -- RSI outranks MACD as a ranking signal
+#    (rsi_distance_50 is top-3 in both models' own feature-gain ranking;
+#    MACD z-score tested and moved nothing, see
+#    scripts/test_macd_zscore_feature.py).
+# 5. divergence_age_days ascending -- fresher divergence first within an
+#    otherwise-tied group. Always NaN for tier 2, a no-op there.
+# 6. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
+#    cuma pertimbangan tambahan" ordering the user asked for, not a driver.
+filtered = filtered.sort_values(
+    ["validated_signal", "divergence_tier", "regime_priority", "rsi_pivot_distance", "divergence_age_days", "probability"],
+    ascending=[False, True, True, True, True, False], na_position="last",
+).reset_index(drop=True)
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total hasil filter", len(filtered))
+c2.metric("✅ Sinyal Tervalidasi (total, semua saham)", validated_total,
+          help="Tidak terpengaruh filter sidebar lain -- centang 'Hanya Sinyal Tervalidasi' untuk melihat daftarnya langsung.")
+c3.metric("🔥 Divergence ganda", int((filtered["divergence_tier"] == 0).sum()))
+c4.metric("Divergence tunggal", int((filtered["divergence_tier"] == 1).sum()))
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+if filtered.empty:
+    st.info("Tidak ada saham yang cocok dengan filter saat ini -- coba longgarkan rentang RSI atau status MACD.")
+    st.stop()
+
+st.subheader(f"📋 {len(filtered)} Saham -- Sinyal Tervalidasi dulu, lalu divergence, probabilitas Swing sebagai tiebreaker terakhir")
+st.caption("Klik satu baris untuk buka halaman detail saham itu.")
+
+table_df = filtered.copy()
+table_df["divergence_label"] = table_df.apply(divergence_detail, axis=1)
+table_df["momentum"] = table_df.apply(lambda r: momentum_label(r["macd_hist"], r["macd_hist_slope_3d"]), axis=1)
+table_df["money_flow"] = table_df["cmf_20"].apply(
+    lambda v: "-" if pd.isna(v) else ("Akumulasi" if v > 0 else "Distribusi")
+)
+table_df["rvol_display"] = table_df["rvol_20"].apply(lambda v: "-" if pd.isna(v) else f"{v:.1f}x")
+table_df["probability_pct"] = table_df["probability"].astype(float) * 100
+table_df["validated_display"] = table_df["validated_signal"].apply(lambda v: "✅ Ya" if v else "-")
+
+display_cols = [
+    "stock_code", "name", "validated_display", "close", "rsi_14", "macd_status", "momentum",
+    "money_flow", "rvol_display", "divergence_label", "probability_pct", "regime",
+]
+
+event = st.dataframe(
+    table_df[display_cols].reset_index(drop=True),
+    width="stretch",
+    hide_index=True,
+    height=min(36 * (len(table_df) + 1) + 3, 600),
+    column_config={
+        "stock_code": st.column_config.TextColumn("Kode"),
+        "name": st.column_config.TextColumn("Nama"),
+        "validated_display": st.column_config.TextColumn("✅ Tervalidasi"),
+        "close": st.column_config.NumberColumn("Harga", format="%.0f"),
+        "rsi_14": st.column_config.NumberColumn("RSI", format="%.1f"),
+        "macd_status": st.column_config.TextColumn("Status MACD"),
+        "momentum": st.column_config.TextColumn("Momentum Histogram"),
+        "money_flow": st.column_config.TextColumn("Money Flow"),
+        "rvol_display": st.column_config.TextColumn("Volume Relatif"),
+        "divergence_label": st.column_config.TextColumn("Divergence"),
+        "probability_pct": st.column_config.ProgressColumn("Probabilitas Swing", format="%.1f%%", min_value=0.0, max_value=100.0),
+        "regime": st.column_config.TextColumn("Regime"),
+    },
+    on_select="rerun",
+    selection_mode="single-row",
+)
+
+selected_rows = event.selection.rows if event and event.selection else []
+if selected_rows:
+    picked_code = table_df.iloc[selected_rows[0]]["stock_code"]
+    st.session_state["selected_ticker"] = picked_code
+    st.switch_page("pages/1_📈_Detail_Saham.py")
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+st.subheader("🏆 Prioritas Teratas")
+top = filtered.head(9)
+CARDS_PER_ROW = 3
+rows = [top.iloc[i:i + CARDS_PER_ROW] for i in range(0, len(top), CARDS_PER_ROW)]
+for row_chunk in rows:
+    cols = st.columns(CARDS_PER_ROW)
+    for col, (_, r) in zip(cols, row_chunk.iterrows()):
+        with col:
+            name = r["stock_code"] if pd.isna(r["name"]) else r["name"]
+            div_badge = badge_html(DIVERGENCE_LABELS[r["divergence_tier"]], DIVERGENCE_COLORS[r["divergence_tier"]])
+            macd_badge = badge_html(r["macd_status"], MACD_STATUS_COLORS.get(r["macd_status"], TEXT_MUTED))
+            prob_txt = f"{float(r['probability']) * 100:.1f}%" if pd.notna(r["probability"]) else "belum ada prediksi"
+            validated_badge = badge_html("✅ Tervalidasi (39,8% win rate)", "#22C55E") if r["validated_signal"] else ""
+            # dedent() strips the ~16 spaces of Python source indentation
+            # every line in this f-string carries (nested inside a for-loop
+            # inside "with col:") -- Markdown treats a line indented 4+
+            # spaces as the START of an indented CODE block rather than an
+            # HTML block (CommonMark only allows up to 3 spaces before a raw
+            # "<div..." line), so without dedent() the raw tags render as
+            # literal on-screen text instead of HTML.
+            # The blank-line filter after it is equally load-bearing, for a
+            # SEPARATE reason caught the same way (real screenshot, not a
+            # guess): when validated_badge is empty, the conditional line
+            # below collapses to a genuinely blank line, and CommonMark ends
+            # an HTML block at the first blank line -- everything after it
+            # then starts a NEW block, still carrying its own nested-level
+            # nested-level indentation (4/8 spaces), which is once again
+            # enough to be misread as a code block. Dropping every blank
+            # line keeps the whole card as one unbroken HTML block no matter
+            # which optional badges are empty.
+            card_html = textwrap.dedent(f"""
+                <div class="mystocks-card">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <div class="mystocks-ticker">{r['stock_code']}</div>
+                            <div class="mystocks-muted">{name}</div>
+                        </div>
+                        {div_badge}
+                    </div>
+                    {f'<div style="margin-top:0.5rem;">{validated_badge}</div>' if validated_badge else ''}
+                    <div style="margin-top:0.7rem;">
+                        <span class="mystocks-muted" style="font-size:0.72rem;">MACD</span> {macd_badge}
+                        &nbsp;&nbsp;
+                        <span class="mystocks-muted" style="font-size:0.72rem;">Regime</span> {regime_badge(r['regime'])}
+                    </div>
+                    <div style="margin-top:0.6rem;" class="mystocks-muted">
+                        RSI {r['rsi_14']:.1f} &middot; {momentum_label(r['macd_hist'], r['macd_hist_slope_3d'])} &middot;
+                        {"Akumulasi" if pd.notna(r['cmf_20']) and r['cmf_20'] > 0 else "Distribusi" if pd.notna(r['cmf_20']) else "-"}
+                    </div>
+                    <div style="margin-top:0.4rem;" class="mystocks-muted">Probabilitas Swing: {prob_txt}</div>
+                </div>
+                """)
+            card_html = "\n".join(line for line in card_html.splitlines() if line.strip())
+            st.markdown(card_html, unsafe_allow_html=True)
+            if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
+                st.session_state["selected_ticker"] = r["stock_code"]
+                st.switch_page("pages/1_📈_Detail_Saham.py")
+            st.markdown("<div style='margin-bottom:0.8rem'></div>", unsafe_allow_html=True)

@@ -403,3 +403,148 @@ sebagai server production). Cakupan:
 JANGAN mengubah logic model/feature/UI di fase ini — murni operasional deployment. Tunjukkan
 langkah deployment lengkap + checklist verifikasi sebelum aplikasi dianggap production-ready.
 ```
+
+---
+
+## FASE 7 — Model Turnaround, Momentum Screener, Rekomendasi Emitten, dan hardening operasional ✅ (sudah selesai)
+
+**Tujuan:** menambah dua cara baru menemukan saham (model Turnaround untuk saham bearish/bottoming
+yang berpotensi berbalik arah, dan Momentum Screener rule-based untuk eksplorasi teknikal manual),
+satu halaman yang menggabungkan ketiganya, sekaligus memperbaiki dua masalah operasional nyata
+(`start` yang berhenti berfungsi, dan scheduler yang diam-diam basi 4 hari) yang ditemukan di
+tengah jalan. Berbeda dari fase-fase sebelumnya, fase ini dikerjakan lewat banyak sesi iteratif
+di PC lokal (Windows native, SQLite, bukan Codespaces) -- bukan satu prompt build besar di awal.
+
+**Keputusan (tanggal perkiraan, akhir Agustus - awal September 2026)**:
+
+- **Jalur dev kedua (PC lokal, tanpa Docker)**: user memindahkan sebagian besar kerja harian ke
+  PC Windows pribadi, bukan Codespaces terus-menerus. Diputuskan TIDAK membuat cabang kode
+  terpisah -- `pipeline/db.py` sudah otomatis pilih SQLite kalau `MYSQL_HOST` tidak di-set, jadi
+  cukup jalankan apa adanya. `scripts/start.ps1` + `scripts/install_start_shortcut.ps1` dibuat
+  supaya PC lokal sama praktisnya dengan `docker compose up` di Codespaces -- satu perintah
+  (`start`) menyiapkan venv, install dependency, jalankan scheduler + Streamlit di jendela
+  terpisah, lalu buka browser.
+- **Filosofi sinkronisasi git**: user menegaskan "yang digithub sebetulnya hanya backup yang
+  mainnya di pc ini" -- PC lokal adalah sumber kebenaran utama, GitHub cuma cadangan, bukan
+  sebaliknya. `start.ps1` karena itu auto-`pull --ff-only` (hanya kalau working tree bersih,
+  tidak pernah menimpa kerja yang belum di-commit) DAN auto-push commit lokal yang belum
+  ter-backup -- tapi TIDAK PERNAH auto-commit perubahan yang belum di-commit (itu tetap manual).
+- **Model Turnaround**: user ingin tahu saham yang SAAT INI bearish/bottoming tapi berpotensi
+  berbalik arah -- beda pertanyaan dari Swing (yang menjawab "mana yang akan naik dalam 10 hari",
+  terlepas dari regime saat ini). Definisi label dikalibrasi 3x (`scripts/turnaround_labels.py`):
+  v1 (pindah regime sekali saja) terlalu longgar, v2 (bertahan sangat lama) terlalu ketat,
+  v3 (pindah ke early_reversal/bullish DAN bertahan ≥20 hari trading dalam 6 bulan) dipakai.
+  Base rate historisnya sendiri tinggi (~82%, kebanyakan saham bearish akhirnya membaik) --
+  nilai modelnya lebih ke menyisihkan ~15% yang kemungkinan besar gagal, bukan menjamin sukses.
+- **Kenapa saham "bearish" bisa direkomendasikan** (klarifikasi konseptual ke user): model
+  Turnaround secara desain HANYA menyekor saham yang sedang lemah -- itu bukan bug, itu
+  pertanyaan yang berbeda dari Swing. Dijelaskan lewat contoh nyata di sesi, bukan cuma teori.
+- **Momentum Screener -- permintaan awal**: user ingin "sesuatu yang lain diluar model", filter
+  manual berbasis RSI/MACD/Harga/Volume/Money Flow dengan prioritas ke divergence, probabilitas
+  model ditampilkan sebagai pertimbangan sekunder saja. Dibangun sebagai fitur RULE-BASED murni
+  (`features/momentum_screener.py`) -- sengaja TIDAK dilatih dari data, supaya bisa di-backtest
+  di tanggal manapun tanpa risiko lookahead sama sekali (beda dengan Swing/Turnaround yang model
+  ML terlatih).
+- **Momentum Screener -- filter default aslinya TERBUKTI LEBIH BURUK dari acak**: setelah user
+  bertanya "apakah algoritmanya bisa dibuktikan", dibangun backtest 5-tahun leakage-free
+  (`scripts/backtest_momentum_screener.py`) -- ternyata filter awal (RSI 20-60 + Bullish MACD +
+  CMF>0) menang cuma 24,78% vs baseline acak 30,55%. Alih-alih tetap pakai heuristik yang terasa
+  masuk akal, dicari kombinasi yang TERBUKTI lewat pengujian bertahap
+  (`scripts/search_momentum_rules.py`: kombinasi tunggal → hand-picked → threshold volume) lalu
+  grid search sistematis 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`, filter
+  `MIN_N=100` + Wilson 95% lower-bound sebagai metrik utama, bukan win rate mentah, untuk
+  menghindari overfitting saat menguji ribuan kombinasi sekaligus). Hasil #1 literal di grid
+  (n=192) SENGAJA ditolak karena kecurigaan multiple-comparisons; dipilih kombinasi yang menang
+  di DUA sisi (win rate lebih tinggi DAN sample lebih besar dari kandidat sebelumnya, dari
+  MELONGGARKAN bukan mengetatkan syarat volume -- tanda kebalikan dari overfitting).
+  **Kombinasi final tervalidasi**: regime bottoming + momentum histogram menguat + CMF<0 +
+  RVOL≥0,8 → win rate 39,77% (n=958, Wilson LB 36,72%). Ide user soal "CMF menuju 0" (bukan cuma
+  di bawah 0) diuji terpisah dan TERBUKTI TIDAK membantu (LB turun jadi 34,87%) -- tidak dipakai.
+- **Filter Excel-style dicoba lalu di-revert**: user minta filter per-kolom ala Excel di tabel
+  Momentum Screener. AG-Grid (`streamlit-aggrid`) dicoba, tapi Set Filter (checkbox list, yang
+  paling mirip Excel) ternyata fitur Enterprise-only (butuh lisensi, diam-diam tidak berfungsi
+  tanpa itu -- dikonfirmasi langsung lewat pengujian interaktif). User menilai hasilnya "tidak
+  pas" setelah dicoba dan minta kembali ke opsi filter sidebar Streamlit native -- di-revert
+  penuh (`git revert`), diganti filter native (Regime, Divergence, Probabilitas Swing, dst).
+- **Bug filter default menyembunyikan semua Sinyal Tervalidasi**: ditemukan bahwa filter default
+  (Bullish MACD + CMF>0) MENGHAPUS SEMUA baris `validated_signal` dari tampilan, karena saham
+  regime bottoming secara struktural terlihat bearish/distribusi di permukaan. Diperbaiki dengan
+  membuat checkbox "Hanya Sinyal Tervalidasi" melewati SEMUA filter lain saat dicentang, dan
+  metrik jumlah tervalidasi dihitung dari data yang belum difilter sama sekali.
+- **Rekomendasi Emitten**: setelah dikonfirmasi ada saham yang lolos ketiga alat sekaligus
+  (CYBR, MYOR, PUDP, MSIN saat pengecekan), dan setelah user setuju diuji, backtest gabungan
+  (`scripts/backtest_triple_intersection.py`) menunjukkan win rate lebih tinggi saat ketiganya
+  sepakat (42,30%, n=435) vs Momentum sendirian (39,77%) -- dengan catatan metodologi eksplisit:
+  menyekor model Swing/Turnaround yang SAAT INI sudah terlatih ke tanggal-tanggal masa lalu
+  punya risiko optimisme yang lebih sempit tapi nyata (beda dengan Momentum Screener yang aturan
+  tetap, bebas risiko lookahead). Halaman baru dibangun murni sebagai agregator, tanpa
+  perhitungan baru.
+- **Kekhawatiran soal kepercayaan pada angka probabilitas rendah**: user mengangkat bahwa angka
+  probabilitas ~30%an di Detail Saham bisa membuat orang meragukan model, padahal itu WATCH yang
+  valid (di atas base rate acak). Diperbaiki di tiga tempat: (1) Info Model menambah metrik
+  precision/ROC-AUC walk-forward untuk Swing yang sebelumnya tidak ada sama sekali (tidak
+  simetris dengan bagian Turnaround yang sudah ada), sekaligus menyurfacekan EKSPLISIT bahwa
+  metadata tersimpan mengukur di threshold BUY 65% sedangkan live sekarang 60% (bukan
+  disembunyikan); (2) caption baru langsung di Detail Saham yang menjelaskan base rate acak di
+  samping angka probabilitas; (3) penjelasan bahwa probabilitas itu skala kontinu, bukan skor
+  keyakinan 0-100 yang "harus" tinggi.
+- **`start` berhenti berfungsi**: root-caused ke bug PowerShell 5.1 yang berbahaya --
+  `$ErrorActionPreference = "Stop"` membuat SEMUA output stderr dari native command (termasuk
+  `2>&1` MAUPUN `2>$null`) jadi exception yang menghentikan skrip, dan `git push` SELALU menulis
+  ringkasan ref-update ke stderr meski sukses. Jadi push pertama yang benar-benar terjadi
+  langsung mematikan `start.ps1` sebelum aplikasi sempat jalan. Diperbaiki dengan menghapus semua
+  redirection pada pemanggilan git, ganti jadi cek `$LASTEXITCODE` polos -- diverifikasi lewat
+  reproduksi terisolasi DAN end-to-end run sungguhan dengan commit nyata yang belum ter-push.
+- **Scheduler diam-diam basi 4 hari**: laptop dev tidak menyala 24/7 seperti VPS production,
+  jadi jadwal 16:30 WIB kadang terlewat tanpa ada yang sadar. Diperbaiki dengan menyimpan
+  penanda tanggal run terakhir (`data/last_daily_run.txt`) dan mengecek saat `scheduler_loop.py`
+  start -- kalau slot hari ini sudah lewat dan belum ada run sukses hari ini, langsung jalankan
+  catch-up sebelum masuk loop tunggu normal. Diuji 4 skenario (belum pernah jalan, penanda basi,
+  sudah jalan hari ini, sebelum jadwal hari ini) dan divalidasi dengan catch-up run sungguhan
+  yang membawa data dari 2026-09-01 ke 2026-09-04.
+
+**Catatan implementasi:**
+- Semua klaim performa di fase ini (Momentum Screener, triple intersection, precision Swing di
+  threshold live) dibuktikan lewat skrip backtest yang benar-benar dijalankan
+  (`scripts/backtest_momentum_screener.py`, `search_momentum_rules.py`,
+  `grid_search_momentum_rules.py`, `backtest_triple_intersection.py`), bukan diasumsikan dari
+  teori -- termasuk saat hasilnya berlawanan dengan intuisi awal (filter awal Momentum Screener
+  ternyata lebih buruk dari acak; CMF-menuju-0 ternyata tidak membantu).
+- Metodologi no-lookahead didokumentasikan eksplisit dan berbeda untuk dua kategori alat:
+  Momentum Screener (aturan tetap, tidak pernah belajar dari data → replay historis 100% aman
+  dari lookahead) vs Swing/Turnaround (model terlatih → menyekor ulang ke tanggal lampau dengan
+  model yang SUDAH dilatih dari seluruh histori punya risiko optimisme sempit tapi nyata,
+  didokumentasikan di docstring `backtest_triple_intersection.py` dan disurfacekan di UI
+  Rekomendasi Emitten, bukan disembunyikan).
+- Halaman Streamlit final: Home (dashboard) → Detail Saham → Swing → Turnaround → Momentum
+  Screener → Rekomendasi Emitten → Info Model (di-`git mv` dari slot 5 ke 6 untuk memberi ruang
+  Rekomendasi Emitten).
+
+```
+Ringkasan permintaan (dikumpulkan dari beberapa sesi iteratif di PC lokal, bukan satu prompt
+build tunggal seperti fase-fase sebelumnya):
+
+"tolong cek kenapa pada detail saham saat saya ketikkan ticker kadang tidak langsung merespon"
+"kenapa algoritmanya tidak kita buat dari bottoming atau bearish ada sinyal sedikit kearah early
+reversal..." -> "ok silahkan cari kombinasi yang benar benar terbukti, dan tolong perbaiki dulu
+kenapa saya tidak bisa buka programnya hanya dengan mengetikkan start diterminal saat ini"
+"tapi yang digithub sebetulnya hanya backup yang mainnya di pc ini"
+"saya ingin membuat sesuatu yang lain diluar model yaitu ingin membuat filter berdasarkan dari
+value RSI, status MACD, Harga, Volume, dan Money flow, untuk mencari saham saham yang berpotensi
+akan naik dengan prioritas ke yang memiliki divergency. kemudian nanti setelah muncul filternya
+kita juga tampilkan probabilitas modelnya sebagai pertimbangan tapi prioritasnya adalah screening
+atau filter yang barusan saya sampaikan."
+"apakah bisa pada kolom kolom tersebut ditambahkan opsi filter seperti kolom di ms excel" ->
+"sepertinya tidak pas, bagaimana jika dibuat seperti opsi sesuai rekomendasi anda saja"
+"apakah anda bisa bandingkan performa akurasi... urutkan mana yang performance-nya lebih baik,
+dengan melihat data histori dan beberapa waktu setelah itu apakah rekomendasinya terrealisasi"
+"ok, apakah ini sudah paling optimal apakah ada kemungkinan ditambah kombinasi volume" ->
+"ya coba sekarang siapa tahu jadi lebih optimal"
+"mungkin untuk CMF apakah bisa dibuat bukan dibawah 0 tapi dibawah 0 yang sedang menuju 0"
+"apakah dari penggunaan ketiganya dalam satu waktu ditemukan suatu emitten yang sama yang masuk
+screener dari ketiganya" -> "ya"
+"tolong buatkan satu halaman lagi dengan Title Rekomendasi Emitten menampilkan yang tersaring
+dari ketiga page sebelumnya... dan tolong perbaharui informasi di semua hal dari readme sampai
+semuanya. dan tolong pikirkan bagaimana informasi Winrate pada detail saham yang hanya 30%an
+tidak membuat orang jadi meragukan model ini"
+```

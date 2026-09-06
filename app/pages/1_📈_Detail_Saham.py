@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -6,9 +7,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
+import ta
 from plotly.subplots import make_subplots
 
-from app.data import load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_news, load_price_history, load_stock_list
+from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
 def _notna(value):
@@ -49,14 +52,11 @@ codes = stocks_df["code"].tolist()
 # this selectbox had no explicit `key=`, so its displayed value was
 # re-derived every rerun from `index=`, computed from
 # session_state["selected_ticker"] -- which this same page ALSO wrote back
-# into at the bottom (`st.session_state["selected_ticker"] = selected`).
-# That write only lands AFTER the widget call, so on the very next rerun
-# (the one Streamlit triggers immediately from the user's own pick) the
-# value being read back was still the value from BEFORE that pick --
-# forcibly reverting the widget to the PREVIOUS ticker and clobbering
-# whatever the user had just chosen. One bad fix attempt reproduced the
-# exact same feedback loop with an explicit key, for the identical reason
-# (still reading a same-page value that lags one rerun behind).
+# into at the bottom. That write only lands AFTER the widget call, so on
+# the very next rerun (the one Streamlit triggers immediately from the
+# user's own pick) the value being read back was still the value from
+# BEFORE that pick -- forcibly reverting the widget to the PREVIOUS ticker
+# and clobbering whatever the user had just chosen.
 #
 # Correct fix: "selected_ticker" is only ever WRITTEN by *other* pages
 # (Swing/Turnaround/Home's "Lihat Detail" buttons) right before
@@ -87,6 +87,15 @@ fund = load_latest_fundamental(selected)
 
 with st.spinner("Memuat data harga..."):
     price_df = load_price_history(selected, days=260)
+
+# On-demand foreign-flow fetch+persist for whichever ticker is being
+# viewed right now (see app/data.py's load_foreign_flow) -- display-only
+# complement, deliberately NOT a model input (scripts/test_foreign_flow_feature.py
+# found it doesn't help Swing's predictions). No-ops quietly if RAPIDAPI_KEY
+# isn't configured. Cached FOREIGN_FLOW_TTL (6h), so this is cheap on repeat
+# views of the same ticker in one sitting.
+load_foreign_flow(selected)
+foreign_flow_df = load_foreign_flow_history(selected, days=260)
 
 stock_name = stocks_df.loc[stocks_df["code"] == selected, "name"].iloc[0] if selected in stocks_df["code"].values else ""
 
@@ -123,6 +132,23 @@ with h3:
     if row is not None:
         st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
+        # Angka mentah (0-100%) sengaja BUKAN skor keyakinan model pada
+        # dirinya sendiri -- ini probabilitas dari data historis, dan base
+        # rate acaknya sendiri cuma ~30%. Tanpa konteks ini, angka "30%an"
+        # untuk saham WATCH gampang disalahartikan sebagai "model ragu/tidak
+        # akurat", padahal itu justru wilayah kerja normal WATCH (di atas
+        # acak, belum cukup untuk BUY) -- lihat halaman Info Model untuk
+        # angka precision walk-forward per tingkat keputusan.
+        try:
+            swing_base_rate = load_model_metadata()["base_rate"]
+            above_below = "di atas" if float(row["probability"]) >= swing_base_rate else "di bawah"
+            st.caption(
+                f"Base rate acak: {swing_base_rate*100:.0f}% -- angka ini {above_below} itu, makanya "
+                f"**{row['decision']}**. Bukan skor 0-100 yang harus tinggi, tapi seberapa jauh dari acak "
+                "(lihat halaman Info Model untuk detail)."
+            )
+        except (FileNotFoundError, KeyError):
+            pass
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
@@ -154,9 +180,45 @@ else:
     price_df["bb_lower"] = price_df["bb_mid"] - 2 * bb_std
     price_df["sma50"] = price_df["close"].rolling(50).mean()
     price_df["sma200"] = price_df["close"].rolling(200).mean()
-    price_df["volume_ma20"] = price_df["volume"].rolling(20).mean()
+    # Naming note: this is the exact same computation (rolling(20).mean(),
+    # a simple moving average) as sma50/sma200 above and sma_20/50/200 in
+    # features/technical.py -- named "sma" (not "ma") for consistency with
+    # every other moving average in this codebase; it was previously called
+    # volume_ma20 with no functional difference, just an inconsistent label.
+    price_df["volume_sma20"] = price_df["volume"].rolling(20).mean()
+    # Same computation (ta library, window=20) the model itself uses for
+    # cmf_20 -- see features/technical.py's compute_money_flow -- so this
+    # panel matches exactly what the model sees, not a lookalike recomputed
+    # differently.
+    price_df["cmf_20"] = ta.volume.ChaikinMoneyFlowIndicator(
+        price_df["high"], price_df["low"], price_df["close"], price_df["volume"], window=20
+    ).chaikin_money_flow()
+    # RSI(14) and MACD -- same ta library calls/params as
+    # features/technical.py's compute_momentum, for the same reason as CMF
+    # above: this panel should show exactly what the model sees.
+    price_df["rsi_14"] = ta.momentum.RSIIndicator(price_df["close"], window=14).rsi()
+    macd_ind = ta.trend.MACD(price_df["close"])
+    price_df["macd"] = macd_ind.macd()
+    price_df["macd_signal"] = macd_ind.macd_signal()
+    price_df["macd_hist"] = macd_ind.macd_diff()
+    # Foreign flow isn't derivable from OHLCV -- merge in whatever's stored
+    # in feature_daily.net_foreign_flow (kept current by load_foreign_flow's
+    # on-demand fetch earlier on this page). Left join: a date with no
+    # foreign-flow value (RAPIDAPI_KEY unset, or just not backfilled yet)
+    # stays NaN, which Plotly simply skips/gaps rather than erroring on.
+    price_df = price_df.merge(foreign_flow_df, on="date", how="left")
+    # Raw daily net_foreign_flow is noisy (one big print can dominate the
+    # bars) -- a trailing 20-day average smooths it into a readable trend
+    # line, same role CMF's smoothing plays for money flow: is the last few
+    # weeks net accumulation (line above zero) or distribution (below)?
+    price_df["foreign_flow_ma20"] = price_df["net_foreign_flow"].rolling(20, min_periods=5).mean()
 
-    INDICATOR_OPTIONS = ["EMA5", "EMA9", "SMA20", "SMA50", "SMA200", "Bollinger Band(20)"]
+    # Labeled "MA" (not "SMA") to match common retail-platform convention
+    # (Stockbit/RTI/etc. show plain "MA" for the simple moving average and
+    # reserve "EMA" for the exponential one) -- display label only, the
+    # underlying values and internal column/feature names (sma_20/50/200 in
+    # features/technical.py) are unchanged.
+    INDICATOR_OPTIONS = ["EMA5", "EMA9", "MA20", "MA50", "MA200", "Bollinger Band(20)"]
     ctrl1, ctrl2 = st.columns([1, 2])
     with ctrl1:
         chart_type = st.radio("Tipe candle", ["Normal", "Heikin-Ashi"], horizontal=True, key="chart_type")
@@ -179,18 +241,29 @@ else:
         plot_open, plot_high, plot_low, plot_close = price_df["open"], price_df["high"], price_df["low"], price_df["close"]
         candle_name = "Harga"
 
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
+    # Rows 3-6 (RSI, MACD, CMF, Foreign Flow) are always-on context panels,
+    # same treatment as Volume (row 2) already gets -- not folded into the
+    # INDICATOR_OPTIONS multiselect, since they're meant to be a permanent
+    # complement to the price action rather than an optional overlay.
+    fig = make_subplots(
+        rows=6, cols=1, shared_xaxes=True,
+        row_heights=[0.30, 0.10, 0.13, 0.13, 0.14, 0.20], vertical_spacing=0.02,
+        subplot_titles=("Harga", "Volume", "RSI(14)", "MACD", "CMF(20)", "Foreign Flow (Net Buy/Sell)"),
+    )
 
-    # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top
+    # Bollinger Band(20) shaded region -- drawn first so price/MA lines render on top.
+    # hoverinfo="skip" on both: now that hovermode is "x unified" (see below),
+    # every trace would otherwise add a line to the unified hover box -- these
+    # two are pure shading, not something worth a numeric readout there.
     if "Bollinger Band(20)" in selected_indicators:
         fig.add_trace(
-            go.Scatter(x=price_df["date"], y=price_df["bb_upper"], name="BB Upper", line=dict(color="rgba(139,92,246,0.35)", width=1), showlegend=False),
+            go.Scatter(x=price_df["date"], y=price_df["bb_upper"], name="BB Upper", line=dict(color="rgba(139,92,246,0.35)", width=1), showlegend=False, hoverinfo="skip"),
             row=1, col=1,
         )
         fig.add_trace(
             go.Scatter(
                 x=price_df["date"], y=price_df["bb_lower"], name="Bollinger Band(20)", line=dict(color="rgba(139,92,246,0.35)", width=1),
-                fill="tonexty", fillcolor="rgba(139,92,246,0.08)",
+                fill="tonexty", fillcolor="rgba(139,92,246,0.08)", hoverinfo="skip",
             ),
             row=1, col=1,
         )
@@ -206,9 +279,9 @@ else:
     for col, color, label in [
         ("ema5", "#FFFFFF", "EMA5"),
         ("ema9", "#EC4899", "EMA9"),
-        ("bb_mid", "#F59E0B", "SMA20"),
-        ("sma50", ACCENT, "SMA50"),
-        ("sma200", "#8B5CF6", "SMA200"),
+        ("bb_mid", "#F59E0B", "MA20"),
+        ("sma50", ACCENT, "MA50"),
+        ("sma200", "#8B5CF6", "MA200"),
     ]:
         if label in selected_indicators:
             fig.add_trace(
@@ -221,19 +294,311 @@ else:
         row=2, col=1,
     )
     fig.add_trace(
-        go.Scatter(x=price_df["date"], y=price_df["volume_ma20"], name="MA20 Volume", line=dict(color="#F59E0B", width=1.3)),
+        go.Scatter(x=price_df["date"], y=price_df["volume_sma20"], name="MA20 Volume", line=dict(color="#F59E0B", width=1.3)),
         row=2, col=1,
     )
+
+    # RSI(14) -- bounded [0, 100]; 70/30 reference lines mark the
+    # conventional overbought/oversold thresholds (tinted with the same
+    # AVOID/BUY colors used everywhere else in this app for that framing).
+    fig.add_trace(
+        go.Scatter(
+            x=price_df["date"], y=price_df["rsi_14"], name="RSI(14)",
+            line=dict(color="#A78BFA", width=1.3), showlegend=False,
+        ),
+        row=3, col=1,
+    )
+    fig.add_hline(y=70, line=dict(color="rgba(239,68,68,0.4)", width=1, dash="dot"), row=3, col=1)
+    fig.add_hline(y=30, line=dict(color="rgba(34,197,94,0.4)", width=1, dash="dot"), row=3, col=1)
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
+
+    # MACD -- MACD line + signal line + histogram (their difference), the
+    # standard three-part presentation. Histogram bars colored the same
+    # up/down convention as every other bar panel on this chart.
+    macd_hist_colors = [COLOR_BUY if v >= 0 else COLOR_AVOID for v in price_df["macd_hist"].fillna(0)]
+    fig.add_trace(
+        go.Bar(x=price_df["date"], y=price_df["macd_hist"], name="MACD Hist", marker_color=macd_hist_colors, opacity=0.55, showlegend=False),
+        row=4, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=price_df["date"], y=price_df["macd"], name="MACD", line=dict(color="#22D3EE", width=1.3), showlegend=False),
+        row=4, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=price_df["date"], y=price_df["macd_signal"], name="Signal", line=dict(color="#F59E0B", width=1.3), showlegend=False),
+        row=4, col=1,
+    )
+    fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=4, col=1)
+
+    # CMF(20) -- oscillates roughly [-1, 1] around a zero line; zero-line
+    # reference makes the buying/selling-pressure sign readable at a glance.
+    fig.add_trace(
+        go.Scatter(
+            x=price_df["date"], y=price_df["cmf_20"], name="CMF(20)",
+            line=dict(color="#22D3EE", width=1.3), showlegend=False,
+        ),
+        row=5, col=1,
+    )
+    fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=5, col=1)
+
+    # Foreign Flow -- net foreign buy(+)/sell(-) in Rupiah, same up/down
+    # bar-color convention as the Volume panel above. price_df only carries
+    # a value on dates load_foreign_flow_history actually has (left-joined
+    # above), so this naturally gaps rather than errors on missing days.
+    if foreign_flow_df.empty:
+        fig.add_annotation(
+            text="Data foreign flow belum tersedia untuk emiten ini",
+            xref="x domain", yref="y domain", x=0.5, y=0.5, row=6, col=1,
+            showarrow=False, font=dict(color="rgba(255,255,255,0.45)", size=11),
+        )
+    else:
+        ff_colors = [COLOR_BUY if v >= 0 else COLOR_AVOID for v in price_df["net_foreign_flow"].fillna(0)]
+        fig.add_trace(
+            go.Bar(
+                x=price_df["date"], y=price_df["net_foreign_flow"], name="Foreign Flow",
+                marker_color=ff_colors, opacity=0.55, showlegend=False,
+            ),
+            row=6, col=1,
+        )
+        # MA20 trend line on top of the daily bars -- same idea as CMF's
+        # line: smooths out single-day noise so the current buy/sell trend
+        # (line above/below zero) reads at a glance instead of having to
+        # eyeball a wall of red/green bars.
+        fig.add_trace(
+            go.Scatter(
+                x=price_df["date"], y=price_df["foreign_flow_ma20"], name="MA20 Foreign Flow",
+                line=dict(color="#F59E0B", width=1.6), showlegend=False,
+            ),
+            row=6, col=1,
+        )
+        fig.add_hline(y=0, line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"), row=6, col=1)
+
+    CHART_HEIGHT = 1080
     fig.update_layout(
-        height=560,
+        height=CHART_HEIGHT,
         template="plotly_dark",
         paper_bgcolor="#0B1120",
         plot_bgcolor="#0B1120",
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
         xaxis_rangeslider_visible=False,
+        # -1 = no cutoff: without this, Plotly only fires 'plotly_hover' when
+        # the cursor is within a small pixel radius of an actual data point,
+        # so hovering at, say, the vertical middle of the Volume or CMF row
+        # (nowhere near that day's bar/line height) fires NOTHING -- caught
+        # via Playwright hovering at each row's own domain center and seeing
+        # zero response on some rows while others worked. Every panel should
+        # respond anywhere inside it, matching how the full-height crosshair
+        # line already behaves.
+        hoverdistance=-1,
     )
-    st.plotly_chart(fig, width="stretch")
+    # Real cross-panel crosshair, verified end-to-end with Playwright (real
+    # browser, real mouse-hover, inspected the actual rendered SVG) before
+    # shipping -- three earlier attempts each failed a real check:
+    #   1. hovermode="x unified" + xaxis.showspikes: Playwright showed the
+    #      spikeline element's own y-span is confined to the axis's own
+    #      subplot domain (~30-306px of a 1080px figure) -- "across" only
+    #      ever meant "across THAT axis's plot area", never the whole
+    #      figure, matching the "only one panel" bug report.
+    #   2. Making the "x unified" hover box transparent (or same-color as
+    #      the background) to hide it broke that propagation further --
+    #      still confined to one panel, per the follow-up screenshot.
+    #   3. A first custom-shape/JS attempt showed nothing at all -- turned
+    #      out hoverinfo="skip" on every trace (added to silence the native
+    #      box) also silences the 'plotly_hover' JS event entirely, so the
+    #      shape-updating callback never ran.
+    # What actually works: a real go.Scatter is swapped in below isn't
+    # needed -- a layout shape (xref="x", yref="paper", spanning y 0-1) is
+    # genuinely full-figure-height regardless of which subplot it's
+    # "anchored" to, confirmed via Playwright reading the rendered <path>
+    # (d="M690.9,1054L690.9,30" for a 1080px-tall figure). It's repositioned
+    # by a plotly_hover listener (hoverinfo left at its default so the event
+    # still fires), and the native hover box/spikelines -- which Playwright
+    # confirmed both live inside the SAME <g class="hoverlayer"> element --
+    # are hidden with one CSS rule, which cannot affect the shape since
+    # shapes render in a separate <g class="shapelayer">.
+    fig.add_shape(
+        type="line", xref="x", yref="paper", x0=price_df["date"].iloc[0], x1=price_df["date"].iloc[0],
+        y0=0, y1=1, line=dict(color="rgba(255,255,255,0.6)", width=1.5, dash="solid"),
+        visible=False, name="crosshair",
+    )
+
+    # Compact per-panel value label shown next to the crosshair on hover --
+    # "nilai yang penting saja" (RSI panel shows only the RSI number, MACD
+    # panel shows only its histogram, etc.), not a full multi-trace
+    # readout, and small enough (tucked at the top edge of each panel's own
+    # domain, semi-transparent background) that it never sits over the
+    # middle of the candles/lines. One annotation per row, all invisible
+    # until the JS hover handler below fills in text and flips it visible.
+    # Index tracked the SAME way the crosshair shape's index is tracked
+    # above (comment at the add_shape call for the reasoning): make_subplots'
+    # own subplot_titles already occupy annotations[0..5], so hardcoding a
+    # 0-based index here would silently animate the wrong (title) annotation
+    # -- read the actual count instead of assuming it.
+    value_label_base_idx = len(fig.layout.annotations)
+    for panel_row in range(1, 7):
+        axis_name = "yaxis" if panel_row == 1 else f"yaxis{panel_row}"
+        domain_top = getattr(fig.layout, axis_name).domain[1]
+        fig.add_annotation(
+            xref="x", yref="paper", x=price_df["date"].iloc[0], y=domain_top - 0.006,
+            xanchor="left", yanchor="top", text="", showarrow=False,
+            font=dict(size=11, color="#E2E8F0"), bgcolor="rgba(15,23,42,0.85)",
+            bordercolor="rgba(255,255,255,0.25)", borderwidth=1, borderpad=3,
+            visible=False,
+        )
+
+    def _fmt_volume_id(v: float) -> str:
+        if v >= 1e9:
+            return f"{v / 1e9:.2f} M"
+        if v >= 1e6:
+            return f"{v / 1e6:.1f} Jt"
+        if v >= 1e3:
+            return f"{v / 1e3:.0f} rb"
+        return f"{v:.0f}"
+
+    # Hover label text is precomputed HERE in Python, keyed by date, rather
+    # than read out of the rendered Plotly trace objects in JS. Tried the
+    # JS-side approach first -- it failed even after fixing an unrelated
+    # Date-vs-string mismatch, because this Plotly version serializes
+    # numeric trace arrays as a compact {dtype, bdata} binary-encoded
+    # object (confirmed by inspecting gd.data in a real browser), not a
+    # plain JS array -- so `trace.y[idx]` was silently undefined for every
+    # single panel, always, regardless of which date was hovered. A plain
+    # JSON dict built from price_df sidesteps that representation
+    # entirely and is robust to however Plotly's own JS happens to encode
+    # its traces internally.
+    hover_lookup: dict[str, list[str | None]] = {}
+    for _, hr in price_df.iterrows():
+        if pd.isna(hr["date"]):
+            continue
+        # pd.Timestamp(...) normalizes either case -- this app runs SQLite
+        # in dev (no native DATE type, so price_df["date"] comes back as a
+        # plain string like "2025-08-11") and MySQL in production (where it
+        # comes back as a real Timestamp) -- calling .strftime() directly
+        # crashed dev with "'str' object has no attribute 'strftime'".
+        date_key = pd.Timestamp(hr["date"]).strftime("%Y-%m-%d")
+        ff_val = hr.get("net_foreign_flow")
+        hover_lookup[date_key] = [
+            None if pd.isna(hr["close"]) else f"Harga: Rp {hr['close']:,.0f}",
+            None if pd.isna(hr["volume"]) else f"Vol: {_fmt_volume_id(hr['volume'])}",
+            None if pd.isna(hr["rsi_14"]) else f"RSI: {hr['rsi_14']:.1f}",
+            None if pd.isna(hr["macd_hist"]) else f"MACD Hist: {hr['macd_hist']:.2f}",
+            None if pd.isna(hr["cmf_20"]) else f"CMF: {hr['cmf_20']:.3f}",
+            None if pd.isna(ff_val) else f"FF: Rp {ff_val / 1e9:.1f} M",
+        ]
+    hover_lookup_json = json.dumps(hover_lookup, ensure_ascii=False)
+
+    chart_html = fig.to_html(
+        full_html=False,
+        include_plotlyjs=True,
+        div_id="detail-saham-chart",
+        config={"displayModeBar": True, "responsive": True},
+        post_script="""
+        (function() {
+            var gd = document.getElementById('detail-saham-chart');
+            // The crosshair is always the LAST shape, not shapes[0] -- this
+            // figure already has several other shapes from add_hline calls
+            // (RSI's 70/30 reference lines, the zero-lines on MACD/CMF/
+            // Foreign Flow), added before the crosshair above. Hardcoding
+            // shapes[0] silently animated the WRONG shape (the first RSI
+            // reference line) instead -- caught via Playwright, not a guess.
+            var crosshairIdx = gd.layout.shapes.length - 1;
+            gd.on('plotly_hover', function(evt) {
+                if (!evt.points || !evt.points.length) return;
+                var x = evt.points[0].x;
+                var upd = {};
+                upd['shapes[' + crosshairIdx + '].x0'] = x;
+                upd['shapes[' + crosshairIdx + '].x1'] = x;
+                upd['shapes[' + crosshairIdx + '].visible'] = true;
+                Plotly.relayout(gd, upd);
+            });
+            gd.on('plotly_unhover', function() {
+                var upd = {};
+                upd['shapes[' + crosshairIdx + '].visible'] = false;
+                Plotly.relayout(gd, upd);
+            });
+
+            // Per-panel value labels (separate listeners, same 'gd' and
+            // 'crosshairIdx' above -- both this and the crosshair listener
+            // fire together on every hover/unhover, JS allows multiple
+            // handlers on one event). Text comes from a lookup dict built
+            // in PYTHON (keyed by date), not by reading gd.data -- see the
+            // comment on hover_lookup in the Python source for why: this
+            // Plotly version encodes trace y-arrays as a compact binary
+            // {dtype, bdata} object client-side, not a plain JS array.
+            var valueLabelBaseIdx = __VALUE_LABEL_BASE_IDX__;
+            var hoverLookup = __HOVER_LOOKUP_JSON__;
+            function dateKeyUTC(x) {
+                // UTC getters, not local (getFullYear/getMonth/getDate) --
+                // a date-only ISO string parses to midnight UTC, and a
+                // negative-offset timezone would read that back as the
+                // PREVIOUS calendar day, silently missing every lookup for
+                // viewers outside UTC+.
+                var d = new Date(x);
+                var y = d.getUTCFullYear();
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                return y + '-' + m + '-' + day;
+            }
+            gd.on('plotly_hover', function(evt) {
+                if (!evt.points || !evt.points.length) return;
+                var x = evt.points[0].x;
+                // Flip the label to the other side of the crosshair once the
+                // line gets close to the right edge of the CURRENTLY VISIBLE
+                // range (so it keeps working after zoom/pan, not just on the
+                // full 260-day view) -- otherwise the label would render
+                // partly off-chart instead of just "beside" the line.
+                var xr = gd._fullLayout.xaxis.range;
+                var t0 = new Date(xr[0]).getTime(), t1 = new Date(xr[1]).getTime(), tx = new Date(x).getTime();
+                var anchor = (t1 > t0 && (tx - t0) / (t1 - t0) > 0.65) ? 'right' : 'left';
+                var texts = hoverLookup[dateKeyUTC(x)] || [null, null, null, null, null, null];
+                var labelUpd = {};
+                texts.forEach(function(text, i) {
+                    var annIdx = valueLabelBaseIdx + i;
+                    labelUpd['annotations[' + annIdx + '].x'] = x;
+                    labelUpd['annotations[' + annIdx + '].xanchor'] = anchor;
+                    labelUpd['annotations[' + annIdx + '].text'] = text || '';
+                    labelUpd['annotations[' + annIdx + '].visible'] = !!text;
+                });
+                Plotly.relayout(gd, labelUpd);
+            });
+            gd.on('plotly_unhover', function() {
+                var labelUpd = {};
+                for (var i = 0; i < 6; i++) { labelUpd['annotations[' + (valueLabelBaseIdx + i) + '].visible'] = false; }
+                Plotly.relayout(gd, labelUpd);
+            });
+        })();
+        """.replace("__VALUE_LABEL_BASE_IDX__", str(value_label_base_idx)).replace("__HOVER_LOOKUP_JSON__", hover_lookup_json),
+    )
+    # Hides Plotly's native hover box AND its (single-panel-only) spikelines
+    # -- both confirmed to live inside g.hoverlayer -- without touching our
+    # shape above, which renders in the separate g.shapelayer.
+    chart_html = chart_html.replace("</head>", "<style>.hoverlayer{display:none !important;}</style></head>") if "</head>" in chart_html else (
+        "<style>.hoverlayer{display:none !important;}</style>" + chart_html
+    )
+    components.html(chart_html, height=CHART_HEIGHT + 50, scrolling=False)
+    if foreign_flow_df.empty:
+        st.caption(
+            "Foreign flow: data belum tersedia (RapidAPI key belum diset, atau "
+            "belum pernah diambil untuk emiten ini). Data akan otomatis diambil "
+            "saat halaman ini dibuka jika key sudah dikonfigurasi."
+        )
+    else:
+        # Read the trend straight off the same MA20 line just plotted --
+        # dropna() rather than .iloc[-1] because the trailing rows of
+        # price_df's 260-day window can be newer than the latest foreign-
+        # flow data actually available (RapidAPI lags a day or so).
+        ma20_recent = price_df["foreign_flow_ma20"].dropna()
+        if not ma20_recent.empty:
+            latest_ma20 = ma20_recent.iloc[-1]
+            trend_label = "NET BUY (akumulasi asing)" if latest_ma20 >= 0 else "NET SELL (distribusi asing)"
+            trend_color = COLOR_BUY if latest_ma20 >= 0 else COLOR_AVOID
+            st.caption(
+                f"Tren foreign flow (rata-rata 20 hari terakhir): "
+                f"<span style='color:{trend_color}; font-weight:600;'>{trend_label}</span>, "
+                f"Rp {latest_ma20 / 1e9:,.1f} miliar/hari.",
+                unsafe_allow_html=True,
+            )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 

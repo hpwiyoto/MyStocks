@@ -1,6 +1,6 @@
-"""Read-only data access for the Streamlit app. Only queries MySQL and reads
-the committed model metadata file -- no pipeline/feature/training logic here
-(that belongs in /pipeline, /features, /engine)."""
+"""Read-only data access for the Streamlit app. Only queries the database and
+reads the committed model metadata file -- no pipeline/feature/training logic
+here (that belongs in /pipeline, /features, /engine)."""
 import datetime as dt
 import json
 import os
@@ -11,12 +11,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-from sqlalchemy import inspect
+from sqlalchemy import bindparam, inspect, text, update
 
 from engine.predict import MODEL_VERSION
 from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
+from features.db import feature_daily
 from features.news import fetch_news_headlines
 from pipeline.db import get_engine
+from pipeline.idx_rapidapi_source import RAPIDAPI_KEY, fetch_foreign_flow_all
 from pipeline.logging_config import get_logger
 from pipeline.tickers import to_yfinance_symbol
 
@@ -28,6 +30,10 @@ CACHE_TTL = 300  # seconds
 LIVE_PRICE_TTL = 30  # seconds -- short on purpose, this is the "what's it doing right now" overlay
 NEWS_TTL = 1800  # seconds -- headlines don't need 30s freshness like price does, and this is one
                  # extra outbound HTTP call per Detail Saham page load, no need to repeat it often
+FOREIGN_FLOW_TTL = 21600  # 6h -- IDX foreign flow only changes once per trading session, no reason
+                          # to refetch more often than this; also keeps RapidAPI's free-tier monthly
+                          # quota (see pipeline/idx_rapidapi_source.py's reserve_requests) safe from a
+                          # single ticker being viewed repeatedly in one sitting.
 
 
 def _missing_tables(engine, required: list[str]) -> list[str]:
@@ -46,7 +52,7 @@ def load_latest_predictions() -> pd.DataFrame:
     if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
         return pd.DataFrame()
     df = pd.read_sql(
-        """
+        text("""
         SELECT p.stock_code, s.name, s.sector, p.date, p.probability, p.decision,
                p.entry_price, p.stop_loss_price, p.take_profit_price, p.risk_reward_ratio,
                fd.regime
@@ -56,10 +62,10 @@ def load_latest_predictions() -> pd.DataFrame:
         INNER JOIN (
             SELECT stock_code, MAX(date) AS max_date
             FROM predictions
-            WHERE model_version = %(model_version)s
+            WHERE model_version = :model_version
             GROUP BY stock_code
         ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
-        WHERE p.model_version = %(model_version)s
+        WHERE p.model_version = :model_version
         ORDER BY
             -- Decision tier first (BUY, then WATCH, then AVOID), probability
             -- only as the tiebreaker within a tier -- NOT probability alone.
@@ -70,7 +76,7 @@ def load_latest_predictions() -> pd.DataFrame:
             -- genuine opportunities at the top of Home's ranked table.
             CASE p.decision WHEN 'BUY' THEN 0 WHEN 'WATCH' THEN 1 ELSE 2 END,
             p.probability DESC
-        """,
+        """),
         engine,
         params={"model_version": MODEL_VERSION},
     )
@@ -89,7 +95,7 @@ def load_latest_turnaround_predictions() -> pd.DataFrame:
     if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
         return pd.DataFrame()
     df = pd.read_sql(
-        """
+        text("""
         SELECT p.stock_code, s.name, s.sector, s.industry, p.date, p.probability, p.decision,
                p.entry_price, fd.regime
         FROM predictions p
@@ -98,12 +104,12 @@ def load_latest_turnaround_predictions() -> pd.DataFrame:
         INNER JOIN (
             SELECT stock_code, MAX(date) AS max_date
             FROM predictions
-            WHERE model_version = %(model_version)s
+            WHERE model_version = :model_version
             GROUP BY stock_code
         ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
-        WHERE p.model_version = %(model_version)s
+        WHERE p.model_version = :model_version
         ORDER BY CASE p.decision WHEN 'POTENSIAL' THEN 0 ELSE 1 END, p.probability DESC
-        """,
+        """),
         engine,
         params={"model_version": TURNAROUND_MODEL_VERSION},
     )
@@ -116,13 +122,68 @@ def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
     if _missing_tables(engine, ["price_history"]):
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
     df = pd.read_sql(
-        """
+        text("""
         SELECT date, open, high, low, close, volume
         FROM price_history
-        WHERE stock_code = %(code)s AND source_provider = 'yfinance'
+        WHERE stock_code = :code AND source_provider = 'yfinance'
         ORDER BY date DESC
-        LIMIT %(days)s
-        """,
+        LIMIT :days
+        """),
+        engine,
+        params={"code": stock_code, "days": days},
+    )
+    return df.sort_values("date").reset_index(drop=True)
+
+
+@st.cache_data(ttl=FOREIGN_FLOW_TTL)
+def load_foreign_flow(stock_code: str) -> pd.DataFrame:
+    """On-demand fetch (RapidAPI IDX, see pipeline/idx_rapidapi_source.py)
+    for ONE ticker, triggered the first time its Detail Saham page loads
+    each cache window -- not a bulk daily job, so quota only gets spent on
+    tickers someone actually looks at. Persists into
+    feature_daily.net_foreign_flow (same UPDATE-only, never-insert-a-bare-
+    row convention as scripts/backfill_foreign_flow.py) so the data stays
+    available for the empirical/analysis use the user asked for even
+    though it deliberately does NOT feed any model (see
+    scripts/test_foreign_flow_feature.py -- tested, didn't help Swing).
+    Returns [] gracefully (never raises) if RAPIDAPI_KEY isn't configured
+    or the fetch fails -- this is a best-effort display complement, same
+    contract as load_news."""
+    if not RAPIDAPI_KEY:
+        return pd.DataFrame(columns=["date", "value"])
+    flows = fetch_foreign_flow_all([stock_code], timeframe="1y")
+    df = flows.get(stock_code, pd.DataFrame(columns=["date", "value"]))
+    if not df.empty:
+        engine = get_engine()
+        with engine.begin() as conn:
+            stmt = (
+                update(feature_daily)
+                .where(feature_daily.c.stock_code == bindparam("code"), feature_daily.c.date == bindparam("d"))
+                .values(net_foreign_flow=bindparam("val"))
+            )
+            conn.execute(stmt, [{"code": stock_code, "d": r["date"], "val": float(r["value"])} for _, r in df.iterrows()])
+    return df.sort_values("date").reset_index(drop=True)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_foreign_flow_history(stock_code: str, days: int = 260) -> pd.DataFrame:
+    """Reads whatever's already stored in feature_daily.net_foreign_flow --
+    the chart-ready counterpart to load_foreign_flow above, which is what
+    actually keeps that column current. Deliberately separate (DB read vs
+    API fetch+write) so the chart doesn't wait on a live API call every
+    render -- load_foreign_flow already ran earlier in the same page load
+    and cached its result for FOREIGN_FLOW_TTL."""
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily"]):
+        return pd.DataFrame(columns=["date", "net_foreign_flow"])
+    df = pd.read_sql(
+        text("""
+        SELECT date, net_foreign_flow
+        FROM feature_daily
+        WHERE stock_code = :code AND net_foreign_flow IS NOT NULL
+        ORDER BY date DESC
+        LIMIT :days
+        """),
         engine,
         params={"code": stock_code, "days": days},
     )
@@ -135,11 +196,11 @@ def load_latest_feature_row(stock_code: str) -> dict | None:
     if _missing_tables(engine, ["feature_daily"]):
         return None
     df = pd.read_sql(
-        """
+        text("""
         SELECT * FROM feature_daily
-        WHERE stock_code = %(code)s
+        WHERE stock_code = :code
         ORDER BY date DESC LIMIT 1
-        """,
+        """),
         engine,
         params={"code": stock_code},
     )
@@ -152,15 +213,69 @@ def load_latest_fundamental(stock_code: str) -> dict | None:
     if _missing_tables(engine, ["feature_fundamental_snapshot"]):
         return None
     df = pd.read_sql(
-        """
+        text("""
         SELECT * FROM feature_fundamental_snapshot
-        WHERE stock_code = %(code)s
+        WHERE stock_code = :code
         ORDER BY snapshot_date DESC LIMIT 1
-        """,
+        """),
         engine,
         params={"code": stock_code},
     )
     return df.iloc[0].to_dict() if not df.empty else None
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_data_freshness() -> dt.date | None:
+    """Most recent date present in feature_daily -- i.e. how current the
+    prices/RSI/MACD/CMF everyone reads actually are. Surfaced directly in
+    the UI (rather than silently trusted) after a real incident: the
+    scheduler process was asleep for 4 days (laptop off/asleep over that
+    stretch, see scripts/scheduler_loop.py's catch-up fix) and every page
+    kept quietly showing Sept-1 data with no indication anything was stale.
+    Returns None if feature_daily doesn't exist yet or is empty.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily"]):
+        return None
+    df = pd.read_sql("SELECT MAX(date) AS max_date FROM feature_daily", engine)
+    value = df["max_date"].iloc[0] if not df.empty else None
+    if value is None or value != value:  # NaT/NaN guard, same pattern as safe_ratio's NaN check
+        return None
+    return pd.to_datetime(value).date()
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
+    """Bulk per-(ticker, date) panel across the WHOLE universe for the last
+    ~`lookback_days` TRADING days, feeding features.momentum_screener's
+    MACD-status classification and RSI/MACD divergence detection on the
+    Momentum Screener page. Unlike load_price_history (one ticker), this
+    scores the whole universe at once -- same shape as load_latest_predictions.
+
+    Cutoff is a plain calendar-date WHERE clause (lookback_days*2 days back,
+    a generous buffer for weekends/holidays) computed in Python rather than
+    DATE_SUB/julianday SQL -- this project runs on SQLite locally and MySQL
+    in production (see pipeline.db.get_engine), and a literal date string
+    compares correctly on both without dialect-specific date arithmetic.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily", "price_history"]):
+        return pd.DataFrame()
+    cutoff = (dt.date.today() - dt.timedelta(days=lookback_days * 2)).isoformat()
+    df = pd.read_sql(
+        text("""
+        SELECT fd.stock_code, fd.date, ph.close, ph.volume,
+               fd.rsi_14, fd.macd, fd.macd_signal, fd.macd_hist, fd.macd_hist_slope_3d,
+               fd.cmf_20, fd.rvol_20, fd.regime
+        FROM feature_daily fd
+        JOIN price_history ph ON ph.stock_code = fd.stock_code AND ph.date = fd.date AND ph.source_provider = 'yfinance'
+        WHERE fd.date >= :cutoff
+        ORDER BY fd.stock_code, fd.date
+        """),
+        engine,
+        params={"cutoff": cutoff},
+    )
+    return df
 
 
 @st.cache_data(ttl=CACHE_TTL)

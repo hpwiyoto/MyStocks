@@ -45,11 +45,18 @@ BOOL_COLS = ["higher_high_20d", "higher_low_20d", "lower_high_20d", "lower_low_2
 # none of v5's 6 new columns belong here -- obv_zscore_20 is a z-score,
 # price_vs_vwap20_pct/sector_relative_strength_20d_pct are already %,
 # trailing_pe/price_to_book are ratios, market_cap_log is log-compressed).
+# net_foreign_flow (RapidAPI IDX, pipeline/idx_rapidapi_source.py) is the
+# same category -- raw Rupiah, hundreds of billions for a mega-cap vs
+# millions for a small-cap, not comparable across stocks. Its normalized
+# form (net_foreign_flow_zscore_20, same rolling-zscore treatment as
+# obv_zscore_20) is what actually gets used as a feature -- see
+# scripts/test_foreign_flow_feature.py for the empirical A/B test this was
+# built for before committing it here permanently.
 ABSOLUTE_SCALE_COLS = {
     "sma_20", "sma_50", "sma_200", "ema_9", "ema_20", "ema_50",
     "ema20_slope_5d", "ema20_accel_5d", "sma50_slope_10d",
     "macd", "macd_signal", "macd_hist", "macd_hist_slope_3d", "macd_hist_accel_3d",
-    "volume_slope_5d", "obv", "obv_slope_5d",
+    "volume_slope_5d", "obv", "obv_slope_5d", "net_foreign_flow",
 }
 
 XGB_PARAMS = {

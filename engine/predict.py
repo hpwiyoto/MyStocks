@@ -6,13 +6,12 @@ Usage:
     python -m engine.predict
 """
 from sqlalchemy import inspect, select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from engine.db import init_schema, predictions
 from engine.decision import decide
 from engine.model import build_feature_row, load_model_and_metadata, predict_probability
 from features.db import FEATURE_VERSION, feature_daily
-from pipeline.db import get_engine, price_history
+from pipeline.db import get_engine, price_history, upsert
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS
 
@@ -41,14 +40,11 @@ def price_on_date(conn, code: str, date):
 
 
 def upsert_prediction(conn, record: dict) -> None:
-    stmt = mysql_insert(predictions).values([record])
-    update_cols = {
-        c: stmt.inserted[c]
-        for c in record
-        if c not in ("stock_code", "date", "model_version")
-    }
-    stmt = stmt.on_duplicate_key_update(**update_cols)
-    conn.execute(stmt)
+    upsert(
+        conn, predictions, [record],
+        update_columns=[c for c in record if c not in ("stock_code", "date", "model_version")],
+        index_elements=["stock_code", "date", "model_version"],
+    )
 
 
 def run(tickers=None):

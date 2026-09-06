@@ -21,13 +21,12 @@ import time
 
 import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from features.build_features import _build_sector_composites, _load_ihsg_close, _safe_float, load_price_history
 from features.db import FEATURE_VERSION, feature_daily
 from features.technical import MIN_ROWS_FOR_TECHNICAL_FEATURES, compute_vwap
 from features.technical import compute_all as compute_technical
-from pipeline.db import get_engine
+from pipeline.db import get_engine, upsert
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS
 
@@ -53,11 +52,9 @@ def _update_new_columns(conn, code: str, df: pd.DataFrame) -> int:
             record[col] = _safe_float(row[col]) if col in row.index else None
         rows.append(record)
 
-    stmt = mysql_insert(feature_daily).values(rows)
-    update_cols = {c: stmt.inserted[c] for c in NEW_COLUMNS}
-    stmt = stmt.on_duplicate_key_update(**update_cols)
-    result = conn.execute(stmt)
-    return result.rowcount
+    upsert(conn, feature_daily, rows, update_columns=NEW_COLUMNS,
+           index_elements=["stock_code", "date", "feature_version"])
+    return len(rows)
 
 
 def run(tickers=None):

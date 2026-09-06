@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Content *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(git status *)",
+      "PowerShell(Get-Location)",
+      "PowerShell(git log *)",
+      "PowerShell(Get-Item *)",
+      "PowerShell(git remote -v)",
+      "PowerShell(Get-ExecutionPolicy)"
+    ]
+  }
+}

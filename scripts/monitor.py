@@ -20,7 +20,7 @@ import os
 import requests
 from sqlalchemy import text
 
-from pipeline.db import get_engine
+from pipeline.db import coerce_date, get_engine
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS
 
@@ -59,7 +59,7 @@ def check_stale_data(tickers: list[str] | None = None) -> list[str]:
                 text("SELECT MAX(date) FROM price_history WHERE stock_code = :code"),
                 {"code": code},
             ).first()
-            latest = row[0] if row else None
+            latest = coerce_date(row[0]) if row else None
             if latest is None:
                 stale.append(f"{code} (belum ada data sama sekali)")
                 continue

@@ -9,3 +9,4 @@ streamlit~=1.62
 plotly~=6.9
 python-dotenv~=1.2
 requests~=2.34
+truststore~=0.10
