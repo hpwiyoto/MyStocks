@@ -31,12 +31,24 @@ Write-Host "== MyStocks: starting (native, no Docker) ==" -ForegroundColor Cyan
 # Pull: fast-forward only (never auto-merge/create a merge commit), and
 # only when the working tree is clean (never pull over uncommitted local
 # edits -- warn and skip, don't guess).
+#
+# IMPORTANT: never redirect a native command's stderr here (no 2>&1, no
+# even 2>$null) while $ErrorActionPreference = "Stop" is set above --
+# confirmed by testing that BOTH forms make PowerShell 5.1 throw a
+# terminating exception the instant the process writes anything to
+# stderr, which git routinely does even on a fully successful pull/push
+# (remote-tracking/progress chatter). That silently killed `start` outright
+# the moment there was anything real to pull or push -- exactly the "start
+# doesn't open the program at all" symptom this was reported as. Calling
+# git with NO redirection at all is the safe form: stderr just prints
+# straight to the console like normal, $LASTEXITCODE still works, and nothing
+# aborts the script.
 Write-Host "-> menyamakan dengan GitHub (git pull)..."
-$gitStatus = git status --porcelain 2>$null
+$gitStatus = git status --porcelain
 if ($gitStatus) {
     Write-Host "!! ada perubahan lokal yang belum di-commit -- git pull dilewati, sinkronkan manual (git status)." -ForegroundColor Yellow
 } else {
-    git pull --ff-only 2>&1 | ForEach-Object { Write-Host "   $_" }
+    git pull --ff-only
     if ($LASTEXITCODE -ne 0) {
         Write-Host "!! git pull gagal (offline, atau riwayat lokal & remote sudah bercabang) -- lanjut pakai kode yang ada di disk." -ForegroundColor Yellow
     }
@@ -46,10 +58,10 @@ if ($gitStatus) {
 # backed up automatically. Deliberately never touches uncommitted changes
 # (git add/commit stays a manual, deliberate step with a real commit
 # message) -- this only ships commits that already exist.
-$ahead = (git rev-list --count 'origin/main..HEAD' 2>$null)
+$ahead = (git rev-list --count 'origin/main..HEAD')
 if ($ahead -and [int]$ahead -gt 0) {
     Write-Host "-> ada $ahead commit lokal yang belum ter-backup ke GitHub, push sekarang..."
-    git push origin main 2>&1 | ForEach-Object { Write-Host "   $_" }
+    git push origin main
     if ($LASTEXITCODE -ne 0) {
         Write-Host "!! git push gagal (offline?) -- backup GitHub belum ter-update, coba lagi nanti." -ForegroundColor Yellow
     }
