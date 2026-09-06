@@ -227,6 +227,19 @@ def run():
     candidates.append(("Regime = bearish", df["regime"] == "bearish"))
     candidates.append(("Regime = bottoming + Divergence any", (df["regime"] == "bottoming") & (df["divergence_tier"] < 2)))
 
+    # --- Volume layered on top of the winning "bottoming + momentum
+    # menguat" combination -- does confirming volume push the edge further,
+    # or is it already about as good as this rule-based approach gets? ---
+    bottoming_momentum = (df["regime"] == "bottoming") & (df["macd_hist_slope_3d"] > 0)
+    candidates.append(("bottoming+momentum + RVOL>=1", bottoming_momentum & (df["rvol_20"] >= 1)))
+    candidates.append(("bottoming+momentum + RVOL>=1.2", bottoming_momentum & (df["rvol_20"] >= 1.2)))
+    candidates.append(("bottoming+momentum + RVOL>=1.5", bottoming_momentum & (df["rvol_20"] >= 1.5)))
+    candidates.append(("bottoming+momentum + RVOL>=2.0", bottoming_momentum & (df["rvol_20"] >= 2.0)))
+    candidates.append(("bottoming+momentum + RVOL<1 (weak volume)", bottoming_momentum & (df["rvol_20"] < 1)))
+    candidates.append(("bottoming+momentum + CMF>0", bottoming_momentum & (df["cmf_20"] > 0)))
+    candidates.append(("bottoming+momentum + RSI 30-50", bottoming_momentum & df["rsi_14"].between(30, 50)))
+    candidates.append(("bottoming+momentum + RVOL>=1.2 + CMF>0", bottoming_momentum & (df["rvol_20"] >= 1.2) & (df["cmf_20"] > 0)))
+
     results = [evaluate(df, mask, label, null_rate) for label, mask in candidates]
     results_df = pd.DataFrame(results).sort_values("wilson_lb", ascending=False)
     pd.set_option("display.width", 200)
