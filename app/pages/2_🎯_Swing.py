@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_login
 from app.data import load_latest_predictions, load_live_prices
 from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
 from engine.predict import run as predict_run
@@ -15,6 +16,7 @@ from pipeline.ingest_price import run as ingest_price_run
 
 st.set_page_config(page_title="MyStocks — Swing", page_icon="🎯", layout="wide")
 inject_base_css()
+require_login("Swing")
 
 if st.button("← Kembali ke Home"):
     st.switch_page("Home.py")

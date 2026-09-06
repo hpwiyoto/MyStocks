@@ -152,15 +152,42 @@ Hasil Swing dan Turnaround tersimpan di tabel `predictions` yang sama (dibedakan
 streamlit run app/Home.py
 ```
 
-- **Home** — dashboard: pencarian cepat langsung ke Detail Saham, kartu ringkas 3 mode screening (Swing/Turnaround, Long-term Investment masih "Segera Hadir").
-- **Detail Saham** — chart 6 panel (Harga, Volume, RSI, MACD, CMF, Foreign Flow) dengan crosshair lintas-panel, harga live, panel sektor/industri & fundamental, prediksi Swing dengan konteks base rate (supaya angka WATCH ~30% tidak disalahartikan sebagai model gagal).
+- **Home** — dashboard: pencarian cepat langsung ke Detail Saham, kartu ringkas untuk semua mode screening (Swing, Turnaround, Momentum Screener, Rekomendasi Emitten; Long-term Investment masih "Segera Hadir").
+- **Detail Saham** — chart 6 panel (Harga, Volume, RSI, MACD, CMF, Foreign Flow) dengan crosshair lintas-panel plus label nilai tiap panel saat hover, harga live, panel sektor/industri & fundamental, prediksi Swing dengan konteks base rate (supaya angka WATCH ~30% tidak disalahartikan sebagai model gagal).
 - **Swing** — screener utama (ranking probabilitas, filter sidebar, live price overlay, tombol update harga).
 - **Turnaround** — screener kandidat bearish/bottoming yang berpotensi berbalik arah.
 - **Momentum Screener** — filter manual RSI/MACD/volume/CMF dengan kategori "✅ Sinyal Tervalidasi" yang disorot terpisah dari kriteria heuristik lainnya.
 - **Rekomendasi Emitten** — gabungan lintas-alat, saham yang disepakati lebih dari satu screener sekaligus.
 - **Info Model** — detail kedua model ML (Swing & Turnaround): umur model, pengingat retrain manual, precision walk-forward vs threshold live, daftar fitur.
+- **Admin** — hanya untuk admin (lihat "Login & Approval Akses" di bawah): approve/reject permintaan akses baru.
 
 Tema warna diatur di `.streamlit/config.toml` (dark mode) + `app/style.py` (badge/kartu). `/app` murni presentation layer — hanya query database & baca `models/*_metadata.json`, tidak ada logic pipeline/training di dalamnya.
+
+## Login & Approval Akses
+
+Aplikasi ini privat: pengunjung baru bisa melihat pratinjau **2 halaman** secara bebas (mode tamu, tanpa login -- perkenalan singkat sebelum diminta masuk), lalu diarahkan ke layar login Google. Setelah login, akun baru masuk status **"Menunggu Persetujuan"** dan tidak bisa memakai aplikasi sampai di-approve lewat halaman **Admin** (hanya bisa dibuka oleh `heru.purbowiyoto@gmail.com`, dikonfigurasi via `app/auth.py`'s `ADMIN_EMAIL`) -- akun admin sendiri otomatis ter-approve begitu pertama kali login, supaya tidak ada ayam-telur (harus ada admin untuk approve admin pertama).
+
+Implementasinya memakai fitur bawaan Streamlit (`st.login`/`st.user`, OpenID Connect) -- bukan library pihak ketiga -- ditambah satu tabel `app_users` (`app/db.py`: email, nama, status pending/approved/rejected) dan satu email notifikasi (Gmail SMTP, `app/email_notify.py`) tiap ada pendaftar baru.
+
+**Setup (sekali saja, per environment -- dev lokal dan VPS punya redirect URI yang beda):**
+
+1. **Google OAuth Client ID** (untuk tombol "Login dengan Google"):
+   - Buka [Google Cloud Console](https://console.cloud.google.com/) → buat project baru (atau pakai yang sudah ada) → **APIs & Services → OAuth consent screen** → isi minimal (nama app, email support) → **User Type: External** (cukup untuk pemakaian pribadi, tidak perlu publish/verifikasi kalau hanya dipakai beberapa orang yang sudah dikenal).
+   - **APIs & Services → Credentials → Create Credentials → OAuth client ID** → Application type **Web application**.
+   - **Authorized redirect URIs**, tambahkan (harus persis, termasuk skema & port):
+     - Dev lokal: `http://localhost:8501/oauth2callback`
+     - VPS/production: `http://<IP-atau-domain-VPS>:8501/oauth2callback` (ganti sesuai alamat sungguhan; kalau nanti pasang HTTPS di depan reverse proxy, ini juga berubah ke `https://...`)
+   - Simpan **Client ID** dan **Client Secret** yang muncul.
+
+2. **Gmail App Password** (untuk mengirim email notifikasi pendaftar baru):
+   - Prasyarat: verifikasi 2 langkah (2FA) harus aktif di akun Gmail pengirim.
+   - Buka [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) → buat App Password baru (nama bebas, misal "MyStocks") → salin 16 karakter yang muncul (ini BUKAN password Gmail biasa -- password Gmail biasa akan DITOLAK oleh SMTP Google).
+
+3. **Isi `secrets.toml`**: salin `.streamlit/secrets.toml.example` → `.streamlit/secrets.toml` (file ini sengaja di-gitignore, tidak pernah masuk git), lalu isi `client_id`/`client_secret`/`redirect_uri` dari langkah 1, `app_password` dari langkah 2, dan `cookie_secret` (string acak apa saja -- generate dengan `python -c "import secrets; print(secrets.token_hex(32))"`).
+
+4. **Jalankan seperti biasa** (`streamlit run app/Home.py` atau `start` di Windows) -- tombol "Login dengan Google" otomatis aktif begitu `secrets.toml` lengkap. Login pertama dengan `heru.purbowiyoto@gmail.com` langsung ter-approve; akun lain masuk antrian "Menunggu Persetujuan" dan admin akan menerima email untuk membuka halaman **Admin** dan approve/reject.
+
+**Produksi (VPS/Docker)**: `docker-compose.yml`'s service `app` me-mount `.streamlit/secrets.toml` sebagai read-only volume saat runtime (bukan di-build ke image -- `.dockerignore` sengaja mengecualikannya supaya secret tidak pernah ikut ter-bake ke layer image yang mungkin di-push/dibagikan). Buat file itu langsung di VPS (isi redirect URI versi VPS-nya), bukan lewat git.
 
 ## Production Deployment
 

@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_login
 from app.data import (
     load_latest_predictions,
     load_latest_turnaround_predictions,
@@ -25,6 +26,7 @@ from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Rekomendasi Emitten", page_icon="🏆", layout="wide")
 inject_base_css()
+require_login("Rekomendasi Emitten")
 render_developer_footer()
 
 if st.button("← Kembali ke Home"):

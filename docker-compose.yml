@@ -27,6 +27,14 @@ services:
       MYSQL_PORT: "3306"
     ports:
       - "8501:8501"
+    # Login (Google OAuth) + admin-notification (Gmail) credentials --
+    # .dockerignore deliberately excludes .streamlit/secrets.toml from the
+    # image build (never bake secrets into an image layer that could be
+    # pushed/shared) -- mounted read-only at runtime instead. The VPS
+    # operator creates this file directly on the VPS disk, same as
+    # anywhere else this app runs; it is never committed to git.
+    volumes:
+      - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
     command: ["streamlit", "run", "app/Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
 
   scheduler:

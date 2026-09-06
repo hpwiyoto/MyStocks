@@ -4,6 +4,11 @@
 venv/
 docker-compose.override.yml
 
+# Streamlit secrets -- Google OAuth client secret + Gmail App Password.
+# .streamlit/secrets.toml.example is the committed template; the real file
+# is per-machine/per-deployment, never checked in.
+.streamlit/secrets.toml
+
 # Python
 __pycache__/
 *.pyc

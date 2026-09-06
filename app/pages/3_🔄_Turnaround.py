@@ -7,11 +7,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_login
 from app.data import load_latest_turnaround_predictions, load_stock_list
 from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
 
 st.set_page_config(page_title="MyStocks — Turnaround", page_icon="🔄", layout="wide")
 inject_base_css()
+require_login("Turnaround")
 render_developer_footer()
 
 if st.button("← Kembali ke Home"):

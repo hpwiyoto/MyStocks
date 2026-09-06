@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 import ta
 from plotly.subplots import make_subplots
 
+from app.auth import require_login
 from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 
@@ -26,6 +27,7 @@ def _notna(value):
 
 st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
 inject_base_css()
+require_login("Detail Saham")
 render_developer_footer()
 
 if st.button("← Kembali ke Home"):

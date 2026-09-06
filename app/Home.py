@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 
+from app.auth import require_login
 from app.data import (
     load_latest_predictions,
     load_latest_turnaround_predictions,
@@ -16,6 +17,7 @@ from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Home", page_icon="🏠", layout="wide")
 inject_base_css()
+require_login("Home")
 
 st.title("🏠 MyStocks")
 st.caption(

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_login
 from app.data import load_data_freshness, load_latest_predictions, load_screener_raw_panel, load_stock_list
 from app.style import (
     ACCENT,
@@ -24,6 +25,7 @@ from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Momentum Screener", page_icon="📡", layout="wide")
 inject_base_css()
+require_login("Momentum Screener")
 render_developer_footer()
 
 if st.button("← Kembali ke Home"):
