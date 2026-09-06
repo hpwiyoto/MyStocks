@@ -1,0 +1,51 @@
+# Lightweight production deployment for a resource-constrained VM (e.g.
+# Google Cloud's Always-Free e2-micro: 1GB RAM) -- NOT the same stack as
+# docker-compose.yml (which runs a separate MySQL container, too heavy for
+# a box this small). Differences:
+#   - No `mysql` service at all -- app/scheduler get no MYSQL_HOST env var,
+#     so pipeline/db.py's get_engine() falls back to SQLite (same code
+#     path already used and tested in local dev, see README's "Windows
+#     tanpa Docker" section). ./data is bind-mounted so the SQLite file
+#     survives container rebuilds/restarts.
+#   - Adds `caddy` as the sole internet-facing service (ports 80/443),
+#     terminating HTTPS automatically (Let's Encrypt) and reverse-proxying
+#     to `app` over the internal Docker network -- `app` itself publishes
+#     no host port, so it's unreachable except through Caddy. HTTPS is not
+#     optional here: Google's OAuth login requires it for any non-
+#     localhost redirect_uri.
+#
+# Usage: docker compose -f docker-compose.lite.yml up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
+    command: ["streamlit", "run", "app/Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    command: ["python", "-m", "scripts.scheduler_loop"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

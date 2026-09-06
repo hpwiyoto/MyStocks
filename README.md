@@ -191,27 +191,71 @@ Implementasinya memakai fitur bawaan Streamlit (`st.login`/`st.user`, OpenID Con
 
 ## Production Deployment
 
-Satu VPS menjalankan semuanya lewat Docker Compose: MySQL (self-host, volume persisten), aplikasi Streamlit, dan scheduler yang menjalankan `ingest_price → build_features → predict → predict_turnaround → monitor` otomatis tiap hari jam 16:30 WIB (bisa diubah via `SCHEDULER_RUN_HOUR`/`SCHEDULER_RUN_MINUTE`). Scheduler otomatis catch-up kalau ada hari yang terlewat (lihat "Windows tanpa Docker" di atas -- logika yang sama berlaku di semua environment).
+Satu VPS menjalankan semuanya lewat Docker Compose. Scheduler menjalankan `ingest_price → build_features → predict → predict_turnaround → monitor` otomatis tiap hari jam 16:30 WIB (bisa diubah via `SCHEDULER_RUN_HOUR`/`SCHEDULER_RUN_MINUTE`), dengan catch-up otomatis kalau ada hari yang terlewat (lihat "Windows tanpa Docker" di atas -- logika yang sama berlaku di semua environment).
 
-**Rekomendasi hosting gratis:** [Oracle Cloud "Always Free"](https://www.oracle.com/cloud/free/) (VM Ampere A1, 2 OCPU/12GB RAM, gratis selamanya bukan trial) — cukup untuk stack ini.
+**Sejak ada Login Google, HTTPS + domain asli WAJIB** (bukan lagi opsional) -- Google menolak redirect URI berbasis HTTP kecuali untuk `localhost`. Dua opsi VPS di bawah ini keduanya sudah termasuk HTTPS otomatis.
 
-### Setup di VPS
+### Opsi A -- VM besar (Oracle Cloud Always Free), MySQL
+
+[Oracle Cloud "Always Free"](https://www.oracle.com/cloud/free/) (VM Ampere A1, 2 OCPU/12GB RAM, gratis selamanya) -- kalau dapat slot (sering kehabisan kapasitas per region, coba region lain kalau gagal). Pakai `docker-compose.yml` (MySQL self-host, volume persisten) apa adanya:
 
 ```bash
 git clone https://github.com/hpwiyoto/MyStocks.git
 cd MyStocks
 cp .env.example .env   # isi kredensial MySQL sungguhan + MYSQL_ROOT_PASSWORD
                         # TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID opsional untuk alert
+cp Caddyfile.example Caddyfile   # ganti domain placeholder dengan domain/sslip.io Anda
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # isi kredensial Google OAuth + Gmail
 docker compose up -d --build
 ```
 
-Verifikasi:
+### Opsi B -- VM kecil gratis-selamanya (Google Cloud Always Free `e2-micro`), SQLite
+
+Dipakai untuk pemakaian pribadi/skala kecil (RAM 1GB, tidak cukup untuk MySQL sebagai container terpisah). Pakai `docker-compose.lite.yml` (tanpa service MySQL -- otomatis jatuh ke SQLite, sama seperti dev lokal; lihat komentar di file itu untuk detail).
+
+**1. Buat VM** (region harus salah satu yang Always-Free eligible: `us-west1`, `us-central1`, atau `us-east1`):
+- Google Cloud Console → **Compute Engine → VM instances → Create Instance**
+- Machine type: `e2-micro`
+- Boot disk: Ubuntu (versi LTS terbaru), 30GB standard persistent disk (batas gratis)
+- Firewall: centang **Allow HTTP traffic** dan **Allow HTTPS traffic**
+- Setelah dibuat, **reserve IP eksternalnya jadi Static** (VPC Network → IP addresses → ubah dari Ephemeral ke Static) -- supaya IP tidak berubah tiap VM restart. Static IP tetap gratis selama terpasang ke VM yang menyala.
+
+**2. Siapkan domain gratis dari IP itu** -- tidak perlu beli domain atau setup DNS: `sslip.io` otomatis mengubah IP jadi hostname valid. IP `34.123.45.67` → domain `34-123-45-67.sslip.io` (ganti titik dengan strip).
+
+**3. Update Google Cloud OAuth Client** (Console → Google Auth Platform → Clients → client Anda) -- tambahkan Authorized redirect URI: `https://<domain-sslip-Anda>/oauth2callback`.
+
+**4. SSH ke VM, install Docker, tambah swap** (RAM 1GB perlu bantuan disk untuk lonjakan sesaat -- mencegah crash, bukan solusi kecepatan):
 ```bash
-docker compose ps                                  # ketiganya harus "Up" / mysql "healthy"
-docker exec mystocks-scheduler-1 python -m scripts.run_daily   # trigger manual, cek log
-curl -I http://localhost:8501                       # HTTP 200
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER && newgrp docker
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-Buka `http://<IP-VPS>:8501` di browser. Untuk domain/HTTPS, pasang reverse proxy (nginx/caddy) di depan port 8501 — di luar scope ini.
+**5. Clone & deploy:**
+```bash
+git clone https://github.com/hpwiyoto/MyStocks.git
+cd MyStocks
+cp .env.example .env   # MYSQL_* dibiarkan kosong/dihapus -- tidak dipakai di opsi ini
+                        # TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID opsional untuk alert
+cp Caddyfile.example Caddyfile
+nano Caddyfile          # ganti domain placeholder dengan domain sslip.io dari langkah 2
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+nano .streamlit/secrets.toml   # isi client_id/client_secret dari langkah 3, redirect_uri =
+                                # "https://<domain-sslip-Anda>/oauth2callback", cookie_secret
+                                # acak, dan app_password Gmail (opsional, boleh menyusul)
+docker compose -f docker-compose.lite.yml up -d --build
+```
+
+### Verifikasi (kedua opsi)
+
+```bash
+docker compose ps                                              # (opsi A) atau tambahkan -f docker-compose.lite.yml (opsi B)
+docker exec mystocks-scheduler-1 python -m scripts.run_daily   # trigger manual, cek log
+curl -I https://<domain-Anda>                                   # HTTP 200, sertifikat HTTPS otomatis dari Caddy
+```
+
+Buka `https://<domain-Anda>` di browser (bukan `http://` atau IP polos -- itu yang dipakai Google untuk redirect setelah login).
 
 **Monitoring:** `scripts/monitor.py` mendeteksi dua jenis kegagalan — gagal ingest eksplisit, dan data "diam-diam basi" (fetch sukses tapi tanggal terbaru tidak maju >4 hari). Tanpa `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`, alert cuma masuk log (`data/logs/pipeline.log` di dalam container `scheduler`); isi keduanya untuk dapat notifikasi Telegram juga.

@@ -9,6 +9,10 @@ docker-compose.override.yml
 # is per-machine/per-deployment, never checked in.
 .streamlit/secrets.toml
 
+# Per-deployment Caddy reverse-proxy config (has the actual VM domain) --
+# Caddyfile.example is the committed template.
+Caddyfile
+
 # Python
 __pycache__/
 *.pyc
