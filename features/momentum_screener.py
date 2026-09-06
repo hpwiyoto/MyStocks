@@ -16,31 +16,55 @@ SWING_WINDOW = 4          # a close must be the lowest within +/-4 trading days 
 MIN_GAP_BETWEEN_LOWS = 5  # trading days -- avoid picking two lows out of the same dip
 RECENT_LOW_MAX_AGE = 20   # trading days -- a divergence only counts if its most recent leg is this fresh
 
-# How much confirmed bullish momentum each features.regime.classify_regime()
-# state represents, lowest = most advanced/actionable -- used as a secondary
-# sort key on the Momentum Screener page (after divergence_tier, before
-# divergence freshness). early_reversal ranks ABOVE bullish deliberately:
-# this screener's whole spirit (like divergence-age priority above it) is
-# catching a stock AS it turns, not after it's already had its run --
-# early_reversal has a real, just-happened trigger (EMA20 reclaim + RSI
-# crossing above 50, see features/regime.py) with more upside runway left,
-# while bullish is already a mature, sustained uptrend. accumulation sits
-# below both: it's a quiet, low-volatility phase with NO confirmed
-# directional trigger yet (could resolve either way), so it's a weaker
-# signal than either regime that already shows real upward momentum --
-# directly answers the "accumulation vs early_reversal" question asked
-# when this was built. overextended ranks last among non-bad regimes since
-# it's a pullback warning, not a buy setup.
+# Regime ranking for the sort order below -- REVISED after
+# scripts/search_momentum_rules.py backtested every regime against 5 years
+# of real outcomes (same +5%/-2.5%/10-trading-day grading as Swing).
+# The ORIGINAL version of this ranking put early_reversal/bullish first on
+# theoretical grounds ("a fresher trigger, more upside runway than an
+# already-confirmed uptrend") -- the backtest showed that reasoning was
+# backwards for this specific target: early_reversal (26.6% win rate) and
+# bullish (28.2%) both underperform the unconditional null baseline
+# (30.55%, n=76,442), while bottoming (35.7%) and bearish (31.5%) --
+# BAD_REGIMES, ranked lowest before -- both beat it. Likely explanation: a
+# stock already in early_reversal/bullish has already captured its recent
+# upside, leaving less room to still rise 5% more in 10 days before a
+# -2.5% pullback; a still-"bad" regime that manages to move has more of
+# that room left -- a mean-reversion dynamic, not the momentum-continuation
+# story the original ordering assumed. Order below now follows the
+# observed win rates directly (bottoming > bearish > sideways >
+# accumulation > bullish > early_reversal), overextended still last
+# (a pullback warning by definition, not tested standalone but has no
+# plausible case for ranking above anything here).
 REGIME_PRIORITY = {
-    "early_reversal": 0,
-    "bullish": 1,
-    "accumulation": 2,
-    "sideways": 3,
-    "bottoming": 4,
-    "bearish": 5,
+    "bottoming": 0,
+    "bearish": 1,
+    "sideways": 2,
+    "accumulation": 3,
+    "bullish": 4,
+    "early_reversal": 5,
     "overextended": 6,
 }
 DEFAULT_REGIME_PRIORITY = len(REGIME_PRIORITY)  # unknown/missing regime sorts last
+
+# The one combination scripts/search_momentum_rules.py found with a
+# real, statistically-supported edge over the null baseline (Wilson 95%
+# lower bound 36.4%, n=640, vs 30.55% null across 76,442 resolved
+# historical instances) -- NOT the same target divergence/regime-priority
+# above were designed around (which turned out, per the same backtest, to
+# be indistinguishable from noise: scripts/backtest_momentum_screener.py).
+# Deliberately a separate, explicitly-labeled flag rather than folded into
+# the heuristic ranking above, so the one thing that's actually PROVEN
+# stays visibly distinct from everything that's still just a reasonable-
+# sounding guess.
+VALIDATED_RVOL_THRESHOLD = 1.2
+
+
+def is_validated_signal(regime, macd_hist_slope_3d, rvol_20) -> bool:
+    return (
+        regime == "bottoming"
+        and pd.notna(macd_hist_slope_3d) and macd_hist_slope_3d > 0
+        and pd.notna(rvol_20) and rvol_20 >= VALIDATED_RVOL_THRESHOLD
+    )
 
 
 def classify_macd_status(macd_hist: pd.Series, fresh_days: int = FRESH_CROSSOVER_DAYS) -> str:
@@ -149,6 +173,9 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
         [0, 1], default=2,
     )
     out["regime_priority"] = out["regime"].map(REGIME_PRIORITY).fillna(DEFAULT_REGIME_PRIORITY).astype(int)
+    out["validated_signal"] = out.apply(
+        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["rvol_20"]), axis=1,
+    )
     # RSI beats MACD as a ranking signal here, backed by two independent
     # findings elsewhere in this project: rsi_distance_50 is a top-3
     # contributor in BOTH the Swing and Turnaround models' own feature-gain

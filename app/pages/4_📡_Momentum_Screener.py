@@ -31,19 +31,30 @@ if st.button("← Kembali ke Home"):
 st.title("📡 Momentum Screener")
 st.caption(
     "Filter manual berbasis RSI, status MACD, harga, volume, dan money flow (CMF) -- "
-    "BUKAN skor model. Urutan: (1) tingkat divergence bullish (Ganda RSI+MACD > Tunggal > "
-    "tidak ada), (2) regime dengan momentum paling terkonfirmasi (early_reversal > bullish > "
-    "accumulation > sideways > bottoming > bearish > overextended), (3) RSI paling dekat ke "
-    "titik pivot 50 (RSI terbukti lebih menentukan daripada MACD untuk kedua model prediksi), "
-    "(4) divergence yang lebih baru, (5) probabilitas model Swing cuma sebagai tiebreaker "
-    "terakhir -- bukan penentu urutan."
+    "BUKAN skor model. Urutan: (1) ✅ Sinyal Tervalidasi (terbukti lewat backtest 5 tahun, "
+    "lihat info di bawah), (2) tingkat divergence bullish (Ganda RSI+MACD > Tunggal > tidak "
+    "ada), (3) regime berdasarkan win rate historis (bottoming > bearish > sideways > "
+    "accumulation > bullish > early_reversal > overextended), (4) RSI paling dekat ke titik "
+    "pivot 50, (5) divergence yang lebih baru, (6) probabilitas model Swing cuma sebagai "
+    "tiebreaker terakhir -- bukan penentu urutan."
+)
+st.success(
+    "**✅ Sinyal Tervalidasi** (baru): `scripts/search_momentum_rules.py` menguji 30+ kombinasi "
+    "terhadap 76.442 kejadian historis nyata (5 tahun, target sama seperti Swing: naik ≥5% "
+    "sebelum turun -2,5% dalam 10 hari). Baseline acak (tanpa filter apa pun) menang **30,6%** "
+    "dari kejadian. Kombinasi **regime bottoming + momentum histogram menguat + volume relatif "
+    "≥1,2x** terbukti menang **40,2%** (batas bawah keyakinan 95%: 36,4% -- tetap jelas di atas "
+    "baseline). Ini satu-satunya kombinasi di halaman ini yang terbukti lebih baik dari acak "
+    "secara statistik -- semua kriteria lain (termasuk divergence & regime priority) murni "
+    "heuristik yang masuk akal tapi belum terbukti.",
+    icon="✅",
 )
 st.info(
     "**Beda dari Swing/Turnaround**: dua screener lain di aplikasi ini diurutkan oleh "
     "probabilitas model machine learning. Screener ini sebaliknya -- urutannya murni "
-    "dari aturan teknikal yang Anda tentukan sendiri (RSI/MACD/volume/money flow), dan "
-    "divergence selalu diprioritaskan di atas. Kolom probabilitas tetap ditampilkan "
-    "supaya Anda bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
+    "dari aturan teknikal, sebagian besar masih heuristik (masuk akal tapi belum diuji), "
+    "kecuali kategori Tervalidasi di atas. Kolom probabilitas tetap ditampilkan supaya Anda "
+    "bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
     icon="ℹ️",
 )
 
@@ -160,74 +171,105 @@ with st.sidebar:
     prob_range = st.slider("Probabilitas Swing (%)", 0, 100, (0, 100), 5)
     include_unscored = st.checkbox("Sertakan yang belum ada prediksi Swing", value=True)
 
-filtered = df[df["rsi_14"].between(rsi_range[0], rsi_range[1])]
-if macd_filter:
-    filtered = filtered[filtered["macd_status"].isin(macd_filter)]
-if momentum_dir_filter == "Menguat ↑":
-    filtered = filtered[filtered["macd_hist_slope_3d"] > 0]
-elif momentum_dir_filter == "Melemah ↓":
-    filtered = filtered[filtered["macd_hist_slope_3d"] < 0]
-if money_flow_filter == "Akumulasi (CMF > 0)":
-    filtered = filtered[filtered["cmf_20"] > 0]
-elif money_flow_filter == "Distribusi (CMF < 0)":
-    filtered = filtered[filtered["cmf_20"] < 0]
-if volume_filter:
-    filtered = filtered[filtered["rvol_20"] >= 1]
-price = filtered["close"].astype(float)
-if price_filter == "Di bawah 50":
-    filtered = filtered[price < 50]
-elif price_filter == "50 - 100":
-    filtered = filtered[(price >= 50) & (price < 100)]
-elif price_filter == "100 - 1.000":
-    filtered = filtered[(price >= 100) & (price < 1000)]
-elif price_filter == "Di atas 1.000":
-    filtered = filtered[price >= 1000]
-if len(divergence_tier_filter) < len(DIVERGENCE_TIER_OPTIONS):
-    allowed_tiers = [DIVERGENCE_TIER_OPTIONS[k] for k in divergence_tier_filter]
-    filtered = filtered[filtered["divergence_tier"].isin(allowed_tiers)]
-if len(regime_filter) < len(regime_options):
-    filtered = filtered[filtered["regime"].isin(regime_filter)]
-if prob_range != (0, 100):
-    prob_mask = (filtered["probability"] * 100).between(prob_range[0], prob_range[1])
-    if include_unscored:
-        prob_mask = prob_mask | filtered["probability"].isna()
-    filtered = filtered[prob_mask]
-if search:
-    q = search.strip().lower()
-    filtered = filtered[
-        filtered["stock_code"].str.lower().str.contains(q)
-        | filtered["name"].fillna("").str.lower().str.contains(q)
-    ]
+    validated_only = st.checkbox(
+        "✅ Hanya Sinyal Tervalidasi", value=False,
+        help="regime bottoming + momentum histogram menguat + volume relatif ≥1,2x -- satu-satunya "
+             "kombinasi di halaman ini yang terbukti menang lebih sering dari baseline acak lewat "
+             "backtest 5 tahun (40,2% vs 30,6%, lihat kotak hijau di atas).",
+    )
 
-# Priority is the filter/divergence result, NOT the model. Five levels:
-# 1. divergence_tier (0=double, 1=single, 2=none) -- the main priority the
-#    user asked for.
-# 2. regime_priority -- how much confirmed bullish momentum the regime
-#    itself already shows (early_reversal > bullish > accumulation > ...,
-#    see features.momentum_screener.REGIME_PRIORITY for the full reasoning
-#    behind that order, incl. why early_reversal outranks bullish and
-#    accumulation outranks neither).
-# 3. rsi_pivot_distance ascending -- RSI outranks MACD as a ranking signal
+# True count regardless of any sidebar filter below -- shown in its own
+# metric so it's never silently hidden by an unrelated filter default
+# (found via testing: the ORIGINAL default filters -- Bullish MACD status,
+# CMF>0 -- actively excluded every validated_signal stock today, because a
+# bottoming-regime stock naturally still LOOKS bearish/distribution on the
+# surface; that's exactly the "not yet confirmed, still room to run"
+# characteristic the validated combination is built on).
+validated_total = int(df["validated_signal"].sum())
+
+if validated_only:
+    # Deliberately bypasses every other filter below -- RSI/MACD/CMF/Volume
+    # were tuned around the ORIGINAL (pre-backtest) idea of what a good
+    # setup looks like, and per the same backtest a couple of them (Bullish
+    # MACD status, CMF>0) actually score BELOW the null baseline on their
+    # own. Gating the one PROVEN combination behind unproven-or-worse
+    # filters defeats the point of it.
+    filtered = df[df["validated_signal"]]
+else:
+    filtered = df[df["rsi_14"].between(rsi_range[0], rsi_range[1])]
+    if macd_filter:
+        filtered = filtered[filtered["macd_status"].isin(macd_filter)]
+    if momentum_dir_filter == "Menguat ↑":
+        filtered = filtered[filtered["macd_hist_slope_3d"] > 0]
+    elif momentum_dir_filter == "Melemah ↓":
+        filtered = filtered[filtered["macd_hist_slope_3d"] < 0]
+    if money_flow_filter == "Akumulasi (CMF > 0)":
+        filtered = filtered[filtered["cmf_20"] > 0]
+    elif money_flow_filter == "Distribusi (CMF < 0)":
+        filtered = filtered[filtered["cmf_20"] < 0]
+    if volume_filter:
+        filtered = filtered[filtered["rvol_20"] >= 1]
+    price = filtered["close"].astype(float)
+    if price_filter == "Di bawah 50":
+        filtered = filtered[price < 50]
+    elif price_filter == "50 - 100":
+        filtered = filtered[(price >= 50) & (price < 100)]
+    elif price_filter == "100 - 1.000":
+        filtered = filtered[(price >= 100) & (price < 1000)]
+    elif price_filter == "Di atas 1.000":
+        filtered = filtered[price >= 1000]
+    if len(divergence_tier_filter) < len(DIVERGENCE_TIER_OPTIONS):
+        allowed_tiers = [DIVERGENCE_TIER_OPTIONS[k] for k in divergence_tier_filter]
+        filtered = filtered[filtered["divergence_tier"].isin(allowed_tiers)]
+    if len(regime_filter) < len(regime_options):
+        filtered = filtered[filtered["regime"].isin(regime_filter)]
+    if prob_range != (0, 100):
+        prob_mask = (filtered["probability"] * 100).between(prob_range[0], prob_range[1])
+        if include_unscored:
+            prob_mask = prob_mask | filtered["probability"].isna()
+        filtered = filtered[prob_mask]
+    if search:
+        q = search.strip().lower()
+        filtered = filtered[
+            filtered["stock_code"].str.lower().str.contains(q)
+            | filtered["name"].fillna("").str.lower().str.contains(q)
+        ]
+
+# Priority is the filter/divergence result, NOT the model. Six levels:
+# 1. validated_signal DESC -- the ONE combination actually proven to beat
+#    doing nothing (scripts/search_momentum_rules.py, 40.2% win rate vs a
+#    30.6% null baseline across 76,442 historical instances). Ranks above
+#    everything else because it's the only tier here backed by real
+#    evidence rather than a reasonable-sounding guess.
+# 2. divergence_tier (0=double, 1=single, 2=none) -- the main heuristic
+#    priority the user originally asked for. NOTE: the backtest found this
+#    tier alone does NOT beat the null baseline either (29.1%/28.8% vs
+#    30.6%) -- kept as a secondary sort for the stocks that don't have a
+#    validated_signal, not because it's proven, but because no evidence
+#    says it hurts either and it's still the requested organizing idea.
+# 3. regime_priority -- ordered by ACTUAL historical win rate per regime
+#    (see features.momentum_screener.REGIME_PRIORITY's docstring for the
+#    full backtest numbers behind this order -- revised from an earlier,
+#    theory-only ordering that turned out backwards).
+# 4. rsi_pivot_distance ascending -- RSI outranks MACD as a ranking signal
 #    (rsi_distance_50 is top-3 in both models' own feature-gain ranking;
 #    MACD z-score tested and moved nothing, see
-#    scripts/test_macd_zscore_feature.py), so a stock sitting right at the
-#    50 pivot (fresh momentum shift) is preferred over one still deep in
-#    oversold territory or already near this screener's overbought edge.
-# 4. divergence_age_days ascending -- WITHIN the same tier+regime+RSI zone,
-#    a divergence spotted a few days ago is fresher/more actionable than
-#    one from 18 days ago (near RECENT_LOW_MAX_AGE's cutoff) that may have
-#    already played out unnoticed. Always NaN for tier 2, a no-op there.
-# 5. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
+#    scripts/test_macd_zscore_feature.py).
+# 5. divergence_age_days ascending -- fresher divergence first within an
+#    otherwise-tied group. Always NaN for tier 2, a no-op there.
+# 6. probability DESC -- last-resort tiebreaker, exactly the "probabilitas
 #    cuma pertimbangan tambahan" ordering the user asked for, not a driver.
 filtered = filtered.sort_values(
-    ["divergence_tier", "regime_priority", "rsi_pivot_distance", "divergence_age_days", "probability"],
-    ascending=[True, True, True, True, False], na_position="last",
+    ["validated_signal", "divergence_tier", "regime_priority", "rsi_pivot_distance", "divergence_age_days", "probability"],
+    ascending=[False, True, True, True, True, False], na_position="last",
 ).reset_index(drop=True)
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total hasil filter", len(filtered))
-c2.metric("🔥 Divergence ganda", int((filtered["divergence_tier"] == 0).sum()))
-c3.metric("Divergence tunggal", int((filtered["divergence_tier"] == 1).sum()))
+c2.metric("✅ Sinyal Tervalidasi (total, semua saham)", validated_total,
+          help="Tidak terpengaruh filter sidebar lain -- centang 'Hanya Sinyal Tervalidasi' untuk melihat daftarnya langsung.")
+c3.metric("🔥 Divergence ganda", int((filtered["divergence_tier"] == 0).sum()))
+c4.metric("Divergence tunggal", int((filtered["divergence_tier"] == 1).sum()))
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
@@ -235,7 +277,7 @@ if filtered.empty:
     st.info("Tidak ada saham yang cocok dengan filter saat ini -- coba longgarkan rentang RSI atau status MACD.")
     st.stop()
 
-st.subheader(f"📋 {len(filtered)} Saham -- diurutkan divergence dulu, probabilitas Swing sebagai tiebreaker")
+st.subheader(f"📋 {len(filtered)} Saham -- Sinyal Tervalidasi dulu, lalu divergence, probabilitas Swing sebagai tiebreaker terakhir")
 st.caption("Klik satu baris untuk buka halaman detail saham itu.")
 
 table_df = filtered.copy()
@@ -246,9 +288,10 @@ table_df["money_flow"] = table_df["cmf_20"].apply(
 )
 table_df["rvol_display"] = table_df["rvol_20"].apply(lambda v: "-" if pd.isna(v) else f"{v:.1f}x")
 table_df["probability_pct"] = table_df["probability"].astype(float) * 100
+table_df["validated_display"] = table_df["validated_signal"].apply(lambda v: "✅ Ya" if v else "-")
 
 display_cols = [
-    "stock_code", "name", "close", "rsi_14", "macd_status", "momentum",
+    "stock_code", "name", "validated_display", "close", "rsi_14", "macd_status", "momentum",
     "money_flow", "rvol_display", "divergence_label", "probability_pct", "regime",
 ]
 
@@ -260,6 +303,7 @@ event = st.dataframe(
     column_config={
         "stock_code": st.column_config.TextColumn("Kode"),
         "name": st.column_config.TextColumn("Nama"),
+        "validated_display": st.column_config.TextColumn("✅ Tervalidasi"),
         "close": st.column_config.NumberColumn("Harga", format="%.0f"),
         "rsi_14": st.column_config.NumberColumn("RSI", format="%.1f"),
         "macd_status": st.column_config.TextColumn("Status MACD"),
@@ -294,6 +338,7 @@ for row_chunk in rows:
             div_badge = badge_html(DIVERGENCE_LABELS[r["divergence_tier"]], DIVERGENCE_COLORS[r["divergence_tier"]])
             macd_badge = badge_html(r["macd_status"], MACD_STATUS_COLORS.get(r["macd_status"], TEXT_MUTED))
             prob_txt = f"{float(r['probability']) * 100:.1f}%" if pd.notna(r["probability"]) else "belum ada prediksi"
+            validated_badge = badge_html("✅ Tervalidasi (40,2% win rate)", "#22C55E") if r["validated_signal"] else ""
             st.markdown(
                 f"""
                 <div class="mystocks-card">
@@ -304,6 +349,7 @@ for row_chunk in rows:
                         </div>
                         {div_badge}
                     </div>
+                    {f'<div style="margin-top:0.5rem;">{validated_badge}</div>' if validated_badge else ''}
                     <div style="margin-top:0.7rem;">
                         <span class="mystocks-muted" style="font-size:0.72rem;">MACD</span> {macd_badge}
                         &nbsp;&nbsp;
