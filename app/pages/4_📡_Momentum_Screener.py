@@ -1,6 +1,7 @@
 import datetime as dt
 import os
 import sys
+import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -144,21 +145,32 @@ with st.sidebar:
     st.header("🔎 Filter")
     search = st.text_input("Cari kode/nama saham", placeholder="mis. BBCA atau bank")
 
-    rsi_range = st.slider("Rentang RSI", 0, 100, (20, 60))
+    # Default filter di seluruh sidebar ini SENGAJA disetel mengikuti satu-
+    # satunya kombinasi yang terbukti lewat backtest (kotak hijau di atas):
+    # regime bottoming + momentum menguat + CMF<0 -- BUKAN "Bullish MACD +
+    # Akumulasi (CMF>0)" seperti sebelumnya, yang justru kombinasi yang
+    # SUDAH terbukti kalah dari acak (24,8% vs baseline 30,6%). RSI dan
+    # Status MACD dibiarkan mencakup semua pilihan (bukan disempitkan ke
+    # yang "terlihat" bullish) karena is_validated_signal() sama sekali
+    # tidak mensyaratkan keduanya -- saham bottoming yang valid justru
+    # biasanya MASIH terlihat bearish/netral secara RSI & MACD di permukaan.
+    rsi_range = st.slider("Rentang RSI", 0, 100, (0, 100))
 
     macd_options = sorted(df["macd_status"].dropna().unique().tolist())
-    macd_default = [o for o in ["Bullish Crossover", "Bullish"] if o in macd_options] or macd_options
-    macd_filter = st.multiselect("Status MACD", macd_options, default=macd_default)
+    macd_filter = st.multiselect("Status MACD", macd_options, default=macd_options)
 
     momentum_dir_filter = st.radio(
-        "Arah Momentum Histogram", ["Semua", "Menguat ↑", "Melemah ↓"], index=0,
+        "Arah Momentum Histogram", ["Semua", "Menguat ↑", "Melemah ↓"], index=1,
         help="Berdasarkan macd_hist_slope_3d -- independen dari Status MACD di atas (bullish/bearish "
-             "bisa sama-sama sedang menguat atau melemah).",
+             "bisa sama-sama sedang menguat atau melemah). Default 'Menguat ↑' mengikuti kombinasi "
+             "tervalidasi di atas.",
     )
 
     money_flow_filter = st.radio(
         "Money Flow (CMF 20 hari)", ["Semua", "Akumulasi (CMF > 0)", "Distribusi (CMF < 0)"],
-        index=1,
+        index=2,
+        help="Default 'Distribusi (CMF < 0)' mengikuti kombinasi tervalidasi di atas -- kounter-"
+             "intuitif untuk sinyal 'naik', tapi itu justru temuannya.",
     )
 
     volume_filter = st.checkbox("Hanya volume di atas rata-rata (RVOL ≥ 1)", value=False)
@@ -171,7 +183,12 @@ with st.sidebar:
     )
 
     regime_options = sorted(df["regime"].dropna().unique().tolist())
-    regime_filter = st.multiselect("Regime", regime_options, default=regime_options)
+    regime_default = ["bottoming"] if "bottoming" in regime_options else regime_options
+    regime_filter = st.multiselect(
+        "Regime", regime_options, default=regime_default,
+        help="Default hanya 'bottoming' mengikuti kombinasi tervalidasi di atas -- regime lain "
+             "boleh dicentang tapi belum terbukti lewat backtest yang sama.",
+    )
 
     prob_range = st.slider("Probabilitas Swing (%)", 0, 100, (0, 100), 5)
     include_unscored = st.checkbox("Sertakan yang belum ada prediksi Swing", value=True)
@@ -345,8 +362,24 @@ for row_chunk in rows:
             macd_badge = badge_html(r["macd_status"], MACD_STATUS_COLORS.get(r["macd_status"], TEXT_MUTED))
             prob_txt = f"{float(r['probability']) * 100:.1f}%" if pd.notna(r["probability"]) else "belum ada prediksi"
             validated_badge = badge_html("✅ Tervalidasi (39,8% win rate)", "#22C55E") if r["validated_signal"] else ""
-            st.markdown(
-                f"""
+            # dedent() strips the ~16 spaces of Python source indentation
+            # every line in this f-string carries (nested inside a for-loop
+            # inside "with col:") -- Markdown treats a line indented 4+
+            # spaces as the START of an indented CODE block rather than an
+            # HTML block (CommonMark only allows up to 3 spaces before a raw
+            # "<div..." line), so without dedent() the raw tags render as
+            # literal on-screen text instead of HTML.
+            # The blank-line filter after it is equally load-bearing, for a
+            # SEPARATE reason caught the same way (real screenshot, not a
+            # guess): when validated_badge is empty, the conditional line
+            # below collapses to a genuinely blank line, and CommonMark ends
+            # an HTML block at the first blank line -- everything after it
+            # then starts a NEW block, still carrying its own nested-level
+            # nested-level indentation (4/8 spaces), which is once again
+            # enough to be misread as a code block. Dropping every blank
+            # line keeps the whole card as one unbroken HTML block no matter
+            # which optional badges are empty.
+            card_html = textwrap.dedent(f"""
                 <div class="mystocks-card">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
@@ -367,9 +400,9 @@ for row_chunk in rows:
                     </div>
                     <div style="margin-top:0.4rem;" class="mystocks-muted">Probabilitas Swing: {prob_txt}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
+            card_html = "\n".join(line for line in card_html.splitlines() if line.strip())
+            st.markdown(card_html, unsafe_allow_html=True)
             if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")

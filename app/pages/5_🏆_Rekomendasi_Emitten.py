@@ -1,5 +1,6 @@
 import os
 import sys
+import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -192,8 +193,18 @@ for row_chunk in rows:
             swing_txt = "-" if pd.isna(r["swing_decision"]) else f"{r['swing_decision']} · {fmt_pct(r['swing_prob'])}"
             turnaround_txt = "-" if pd.isna(r["turnaround_decision"]) else f"{r['turnaround_decision']} · {fmt_pct(r['turnaround_prob'])}"
             momentum_txt = "✅ Tervalidasi" if r["momentum_hit"] else "-"
-            st.markdown(
-                f"""
+            # dedent() strips this f-string's ~16-space Python source
+            # indentation, and the blank-line filter drops any line that
+            # collapses to pure whitespace once its {} is substituted --
+            # both load-bearing, not cosmetic. See the full "why" (a real
+            # screenshot bug, not a guess) at the identical card-rendering
+            # fix in app/pages/4_📡_Momentum_Screener.py: without dedent(),
+            # Markdown reads a 4+-space-indented "<div..." line as an
+            # indented CODE block rather than HTML; without the blank-line
+            # filter, any interpolated value that goes empty splits the
+            # block at that blank line and everything after it (still
+            # carrying its own nested indentation) falls into the same trap.
+            card_html = textwrap.dedent(f"""
                 <div class="mystocks-card">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
@@ -209,9 +220,9 @@ for row_chunk in rows:
                         <b>Momentum</b>: {momentum_txt}
                     </div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
+            card_html = "\n".join(line for line in card_html.splitlines() if line.strip())
+            st.markdown(card_html, unsafe_allow_html=True)
             if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")

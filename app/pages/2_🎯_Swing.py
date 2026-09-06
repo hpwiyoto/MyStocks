@@ -1,5 +1,6 @@
 import os
 import sys
+import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -203,8 +204,15 @@ for row_chunk in rows:
             # for real on Detail Saham's sector panel; guarded here too).
             name = r["stock_code"] if pd.isna(r["name"]) else r["name"]
             prob_pct = float(r["probability"]) * 100
-            st.markdown(
-                f"""
+            # dedent() + dropping any resulting blank line -- both load-
+            # bearing, not cosmetic. See the full "why" (a real screenshot
+            # bug, not a guess) at the identical card-rendering fix in
+            # app/pages/4_📡_Momentum_Screener.py: without dedent(), this
+            # f-string's Python source indentation makes Markdown treat it
+            # as an indented CODE block instead of HTML; a blank line (from
+            # a future empty interpolated value) would split the block the
+            # same way, so the filter is kept here defensively too.
+            card_html = textwrap.dedent(f"""
                 <div class="mystocks-card">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div>
@@ -215,9 +223,9 @@ for row_chunk in rows:
                     </div>
                     <div style="margin-top:0.7rem;">{regime_badge(r['regime'])}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """)
+            card_html = "\n".join(line for line in card_html.splitlines() if line.strip())
+            st.markdown(card_html, unsafe_allow_html=True)
             st.progress(min(max(float(r["probability"]), 0.0), 1.0), text=f"Probabilitas: {prob_pct:.1f}%")
             current_price = float(r["entry_price"])
             entry_low, entry_high = entry_range(current_price)
