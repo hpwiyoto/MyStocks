@@ -39,14 +39,19 @@ st.caption(
     "tiebreaker terakhir -- bukan penentu urutan."
 )
 st.success(
-    "**✅ Sinyal Tervalidasi** (baru): `scripts/search_momentum_rules.py` menguji 30+ kombinasi "
-    "terhadap 76.442 kejadian historis nyata (5 tahun, target sama seperti Swing: naik ≥5% "
-    "sebelum turun -2,5% dalam 10 hari). Baseline acak (tanpa filter apa pun) menang **30,6%** "
-    "dari kejadian. Kombinasi **regime bottoming + momentum histogram menguat + volume relatif "
-    "≥1,2x** terbukti menang **40,2%** (batas bawah keyakinan 95%: 36,4% -- tetap jelas di atas "
-    "baseline). Ini satu-satunya kombinasi di halaman ini yang terbukti lebih baik dari acak "
-    "secara statistik -- semua kriteria lain (termasuk divergence & regime priority) murni "
-    "heuristik yang masuk akal tapi belum terbukti.",
+    "**✅ Sinyal Tervalidasi** (diperbarui): `scripts/search_momentum_rules.py` + lanjutan grid "
+    "search 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`) menguji terhadap 76.442 "
+    "kejadian historis nyata (5 tahun, target sama seperti Swing: naik ≥5% sebelum turun -2,5% "
+    "dalam 10 hari). Baseline acak menang **30,6%**. Kombinasi **regime bottoming + momentum "
+    "histogram menguat + money flow negatif (distribusi, BUKAN akumulasi) + volume relatif "
+    "≥0,8x** terbukti menang **39,8%** (batas bawah keyakinan 95%: 36,7%, dari 958 kejadian -- "
+    "dipilih karena cakupannya lebih luas DAN sedikit lebih baik dari versi sebelumnya, bukan "
+    "cuma peringkat #1 dari 5.880 kombinasi yang diuji, karena mencoba sebanyak itu berisiko "
+    "'menang kebetulan' pada sampel kecil). Money flow negatif terdengar aneh untuk sinyal "
+    "'naik' tapi konsisten dengan pola lain di sini: saham yang secara permukaan masih terlihat "
+    "lemah justru punya ruang lebih besar untuk mengejutkan naik. Ini satu-satunya kombinasi di "
+    "halaman ini yang terbukti lebih baik dari acak secara statistik -- kriteria lain "
+    "(termasuk divergence & regime priority) murni heuristik yang masuk akal tapi belum terbukti.",
     icon="✅",
 )
 st.info(
@@ -173,9 +178,10 @@ with st.sidebar:
 
     validated_only = st.checkbox(
         "✅ Hanya Sinyal Tervalidasi", value=False,
-        help="regime bottoming + momentum histogram menguat + volume relatif ≥1,2x -- satu-satunya "
-             "kombinasi di halaman ini yang terbukti menang lebih sering dari baseline acak lewat "
-             "backtest 5 tahun (40,2% vs 30,6%, lihat kotak hijau di atas).",
+        help="regime bottoming + momentum histogram menguat + money flow negatif + volume relatif "
+             "≥0,8x -- satu-satunya kombinasi di halaman ini yang terbukti menang lebih sering dari "
+             "baseline acak lewat backtest 5 tahun + grid search (39,8% vs 30,6%, lihat kotak hijau "
+             "di atas).",
     )
 
 # True count regardless of any sidebar filter below -- shown in its own
@@ -338,7 +344,7 @@ for row_chunk in rows:
             div_badge = badge_html(DIVERGENCE_LABELS[r["divergence_tier"]], DIVERGENCE_COLORS[r["divergence_tier"]])
             macd_badge = badge_html(r["macd_status"], MACD_STATUS_COLORS.get(r["macd_status"], TEXT_MUTED))
             prob_txt = f"{float(r['probability']) * 100:.1f}%" if pd.notna(r["probability"]) else "belum ada prediksi"
-            validated_badge = badge_html("✅ Tervalidasi (40,2% win rate)", "#22C55E") if r["validated_signal"] else ""
+            validated_badge = badge_html("✅ Tervalidasi (39,8% win rate)", "#22C55E") if r["validated_signal"] else ""
             st.markdown(
                 f"""
                 <div class="mystocks-card">

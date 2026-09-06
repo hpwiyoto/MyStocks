@@ -46,23 +46,39 @@ REGIME_PRIORITY = {
 }
 DEFAULT_REGIME_PRIORITY = len(REGIME_PRIORITY)  # unknown/missing regime sorts last
 
-# The one combination scripts/search_momentum_rules.py found with a
-# real, statistically-supported edge over the null baseline (Wilson 95%
-# lower bound 36.4%, n=640, vs 30.55% null across 76,442 resolved
-# historical instances) -- NOT the same target divergence/regime-priority
-# above were designed around (which turned out, per the same backtest, to
-# be indistinguishable from noise: scripts/backtest_momentum_screener.py).
-# Deliberately a separate, explicitly-labeled flag rather than folded into
-# the heuristic ranking above, so the one thing that's actually PROVEN
-# stays visibly distinct from everything that's still just a reasonable-
-# sounding guess.
-VALIDATED_RVOL_THRESHOLD = 1.2
+# The combination scripts/search_momentum_rules.py + a follow-up 5,880-
+# combination grid search (scripts/grid_search_momentum_rules.py) found
+# with a real, statistically-supported edge over the null baseline (30.55%
+# across 76,442 resolved historical instances) -- NOT the same target
+# divergence/regime-priority above were designed around (which turned out,
+# per the same backtest, to be indistinguishable from noise:
+# scripts/backtest_momentum_screener.py).
+#
+# The grid's #1 result by Wilson lower bound (accumulation+RVOL>=1.2+
+# CMF<0+RSI 30-50, LB=37.4%) was deliberately NOT adopted -- with 5,880
+# combinations tested, a handful of small-n spikes (that one: n=192) at
+# the very top are exactly what multiple-comparisons overfitting looks
+# like, not necessarily a genuinely stronger pattern. This rule instead:
+# bottoming + momentum menguat + CMF<0 + RVOL>=0.8 (n=958, win_rate=39.8%,
+# Wilson LB=36.7%) -- chosen because it beats the original hand-picked
+# rule (bottoming+momentum+RVOL>=1.2, n=640, LB=36.4%) on BOTH axes that
+# matter: a HIGHER lower bound AND ~50% more real-world coverage (from
+# RELAXING the volume bar to 0.8, not raising it), which is the opposite
+# of what an overfit spike looks like. CMF<0 (distribution, not
+# accumulation) is counter-intuitive but consistent with every other
+# finding in this project's momentum work: still-bearish-looking readings
+# (this, plus the bottoming regime itself, plus MACD status not mattering)
+# keep correlating with MORE forward room than already-confirmed-positive
+# ones -- a stock the market is still selling has more room to surprise
+# than one it has already bid up.
+VALIDATED_RVOL_THRESHOLD = 0.8
 
 
-def is_validated_signal(regime, macd_hist_slope_3d, rvol_20) -> bool:
+def is_validated_signal(regime, macd_hist_slope_3d, cmf_20, rvol_20) -> bool:
     return (
         regime == "bottoming"
         and pd.notna(macd_hist_slope_3d) and macd_hist_slope_3d > 0
+        and pd.notna(cmf_20) and cmf_20 < 0
         and pd.notna(rvol_20) and rvol_20 >= VALIDATED_RVOL_THRESHOLD
     )
 
@@ -174,7 +190,7 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
     )
     out["regime_priority"] = out["regime"].map(REGIME_PRIORITY).fillna(DEFAULT_REGIME_PRIORITY).astype(int)
     out["validated_signal"] = out.apply(
-        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["rvol_20"]), axis=1,
+        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"]), axis=1,
     )
     # RSI beats MACD as a ranking signal here, backed by two independent
     # findings elsewhere in this project: rsi_distance_50 is a top-3
