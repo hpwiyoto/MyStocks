@@ -346,6 +346,28 @@ else:
     # a value on dates load_foreign_flow_history actually has (left-joined
     # above), so this naturally gaps rather than errors on missing days.
     if foreign_flow_df.empty:
+        # Root cause of the whole chart's x-axis collapsing to a ~60-year
+        # range (candles squished into a sliver at the right edge, no date
+        # tick labels) whenever a ticker has no foreign-flow data --
+        # confirmed via an isolated Plotly repro, not a guess: this branch
+        # previously left row 6 with ONLY a domain-referenced annotation
+        # and no actual data trace. With shared_xaxes=True linking every
+        # row's x-axis together, a row with zero real x-data apparently
+        # makes Plotly's autorange fall back to a garbage computed range
+        # (reproduced landing anywhere from 1964 to 1968 depending on the
+        # exact figure) that then drags the WHOLE shared axis group down
+        # with it -- this hits nearly every ticker here, since RAPIDAPI_KEY
+        # is unset in this environment and foreign_flow_df is empty for
+        # all of them. Fix: an invisible trace anchored to the real price
+        # date range gives row 6's x-axis valid data to autorange from,
+        # exactly like every other row already has -- the annotation still
+        # renders on top, unchanged.
+        fig.add_trace(
+            go.Scatter(
+                x=price_df["date"], y=[None] * len(price_df), showlegend=False, hoverinfo="skip",
+            ),
+            row=6, col=1,
+        )
         fig.add_annotation(
             text="Data foreign flow belum tersedia untuk emiten ini",
             xref="x domain", yref="y domain", x=0.5, y=0.5, row=6, col=1,
