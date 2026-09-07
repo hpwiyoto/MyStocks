@@ -328,6 +328,39 @@ def load_live_prices(codes: tuple[str, ...]) -> dict[str, float]:
     return prices
 
 
+IHSG_TREND_TTL = 1800  # 30 min -- a slow-moving context indicator, not a live price; no need for LIVE_PRICE_TTL's 30s
+
+
+@st.cache_data(ttl=IHSG_TREND_TTL)
+def load_ihsg_trend() -> dict | None:
+    """IHSG's own recent trend -- pure display context, not a model input.
+    scripts/check_fold_drift.py found the Swing model's precision
+    correlates with IHSG's direction (weaker when IHSG is declining), and
+    scripts/test_ihsg_regime_feature.py found that feeding IHSG's trend
+    INTO the model as a training feature makes things dramatically worse
+    (see that script's docstring for why). This surfaces the same context
+    to the HUMAN instead, who can apply judgment a raw model input
+    couldn't. Returns None on fetch failure (e.g. no network) rather than
+    raising -- this is a supplementary caution panel, never something that
+    should block a page from rendering.
+    """
+    try:
+        hist = yf.Ticker("^JKSE").history(period="6mo")
+    except Exception as exc:
+        logger.warning("IHSG trend fetch failed: %s", exc)
+        return None
+    if hist.empty or len(hist) < 21:
+        return None
+    close = hist["Close"]
+    last = float(close.iloc[-1])
+    return {
+        "last": last,
+        "ret_20d": (last / float(close.iloc[-21]) - 1) * 100 if len(close) >= 21 else None,
+        "ret_50d": (last / float(close.iloc[-51]) - 1) * 100 if len(close) >= 51 else None,
+        "as_of": close.index[-1].date(),
+    }
+
+
 @st.cache_data(ttl=NEWS_TTL)
 def load_news(stock_code: str, stock_name: str = "") -> list[dict]:
     """Display-only headline panel (Detail Saham) -- see features.news for

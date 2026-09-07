@@ -7,12 +7,13 @@ import streamlit as st
 
 from app.auth import require_login
 from app.data import (
+    load_ihsg_trend,
     load_latest_predictions,
     load_latest_turnaround_predictions,
     load_screener_raw_panel,
     load_stock_list,
 )
-from app.style import inject_base_css, render_developer_footer
+from app.style import inject_base_css, render_developer_footer, render_ihsg_context
 from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Home", page_icon="🏠", layout="wide")
@@ -24,6 +25,7 @@ st.caption(
     "Screener saham IDX berbasis machine learning. Pilih mode di bawah sesuai gaya trading/investasi Anda, "
     "atau cari langsung satu saham tertentu."
 )
+render_ihsg_context(load_ihsg_trend())
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 

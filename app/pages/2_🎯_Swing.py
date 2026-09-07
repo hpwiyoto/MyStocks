@@ -8,8 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_latest_predictions, load_live_prices
-from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
+from app.data import load_ihsg_trend, load_latest_predictions, load_live_prices
+from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer, render_ihsg_context
 from engine.predict import run as predict_run
 from features.build_features import run as build_features_run
 from pipeline.ingest_price import run as ingest_price_run
@@ -20,6 +20,8 @@ require_login("Swing")
 
 if st.button("← Kembali ke Home"):
     st.switch_page("Home.py")
+
+render_ihsg_context(load_ihsg_trend())
 
 ENTRY_RANGE_PCT = 0.005  # +-0.5% zona beli di sekitar harga saat ini, bukan satu angka persis
 ENTRY_RANGE_MIN_RUPIAH = 2  # +-1% saham gocap (Rp50) < Rp1 -- dibulatkan jadi "50 - 50", jaminan lebar minimum

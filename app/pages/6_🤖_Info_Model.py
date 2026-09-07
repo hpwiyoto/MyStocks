@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import streamlit as st
 
 from app.auth import require_login
-from app.data import days_since, feature_daily_row_count, load_model_metadata
-from app.style import inject_base_css, render_developer_footer
+from app.data import days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
+from app.style import inject_base_css, render_developer_footer, render_ihsg_context
 from engine.decision import BUY_THRESHOLD
 from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 
@@ -20,6 +20,7 @@ if st.button("← Kembali ke Home"):
     st.switch_page("Home.py")
 
 st.title("🤖 Info Model")
+render_ihsg_context(load_ihsg_trend())
 st.caption("Detail kedua model machine learning yang dipakai aplikasi ini -- Swing dan Turnaround.")
 
 
@@ -113,6 +114,11 @@ st.caption(
     "menambahkan fitur tren IHSG, tapi terbukti memperparah drastis (`scripts/test_ihsg_regime_feature.py`), "
     "jadi belum ada perbaikan yang diterapkan. Model ini perlu dipantau berkala, bukan dianggap "
     "'sudah pasti bagus selamanya' hanya dari validasi sekali di tanggal training."
+)
+st.caption(
+    "🔎 **Pengingat pemantauan**: analisis drift terakhir dijalankan **7 September 2026**. Disarankan "
+    "jalankan `python -m scripts.check_fold_drift` lagi setiap 2-3 bulan, atau lebih cepat kalau IHSG "
+    "baru saja bergerak besar (naik/turun >10% dalam sebulan) -- bukan proses otomatis, perlu dijalankan manual."
 )
 st.caption(
     "**Kenapa satu saham WATCH bisa menampilkan probabilitas serendah 30%an di Detail Saham**: "

@@ -1,5 +1,7 @@
 """Shared color palette, CSS, and small render helpers used across all pages.
 Colors mirror .streamlit/config.toml so badges/charts match the app theme."""
+import textwrap
+
 import streamlit as st
 
 BG = "#0B1120"
@@ -106,6 +108,38 @@ def regime_badge(regime: str) -> str:
         return badge_html("unknown", TEXT_MUTED)
     color = REGIME_COLORS.get(regime, TEXT_MUTED)
     return badge_html(regime.replace("_", " "), color)
+
+
+def render_ihsg_context(trend: dict | None):
+    """Compact IHSG trend banner -- see app/data.py's load_ihsg_trend()
+    docstring for the full reasoning (scripts/check_fold_drift.py found
+    Swing's precision correlates with IHSG's direction; feeding IHSG's
+    trend INTO the model made things worse, per
+    scripts/test_ihsg_regime_feature.py -- this surfaces the same context
+    to the human instead). No-ops quietly if trend is None/incomplete
+    (fetch failed) rather than showing a broken banner.
+    """
+    if not trend or trend.get("ret_20d") is None:
+        return
+    ret_20d = trend["ret_20d"]
+    ret_50d = trend.get("ret_50d")
+    if ret_20d <= -5:
+        icon, color = "📉", COLOR_AVOID
+        note = "historis performa model Swing lebih lemah saat IHSG turun seperti ini -- lihat halaman Info Model."
+    elif ret_20d < 0:
+        icon, color = "📉", COLOR_WATCH
+        note = "IHSG sedang melemah -- lihat halaman Info Model untuk konteks performa model saat ini."
+    else:
+        icon, color = "📈", COLOR_BUY
+        note = "IHSG sedang menguat."
+    ret_50d_txt = f" &middot; {ret_50d:+.1f}% (50 hari)" if ret_50d is not None else ""
+    html = textwrap.dedent(f"""
+        <div style="background-color:{color}14; border:1px solid {color}44; border-radius:10px; padding:0.7rem 1rem; margin-bottom:0.8rem;">
+            <span style="color:{color}; font-weight:600;">{icon} IHSG {ret_20d:+.1f}% (20 hari){ret_50d_txt}</span>
+            <span class="mystocks-muted"> -- {note}</span>
+        </div>
+        """)
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_developer_footer():
