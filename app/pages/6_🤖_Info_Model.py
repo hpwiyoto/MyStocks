@@ -106,6 +106,15 @@ if swing_wf_threshold and abs(swing_wf_threshold - BUY_THRESHOLD) > 1e-6:
         "tapi tetap bukan angka yang sama persis."
     )
 st.caption(
+    "⚠️ **Angka precision di atas adalah rata-rata 4 fold walk-forward, bukan angka tunggal yang "
+    "stabil.** Dicek per-fold secara terpisah (`scripts/check_fold_drift.py`): performanya bervariasi "
+    "72-88% antar fold, dan fold PALING BARU justru yang PALING LEMAH (~71-72%, sinyal BUY paling "
+    "jarang muncul) -- berkorelasi dengan periode IHSG sedang turun. Sudah dicoba diperbaiki dengan "
+    "menambahkan fitur tren IHSG, tapi terbukti memperparah drastis (`scripts/test_ihsg_regime_feature.py`), "
+    "jadi belum ada perbaikan yang diterapkan. Model ini perlu dipantau berkala, bukan dianggap "
+    "'sudah pasti bagus selamanya' hanya dari validasi sekali di tanggal training."
+)
+st.caption(
     "**Kenapa satu saham WATCH bisa menampilkan probabilitas serendah 30%an di Detail Saham**: "
     "probabilitas mentah dari model itu terus-menerus (0-100%), bukan skor keyakinan model pada "
     "dirinya sendiri. Angka precision di atas HANYA berlaku untuk saham yang probabilitasnya sudah "

@@ -109,6 +109,7 @@ Aturan keputusan (`engine/decision.py`, histori tuning lengkap ada di docstring 
 - Entry/SL/TP diturunkan dari `target_pct`/`stop_pct` yang sama dengan definisi label (5% / 2.5%, R:R 2.0).
 - **BUY**: probability ≥ **60%** (`BUY_THRESHOLD`, sengaja diturunkan dari 65% hasil tuning walk-forward, atas permintaan eksplisit supaya sinyal BUY tidak kosong berhari-hari berturut-turut). **WATCH**: probability ≥ base rate historis (~30%) tapi < BUY_THRESHOLD. **AVOID**: di bawah base rate, atau harga ≤ Rp50 (gocap floor, tick-size mendominasi sinyal di harga sekecil itu).
 - Precision walk-forward tercatat 84.5% di threshold 65% (headline lama); di threshold live 60% precision sesungguhnya sekitar 76-78% (dicek langsung, bukan diasumsikan) — kedua angka ditampilkan berdampingan di halaman **Info Model** supaya tidak membingungkan.
+- **Angka precision itu RATA-RATA 4 fold walk-forward, bukan angka tunggal yang stabil** — dicek per-fold (`scripts/check_fold_drift.py`) dan ternyata bervariasi 72-88% antar fold, dengan fold PALING BARU (Mar-Agu 2026) justru yang PALING LEMAH (71-72%, sinyal BUY paling jarang). Berkorelasi nyata dengan tren IHSG sendiri (fold lemah = periode IHSG sedang turun) -- tapi menambahkan fitur tren IHSG sebagai perbaikan justru terbukti memperparah drastis, bukan membantu (`scripts/test_ihsg_regime_feature.py`, lihat docstring-nya untuk detail kenapa). Kesimpulan sementara: model masih perlu dipantau berkala untuk drift, bukan dianggap "sudah pasti bagus selamanya" hanya dari validasi sekali di 27 Agustus.
 
 ## Model Turnaround (6 bulan)
 
@@ -140,6 +141,8 @@ Skrip di `scripts/` yang bukan bagian dari pipeline harian, tapi mendokumentasik
 - `tune_v5.py`, `tune_turnaround.py` — grid search hyperparameter + threshold sweep.
 - `turnaround_labels.py` — 3 kalibrasi definisi label Turnaround.
 - `test_turnaround_candidate_scope.py` — apakah mempersempit kandidat Turnaround membantu (tidak).
+- `check_fold_drift.py` — apakah performa Swing model stabil dari waktu ke waktu, dicek per walk-forward fold (bukan dirata-rata) plus base rate mentah per tahun kalender. Menemukan performa TIDAK stabil, fold terbaru paling lemah.
+- `test_ihsg_regime_feature.py` — mengikuti temuan `check_fold_drift.py`: apakah menambahkan fitur tren IHSG (indeks, bukan per-saham) memperbaiki fold yang lemah tadi. Terbukti memperparah drastis, tidak diadopsi.
 - `backtest_momentum_screener.py`, `search_momentum_rules.py`, `grid_search_momentum_rules.py`, `backtest_triple_intersection.py` — pencarian & validasi kombinasi aturan Momentum Screener + gabungan lintas-alat.
 
 ## Prediction & Decision Engine
