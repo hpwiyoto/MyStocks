@@ -48,7 +48,10 @@ st.success(
     "seluruh histori ke tanggal-tanggal masa lalu -- sedikit berpotensi bias optimis dibanding "
     "pengujian Momentum Screener sendirian (yang sepenuhnya bebas dari risiko itu karena aturan "
     "tetap, bukan model yang dilatih). Anggap angka gabungan ini sebagai indikasi penguat, bukan "
-    "bukti seketat walk-forward validation asli Swing/Turnaround.",
+    "bukti seketat walk-forward validation asli Swing/Turnaround. *Catatan: angka di atas diukur "
+    "SEBELUM Momentum Screener menambahkan kriteria Anchored VWAP (lihat halaman Momentum Screener) "
+    "-- versi Tervalidasi saat ini sedikit lebih ketat dan menang lebih sering (42,4%) sendirian; "
+    "kombinasi tiga alat ini belum diuji ulang dengan definisi terbaru.*",
     icon="🏆",
 )
 st.info(

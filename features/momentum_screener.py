@@ -73,13 +73,47 @@ DEFAULT_REGIME_PRIORITY = len(REGIME_PRIORITY)  # unknown/missing regime sorts l
 # than one it has already bid up.
 VALIDATED_RVOL_THRESHOLD = 0.8
 
+# Added after scripts/test_strategy_6_criteria.py backtested a user-
+# proposed 6-criteria strategy (Anchored VWAP among them) against the same
+# 76,442-instance historical dataset. The 6-criteria combo AS SPECIFIED
+# was unusable stacked together (n=12, win_rate 25% -- WORSE than the
+# 30.55% null baseline), and 5 of its 6 pieces were weak-to-harmful in
+# isolation (Anchored VWAP alone: 29.1%, Golden Cross alone: 26.2%, both
+# below null). But requiring close >= this Anchored VWAP ON TOP OF the
+# already-validated rule below genuinely helped: n=958->523,
+# win_rate 39.8%->42.4%, Wilson LB 36.7%->38.3% -- a real gain on the
+# metric that matters (LB, which penalizes the smaller n), not just a
+# smaller sample cherry-picked for a better point estimate.
+AVWAP_WINDOW = 50
 
-def is_validated_signal(regime, macd_hist_slope_3d, cmf_20, rvol_20) -> bool:
+
+def compute_avwap_from_low(close: np.ndarray, high: np.ndarray, low: np.ndarray, volume: np.ndarray) -> float | None:
+    """Anchored VWAP for the LAST bar in the given arrays (ascending by
+    date), anchored at the date the rolling AVWAP_WINDOW-day low occurred
+    -- an approximation of "the average price smart money has actually
+    paid" since that low, using typical price (H+L+C)/3 as the standard
+    VWAP price input. Returns None if there's not enough data or zero
+    volume throughout the anchored window (can't divide by it)."""
+    n = len(close)
+    if n == 0:
+        return None
+    start = max(0, n - AVWAP_WINDOW)
+    anchor = start + int(np.argmin(close[start:]))
+    seg_vol = volume[anchor:]
+    vol_sum = seg_vol.sum()
+    if vol_sum <= 0:
+        return None
+    seg_typical = (high[anchor:] + low[anchor:] + close[anchor:]) / 3
+    return float((seg_typical * seg_vol).sum() / vol_sum)
+
+
+def is_validated_signal(regime, macd_hist_slope_3d, cmf_20, rvol_20, close_above_avwap) -> bool:
     return (
         regime == "bottoming"
         and pd.notna(macd_hist_slope_3d) and macd_hist_slope_3d > 0
         and pd.notna(cmf_20) and cmf_20 < 0
         and pd.notna(rvol_20) and rvol_20 >= VALIDATED_RVOL_THRESHOLD
+        and close_above_avwap is True
     )
 
 
@@ -152,12 +186,14 @@ def detect_bullish_divergence(g: pd.DataFrame) -> dict:
 
 
 def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
-    """panel: long-format rows (stock_code, date, close, volume, rsi_14,
-    macd, macd_signal, macd_hist, macd_hist_slope_3d, cmf_20, rvol_20),
-    ideally 60+ trading days per ticker (from app.data.load_screener_raw_panel).
-    Returns one summary row per ticker: latest reading + macd_status +
-    divergence flags + a priority tier (0=double divergence, 1=single,
-    2=none) for the screener page to sort by ahead of model probability."""
+    """panel: long-format rows (stock_code, date, close, high, low, volume,
+    rsi_14, macd, macd_signal, macd_hist, macd_hist_slope_3d, cmf_20,
+    rvol_20), ideally 60+ trading days per ticker (from
+    app.data.load_screener_raw_panel; high/low needed for the Anchored
+    VWAP check below). Returns one summary row per ticker: latest reading
+    + macd_status + divergence flags + a priority tier (0=double
+    divergence, 1=single, 2=none) for the screener page to sort by ahead
+    of model probability."""
     if panel.empty:
         return pd.DataFrame()
 
@@ -166,6 +202,11 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
         g = g.sort_values("date").reset_index(drop=True)
         latest = g.iloc[-1]
         div = detect_bullish_divergence(g)
+        avwap = compute_avwap_from_low(
+            g["close"].to_numpy(dtype=float), g["high"].to_numpy(dtype=float),
+            g["low"].to_numpy(dtype=float), g["volume"].to_numpy(dtype=float),
+        )
+        close_above_avwap = bool(latest["close"] >= avwap) if avwap is not None and pd.notna(latest["close"]) else None
         rows.append({
             "stock_code": code,
             "date": latest["date"],
@@ -181,6 +222,8 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
             "cmf_20": latest["cmf_20"],
             "rvol_20": latest["rvol_20"],
             "regime": latest.get("regime"),
+            "avwap_from_low50": avwap,
+            "close_above_avwap": close_above_avwap,
             **div,
         })
     out = pd.DataFrame(rows)
@@ -190,7 +233,9 @@ def compute_screener_panel(panel: pd.DataFrame) -> pd.DataFrame:
     )
     out["regime_priority"] = out["regime"].map(REGIME_PRIORITY).fillna(DEFAULT_REGIME_PRIORITY).astype(int)
     out["validated_signal"] = out.apply(
-        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"]), axis=1,
+        lambda r: is_validated_signal(
+            r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"], r["close_above_avwap"],
+        ), axis=1,
     )
     # RSI beats MACD as a ranking signal here, backed by two independent
     # findings elsewhere in this project: rsi_distance_50 is a top-3

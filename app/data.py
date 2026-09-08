@@ -248,9 +248,12 @@ def load_data_freshness() -> dt.date | None:
 def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
     """Bulk per-(ticker, date) panel across the WHOLE universe for the last
     ~`lookback_days` TRADING days, feeding features.momentum_screener's
-    MACD-status classification and RSI/MACD divergence detection on the
-    Momentum Screener page. Unlike load_price_history (one ticker), this
-    scores the whole universe at once -- same shape as load_latest_predictions.
+    MACD-status classification, RSI/MACD divergence detection, and (via
+    high/low, added for the Anchored VWAP validated-signal criterion --
+    see scripts/test_strategy_6_criteria.py) the AVWAP-from-50-day-low
+    check on the Momentum Screener page. Unlike load_price_history (one
+    ticker), this scores the whole universe at once -- same shape as
+    load_latest_predictions.
 
     Cutoff is a plain calendar-date WHERE clause (lookback_days*2 days back,
     a generous buffer for weekends/holidays) computed in Python rather than
@@ -264,7 +267,7 @@ def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
     cutoff = (dt.date.today() - dt.timedelta(days=lookback_days * 2)).isoformat()
     df = pd.read_sql(
         text("""
-        SELECT fd.stock_code, fd.date, ph.close, ph.volume,
+        SELECT fd.stock_code, fd.date, ph.close, ph.high, ph.low, ph.volume,
                fd.rsi_14, fd.macd, fd.macd_signal, fd.macd_hist, fd.macd_hist_slope_3d,
                fd.cmf_20, fd.rvol_20, fd.regime
         FROM feature_daily fd

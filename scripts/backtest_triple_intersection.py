@@ -54,8 +54,17 @@ def load_full_feature_rows(pairs: list[tuple[str, str]]) -> pd.DataFrame:
 
 def run():
     df = build_dataset()
+    # close_above_avwap=True: this script predates is_validated_signal()'s
+    # AVWAP criterion (added by scripts/test_strategy_6_criteria.py) and
+    # its 42.3% triple-intersection result -- already cited in README.md
+    # and app/pages/5_🏆_Rekomendasi_Emitten.py -- was measured against the
+    # OLDER 4-criteria definition. Passing True here preserves that exact
+    # original definition rather than silently reinterpreting it; rerunning
+    # this specific backtest with AVWAP included is a separate, not-yet-done
+    # follow-up (search_momentum_rules.build_dataset(), which this script
+    # depends on, doesn't fetch high/low yet).
     df["validated_signal"] = df.apply(
-        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"]), axis=1,
+        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"], True), axis=1,
     )
     validated = df[df["validated_signal"]].copy()
     logger.info("validated_signal rows: %d", len(validated))
