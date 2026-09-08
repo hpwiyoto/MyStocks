@@ -41,17 +41,17 @@ st.caption(
 )
 st.success(
     "**Bukti historis (backtest 5 tahun, `scripts/backtest_triple_intersection.py`)**: saham yang "
-    "lolos Sinyal Tervalidasi Momentum Screener SENDIRIAN menang **39,8%** dari kejadian (n=958). "
-    "Kalau Swing (≥WATCH) DAN Turnaround (POTENSIAL) juga sepakat pada saat bersamaan, win rate "
-    "naik jadi **42,3%** (n=435, batas bawah keyakinan 95%: 37,7%). ⚠️ **Catatan metodologi**: angka "
-    "gabungan ini didapat dengan menjalankan model Swing/Turnaround yang SAAT INI terlatih dari "
-    "seluruh histori ke tanggal-tanggal masa lalu -- sedikit berpotensi bias optimis dibanding "
-    "pengujian Momentum Screener sendirian (yang sepenuhnya bebas dari risiko itu karena aturan "
-    "tetap, bukan model yang dilatih). Anggap angka gabungan ini sebagai indikasi penguat, bukan "
-    "bukti seketat walk-forward validation asli Swing/Turnaround. *Catatan: angka di atas diukur "
-    "SEBELUM Momentum Screener menambahkan kriteria Anchored VWAP (lihat halaman Momentum Screener) "
-    "-- versi Tervalidasi saat ini sedikit lebih ketat dan menang lebih sering (42,4%) sendirian; "
-    "kombinasi tiga alat ini belum diuji ulang dengan definisi terbaru.*",
+    "lolos Sinyal Tervalidasi Momentum Screener SENDIRIAN (termasuk kriteria Anchored VWAP, lihat "
+    "halaman Momentum Screener) menang **42,4%** dari kejadian (n=523). Kalau Swing (≥WATCH) DAN "
+    "Turnaround (POTENSIAL) juga sepakat pada saat bersamaan, win rate naik jadi **43,4%** (n=235, "
+    "batas bawah keyakinan 95%: 37,2%) -- kenaikan titik estimasi kecil, tapi batas bawahnya sendiri "
+    "praktis flat (bukan lonjakan besar seperti dari 30,6%→42,4% pada Momentum Screener sendirian) "
+    "karena sampelnya mengecil sekitar separuhnya (kriteria AVWAP membuat gerbang awal lebih ketat). "
+    "⚠️ **Catatan metodologi**: angka gabungan ini didapat dengan menjalankan model Swing/Turnaround "
+    "yang SAAT INI terlatih dari seluruh histori ke tanggal-tanggal masa lalu -- sedikit berpotensi "
+    "bias optimis dibanding pengujian Momentum Screener sendirian (yang sepenuhnya bebas dari risiko "
+    "itu karena aturan tetap, bukan model yang dilatih). Anggap angka gabungan ini sebagai indikasi "
+    "penguat, bukan bukti seketat walk-forward validation asli Swing/Turnaround.",
     icon="🏆",
 )
 st.info(

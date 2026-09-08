@@ -18,6 +18,15 @@ historical instances, so there's some optimism baked into how well they
 result as suggestive/exploratory, not as rigorous new evidence the way
 the rule-only Momentum backtest is.
 
+UPDATE (2026-09-08): now uses scripts.test_strategy_6_criteria's
+build_dataset() (not scripts.search_momentum_rules') because it's the one
+that actually computes close_above_avwap (real Anchored VWAP, not a
+hardcoded True) -- this was a deliberate deferred follow-up when the
+AVWAP criterion was first added to is_validated_signal(), since the
+original 42.3% number here was measured under the OLDER 4-criteria
+definition. This run supersedes that number; see README.md /
+app/pages/5_🏆_Rekomendasi_Emitten.py for the current figures.
+
 Usage:
     python -m scripts.backtest_triple_intersection
 """
@@ -30,7 +39,8 @@ from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 from features.momentum_screener import is_validated_signal
 from pipeline.db import get_engine
 from pipeline.logging_config import get_logger
-from scripts.search_momentum_rules import build_dataset, wilson_lower_bound
+from scripts.search_momentum_rules import wilson_lower_bound
+from scripts.test_strategy_6_criteria import build_dataset
 
 logger = get_logger("scripts.backtest_triple_intersection")
 
@@ -54,17 +64,10 @@ def load_full_feature_rows(pairs: list[tuple[str, str]]) -> pd.DataFrame:
 
 def run():
     df = build_dataset()
-    # close_above_avwap=True: this script predates is_validated_signal()'s
-    # AVWAP criterion (added by scripts/test_strategy_6_criteria.py) and
-    # its 42.3% triple-intersection result -- already cited in README.md
-    # and app/pages/5_🏆_Rekomendasi_Emitten.py -- was measured against the
-    # OLDER 4-criteria definition. Passing True here preserves that exact
-    # original definition rather than silently reinterpreting it; rerunning
-    # this specific backtest with AVWAP included is a separate, not-yet-done
-    # follow-up (search_momentum_rules.build_dataset(), which this script
-    # depends on, doesn't fetch high/low yet).
     df["validated_signal"] = df.apply(
-        lambda r: is_validated_signal(r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"], True), axis=1,
+        lambda r: is_validated_signal(
+            r["regime"], r["macd_hist_slope_3d"], r["cmf_20"], r["rvol_20"], r["close_above_avwap"],
+        ), axis=1,
     )
     validated = df[df["validated_signal"]].copy()
     logger.info("validated_signal rows: %d", len(validated))
