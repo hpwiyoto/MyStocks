@@ -145,6 +145,7 @@ Skrip di `scripts/` yang bukan bagian dari pipeline harian, tapi mendokumentasik
 - `check_fold_drift.py` — apakah performa Swing model stabil dari waktu ke waktu, dicek per walk-forward fold (bukan dirata-rata) plus base rate mentah per tahun kalender. Menemukan performa TIDAK stabil, fold terbaru paling lemah.
 - `test_ihsg_regime_feature.py` — mengikuti temuan `check_fold_drift.py`: apakah menambahkan fitur tren IHSG (indeks, bukan per-saham) memperbaiki fold yang lemah tadi. Terbukti memperparah drastis, tidak diadopsi.
 - `test_regime_conditional_threshold.py` — versi yang benar dari ide yang sama (terinspirasi paper eksternal soal model per-rezim pasar): bukan fitur training, tapi ambang keputusan yang beda saat IHSG turun. Terbukti membantu sungguhan (lihat "Model Swing" di bawah) -- sudah diadopsi ke `engine/decision.py`.
+- `test_rolling_window_size.py` — terinspirasi paper eksternal lain ("jendela training lebih pendek menangkap hubungan yang berubah dari waktu ke waktu lebih baik"): apakah melatih dari histori yang lebih pendek (12/24/36 bulan, bukan 5 tahun penuh) membantu fold yang lemah. Hasilnya CAMPUR ADUK dan tidak konsisten antar fold (cuma fold 3 yang membaik, itupun sampelnya kecil) -- tidak diadopsi, didokumentasikan sebagai riset terbuka.
 - `backtest_momentum_screener.py`, `search_momentum_rules.py`, `grid_search_momentum_rules.py`, `backtest_triple_intersection.py` — pencarian & validasi kombinasi aturan Momentum Screener + gabungan lintas-alat.
 
 ## Prediction & Decision Engine
