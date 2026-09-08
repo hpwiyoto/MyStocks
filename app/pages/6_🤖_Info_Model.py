@@ -8,7 +8,7 @@ import streamlit as st
 from app.auth import require_login
 from app.data import days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
 from app.style import inject_base_css, render_developer_footer, render_ihsg_context
-from engine.decision import BUY_THRESHOLD
+from engine.decision import BUY_THRESHOLD, IHSG_DECLINE_BUY_THRESHOLD
 from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 
 st.set_page_config(page_title="MyStocks — Info Model", page_icon="🤖", layout="wide")
@@ -140,10 +140,18 @@ t1, t2, t3 = st.columns(3)
 t1.metric("Target profit", f"{meta['target_pct']*100:.1f}%")
 t2.metric("Stop loss", f"{meta['stop_pct']*100:.1f}%")
 t3.metric("Horizon", f"{meta['horizon_days']} hari trading")
+_ihsg_trend_for_rule = load_ihsg_trend()
+_ihsg_declining_now = bool(_ihsg_trend_for_rule and _ihsg_trend_for_rule.get("ret_20d") is not None and _ihsg_trend_for_rule["ret_20d"] < 0)
+_active_buy_threshold = IHSG_DECLINE_BUY_THRESHOLD if _ihsg_declining_now else BUY_THRESHOLD
 st.markdown(
     f"""
-    - **BUY** — probabilitas ≥ {BUY_THRESHOLD*100:.0f}%
-    - **WATCH** — probabilitas ≥ base rate historis model, tapi < {BUY_THRESHOLD*100:.0f}%
+    - **BUY** — probabilitas ≥ {BUY_THRESHOLD*100:.0f}% -- **kecuali saat IHSG sendiri sedang turun**
+      (return 20 hari negatif), di mana ambangnya naik ke {IHSG_DECLINE_BUY_THRESHOLD*100:.0f}%. Terbukti lewat
+      backtest (`scripts/test_regime_conditional_threshold.py`): sinyal BUY saat IHSG turun historisnya
+      menang lebih jarang (71,6% vs 75,2%) -- ambang lebih ketat khusus kondisi itu menutup celah tersebut
+      sambil tetap mempertahankan 93% volume sinyal. **Ambang yang berlaku hari ini: {_active_buy_threshold*100:.0f}%**
+      ({"IHSG sedang turun" if _ihsg_declining_now else "IHSG tidak sedang turun"}).
+    - **WATCH** — probabilitas ≥ base rate historis model, tapi < ambang BUY yang berlaku hari itu
     - **AVOID** — probabilitas di bawah base rate (tidak ada edge), atau harga saham ≤ Rp50 (floor gocap,
       lihat `engine.decision.GOCAP_PRICE_FLOOR` — dipaksa AVOID apa pun probabilitasnya)
     """

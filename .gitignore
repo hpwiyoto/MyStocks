@@ -45,6 +45,10 @@ models/*.json
 !models/turnaround_xgboost_v1.json
 !models/turnaround_xgboost_v1_metadata.json
 
+# Reference papers shared during dev conversations -- not project source,
+# not for git (large binary PDFs, third-party copyrighted content).
+journals/
+
 # OS / editor
 .DS_Store
 .vscode/

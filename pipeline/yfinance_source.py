@@ -69,3 +69,31 @@ def fetch_full_info(symbol: str) -> dict:
         return with_retry(_fetch, f"fetch_full_info({symbol})")
     except Exception:
         return {}
+
+
+def is_ihsg_declining(days: int = 20) -> bool:
+    """IHSG's own trailing `days`-trading-day return < 0, as of today --
+    used ONLY at decision time (engine/decision.py), never as a training
+    feature. scripts/test_ihsg_regime_feature.py found feeding IHSG's trend
+    INTO the model backfires badly (zero cross-sectional variance lets a
+    tree split by calendar date instead of learning a real pattern);
+    scripts/test_regime_conditional_threshold.py found the right-sized
+    version of the same idea DOES help: pooled BUY signals issued while
+    IHSG was declining had a real, replicated lower hit rate (65.9%
+    Wilson LB vs 72.5% when IHSG was flat/rising) -- gating the live
+    BUY_THRESHOLD on this (see engine/decision.py) recovered that gap
+    while keeping 93% of signal volume.
+    Fails soft (returns False, i.e. "not declining" -- the ORIGINAL,
+    less-restrictive behavior) on any fetch problem, so a yfinance hiccup
+    degrades to "ignore this adjustment for today", never "silently block
+    every BUY signal".
+    """
+    try:
+        hist = fetch_history("^JKSE", period="3mo")
+    except Exception as exc:
+        logger.warning("IHSG trend fetch failed, treating as not-declining: %s", exc)
+        return False
+    close = hist["Close"] if "Close" in hist.columns else hist.iloc[:, 0]
+    if len(close) <= days:
+        return False
+    return bool(close.iloc[-1] < close.iloc[-1 - days])

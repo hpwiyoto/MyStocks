@@ -51,6 +51,20 @@ of precision for a usable BUY tier that isn't empty on a routine basis.
 
 BUY_THRESHOLD = 0.60
 
+# Regime-conditional bar for the 0.60-0.65 probability band, added after
+# scripts/test_regime_conditional_threshold.py (itself prompted by a paper
+# the user shared on regime-clustered alpha models -- see that script's
+# docstring for the full reasoning and why a raw IHSG feature was rejected
+# instead). Empirical, walk-forward, pooled-across-folds result: BUY
+# signals (>=0.60) issued while IHSG's own trailing 20-day return was
+# negative won 71.6% of the time (Wilson 95% LB 65.9%) vs 75.2% (LB 72.5%)
+# when IHSG was flat/rising -- a real, not noise-level, gap. Requiring the
+# stricter 0.65 bar specifically during an IHSG decline recovers that gap
+# (combined win rate 75.7%, LB 73.2%) while keeping 93% of signal volume
+# (only the weakest, IHSG-decline-specific slice of the 0.60-0.65 band is
+# demoted to WATCH instead of BUY).
+IHSG_DECLINE_BUY_THRESHOLD = 0.65
+
 # IDX's practical price floor ("gocap") -- confirmed by checking real Home
 # output: PNBS/MDLN/HDIT/CPRO were all parked exactly at Rp50, BTEK at Rp10,
 # each showing an inflated BUY probability. At this price, tick size (Rp1)
@@ -64,10 +78,20 @@ BUY_THRESHOLD = 0.60
 GOCAP_PRICE_FLOOR = 50
 
 
-def decide(probability: float, base_rate: float, entry_price: float, target_pct: float, stop_pct: float) -> dict:
+def decide(
+    probability: float, base_rate: float, entry_price: float, target_pct: float, stop_pct: float,
+    ihsg_declining: bool = False,
+) -> dict:
+    """`ihsg_declining`: whether IHSG's own trailing 20-day return is
+    negative right now (see pipeline.yfinance_source.is_ihsg_declining) --
+    a market-wide, same-for-every-ticker signal computed ONCE per
+    prediction run and passed in, not looked up per row. Defaults to False
+    (the original, less-restrictive behavior) so every existing caller
+    that doesn't pass it is unaffected."""
+    buy_threshold = IHSG_DECLINE_BUY_THRESHOLD if ihsg_declining else BUY_THRESHOLD
     if entry_price <= GOCAP_PRICE_FLOOR:
         decision = "AVOID"
-    elif probability >= BUY_THRESHOLD:
+    elif probability >= buy_threshold:
         decision = "BUY"
     elif probability >= base_rate:
         decision = "WATCH"

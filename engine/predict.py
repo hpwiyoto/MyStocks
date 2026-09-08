@@ -8,12 +8,13 @@ Usage:
 from sqlalchemy import inspect, select
 
 from engine.db import init_schema, predictions
-from engine.decision import decide
+from engine.decision import IHSG_DECLINE_BUY_THRESHOLD, decide
 from engine.model import build_feature_row, load_model_and_metadata, predict_probability
 from features.db import FEATURE_VERSION, feature_daily
 from pipeline.db import get_engine, price_history, upsert
 from pipeline.logging_config import get_logger
 from pipeline.tickers import SEED_TICKERS
+from pipeline.yfinance_source import is_ihsg_declining
 
 logger = get_logger("engine.predict")
 
@@ -67,6 +68,13 @@ def run(tickers=None):
     target_pct = meta["target_pct"]
     stop_pct = meta["stop_pct"]
 
+    # Market-wide, same for every ticker today -- computed ONCE, not per
+    # row. See engine/decision.py's IHSG_DECLINE_BUY_THRESHOLD docstring
+    # for the empirical justification.
+    ihsg_declining = is_ihsg_declining()
+    if ihsg_declining:
+        logger.info("IHSG trailing 20d return is negative -- BUY threshold raised to %.2f today", IHSG_DECLINE_BUY_THRESHOLD)
+
     scored = []
     skipped = []
     failures = []
@@ -97,7 +105,7 @@ def run(tickers=None):
                     logger.info("%s: %s NULL, predicting with the rest of the feature row anyway", code, missing)
 
                 probability = predict_probability(booster, X)
-                decision_result = decide(probability, base_rate, entry_price, target_pct, stop_pct)
+                decision_result = decide(probability, base_rate, entry_price, target_pct, stop_pct, ihsg_declining)
 
                 record = {
                     "stock_code": code,
