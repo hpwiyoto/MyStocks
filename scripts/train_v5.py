@@ -296,7 +296,10 @@ def run():
         },
         "notes": (
             "v5 feature set: v4's features + obv_zscore_20, price_vs_vwap20_pct, "
-            "sector_relative_strength_20d_pct, trailing_pe, price_to_book, market_cap_log. "
+            "sector_relative_strength_20d_pct, trailing_pe, price_to_book, market_cap_log, "
+            "and (2026-09-08) ret_10d_pct/ret_10d_atr_norm -- see "
+            "scripts/test_rally_speed_feature.py for the walk-forward test that validated "
+            "this pair (BUY-zone pooled win rate 80.0%->81.1%, Wilson 95% LB 77.1%->78.4%). "
             "Gocap-floor rows (close<=Rp50) excluded from training -- see engine.decision."
             "GOCAP_PRICE_FLOOR. Trained directly in Codespaces (xgb.train Booster API, no "
             "sklearn), same hyperparameters as v4 (no re-tuning yet this round)."

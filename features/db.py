@@ -65,6 +65,10 @@ feature_daily = Table(
     Column("atr_pct_14", Numeric(8, 4)),
     Column("bb_width_pct", Numeric(10, 4)),
     Column("bb_width_change_5d", Numeric(10, 4)),
+    # Rally speed -- see features/technical.py's compute_rally_speed for
+    # why (scripts/test_rally_speed_feature.py's validated finding).
+    Column("ret_10d_pct", Numeric(10, 4)),
+    Column("ret_10d_atr_norm", Numeric(10, 4)),
     # VWAP
     Column("price_vs_vwap20_pct", Numeric(10, 4)),
     # Market structure

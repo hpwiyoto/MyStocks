@@ -119,6 +119,31 @@ def compute_volatility(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def compute_rally_speed(df: pd.DataFrame, atr_pct_14: pd.Series) -> pd.DataFrame:
+    """How fast has this stock moved in the last 10 trading days -- the
+    same window as the Swing model's own HORIZON (scripts/train_v5.py),
+    prompted by a real user concern: does the model account for reversal
+    risk on a stock that has ALREADY rallied very fast right before a BUY
+    signal? scripts/test_rally_speed_feature.py's diagnostic half found
+    the shipped model's BUY-zone win rate does NOT actually degrade for
+    faster recent rallies (essentially flat across speed terciles) -- but
+    its feature-addition half found feeding the model this number
+    directly still sharpens the BUY-threshold boundary: pooled BUY-zone
+    win rate 79.4%->80.6% (Wilson 95% LB 76.6%->77.8%, n~850). Adopted.
+
+    ret_10d_pct: raw 10-day % return -- no lookahead (only the current
+    and past 9 closes). ret_10d_atr_norm: that same return divided by the
+    stock's own atr_pct_14, i.e. "how many of this stock's own ATRs has
+    it moved in 10 days" -- comparable across a normally-volatile
+    small-cap and a normally-calm blue chip, unlike the raw % alone
+    (same normalize-by-the-stock's-own-scale idea as price_vs_sma50_pct
+    and every other _pct helper here)."""
+    out = pd.DataFrame(index=df.index)
+    out["ret_10d_pct"] = df["close"].pct_change(10) * 100
+    out["ret_10d_atr_norm"] = out["ret_10d_pct"] / atr_pct_14.replace(0, float("nan"))
+    return out
+
+
 def compute_vwap(df: pd.DataFrame) -> pd.DataFrame:
     """Rolling 20-day VWAP -- daily bars only (no intraday ticks here), so
     this is the standard multi-day approximation: volume-weighted average of
@@ -181,12 +206,14 @@ def compute_all(df: pd.DataFrame, index_close: pd.Series = None, sector_close: p
     than relative_strength_20d_pct's whole-market comparison since it
     controls for sector-wide moves (e.g. a broad banking rally lifting every
     bank at once isn't evidence any one of them has an edge over its peers)."""
+    volatility = compute_volatility(df)
     parts = [
         compute_trend(df),
         compute_momentum(df),
         compute_volume(df),
         compute_money_flow(df),
-        compute_volatility(df),
+        volatility,
+        compute_rally_speed(df, volatility["atr_pct_14"]),
         compute_vwap(df),
         compute_trend_strength(df),
         compute_gap(df),
