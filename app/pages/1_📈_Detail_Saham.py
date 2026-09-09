@@ -12,8 +12,10 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import require_login
-from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
+from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_latest_turnaround_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
+from features.momentum_screener import classify_macd_status
+from features.support_resistance import compute_pivot_levels, nearest_significant_level
 
 def _notna(value):
     """`feat`/`fund` here are dicts built from a pandas row via .to_dict()
@@ -215,6 +217,55 @@ else:
     # weeks net accumulation (line above zero) or distribution (below)?
     price_df["foreign_flow_ma20"] = price_df["net_foreign_flow"].rolling(20, min_periods=5).mean()
 
+    # --- Ringkasan Sinyal Saat Ini: satu tempat untuk melihat semua bacaan
+    # teknikal + kedua probabilitas model sekaligus, tanpa perlu menghitung
+    # sendiri dari chart di bawah. Regime & momentum-histogram-slope diambil
+    # dari feat (feature_daily -- nilai kanonik yang benar-benar dipakai
+    # model), bukan dihitung ulang, KECUALI status MACD (perlu SERI histori,
+    # bukan cuma nilai terakhir, untuk mendeteksi fresh crossover -- lihat
+    # classify_macd_status) dan RSI (fallback ke rekomputasi price_df kalau
+    # feature_daily belum sempat ter-update untuk hari ini).
+    st.subheader("🔎 Ringkasan Sinyal Saat Ini")
+    sig1, sig2, sig3, sig4 = st.columns(4)
+    with sig1:
+        st.markdown("<div class='mystocks-muted'>Regime</div>", unsafe_allow_html=True)
+        current_regime = feat.get("regime") if feat else None
+        st.markdown(regime_badge(current_regime) if _notna(current_regime) else "-", unsafe_allow_html=True)
+    with sig2:
+        st.metric("Status MACD", classify_macd_status(price_df["macd_hist"]))
+    with sig3:
+        current_rsi = feat.get("rsi_14") if feat else None
+        if not _notna(current_rsi):
+            rsi_series = price_df["rsi_14"].dropna()
+            current_rsi = rsi_series.iloc[-1] if not rsi_series.empty else None
+        st.metric("RSI(14)", f"{float(current_rsi):.1f}" if _notna(current_rsi) else "-")
+    with sig4:
+        hist_slope = feat.get("macd_hist_slope_3d") if feat else None
+        if _notna(hist_slope):
+            momentum_status = "📈 Menguat" if hist_slope > 0 else ("📉 Melemah" if hist_slope < 0 else "Netral")
+        else:
+            momentum_status = "-"
+        st.metric("Momentum Histogram (3 hari)", momentum_status)
+
+    prob1, prob2 = st.columns(2)
+    with prob1:
+        if row is not None:
+            st.metric("Probabilitas Swing", f"{float(row['probability'])*100:.1f}%", help=f"Keputusan: {row['decision']}")
+        else:
+            st.metric("Probabilitas Swing", "-")
+            st.caption("Belum ada prediksi Swing untuk saham ini.")
+    with prob2:
+        turnaround_preds = load_latest_turnaround_predictions()
+        ta_match = turnaround_preds[turnaround_preds["stock_code"] == selected] if not turnaround_preds.empty else turnaround_preds
+        if len(ta_match):
+            ta_row = ta_match.iloc[0]
+            st.metric("Probabilitas Turnaround", f"{float(ta_row['probability'])*100:.1f}%", help=f"Keputusan: {ta_row['decision']}")
+        else:
+            st.metric("Probabilitas Turnaround", "-")
+            st.caption("Bukan kandidat turnaround saat ini (regime saat ini bukan bearish/bottoming).")
+
+    st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
     # Labeled "MA" (not "SMA") to match common retail-platform convention
     # (Stockbit/RTI/etc. show plain "MA" for the simple moving average and
     # reserve "EMA" for the exponential one) -- display label only, the
@@ -290,6 +341,41 @@ else:
                 go.Scatter(x=price_df["date"], y=price_df[col], name=label, line=dict(color=color, width=1.3)),
                 row=1, col=1,
             )
+
+    # Support/resistance -- pivot-based multi-touch zones (features/
+    # support_resistance.py), NOT the simple rolling-20-day-high/low proxy
+    # that's actually the MODEL feature (features/structure.py) -- tested
+    # as a Momentum Screener criterion and rejected (scripts/test_pivot_
+    # support_resistance.py: every variant scored a worse Wilson LB than
+    # the already-shipped rule), but kept here as trader CONTEXT, same
+    # principle as MACD (rejected as a model feature, still shown on this
+    # chart). Uses the full 260-day window already loaded for this page,
+    # not the shorter as-of-date lookback the backtest used -- this is a
+    # "where are the levels right now" display, not a walk-forward metric,
+    # so there's no lookahead concern to guard against here.
+    high_arr = price_df["high"].to_numpy(dtype=float)
+    low_arr = price_df["low"].to_numpy(dtype=float)
+    _support_levels, _resistance_levels = compute_pivot_levels(high_arr, low_arr)
+    _current_close = float(price_df["close"].iloc[-1]) if not price_df["close"].empty else None
+    nearest_support = nearest_significant_level(_support_levels, _current_close, "support")
+    nearest_resistance = nearest_significant_level(_resistance_levels, _current_close, "resistance")
+    if nearest_support:
+        fig.add_hline(
+            y=nearest_support["level"], row=1, col=1,
+            line=dict(color=COLOR_BUY, width=1.2, dash="dash"),
+            annotation_text=f"Support {nearest_support['level']:,.0f} ({nearest_support['touches']}x disentuh)",
+            annotation_position="bottom right",
+            annotation_font=dict(size=10, color=COLOR_BUY),
+        )
+    if nearest_resistance:
+        fig.add_hline(
+            y=nearest_resistance["level"], row=1, col=1,
+            line=dict(color=COLOR_AVOID, width=1.2, dash="dash"),
+            annotation_text=f"Resistance {nearest_resistance['level']:,.0f} ({nearest_resistance['touches']}x disentuh)",
+            annotation_position="top right",
+            annotation_font=dict(size=10, color=COLOR_AVOID),
+        )
+
     volume_colors = [COLOR_BUY if c >= o else COLOR_AVOID for o, c in zip(price_df["open"], price_df["close"])]
     fig.add_trace(
         go.Bar(x=price_df["date"], y=price_df["volume"], name="Volume", marker_color=volume_colors, opacity=0.6),
@@ -500,10 +586,18 @@ else:
         # plain string like "2025-08-11") and MySQL in production (where it
         # comes back as a real Timestamp) -- calling .strftime() directly
         # crashed dev with "'str' object has no attribute 'strftime'".
-        date_key = pd.Timestamp(hr["date"]).strftime("%Y-%m-%d")
+        hr_date = pd.Timestamp(hr["date"])
+        date_key = hr_date.strftime("%Y-%m-%d")
         ff_val = hr.get("net_foreign_flow")
+        # Date prefixed onto the Harga (row 1) label specifically, rather
+        # than a separate floating annotation -- row 1 is the panel every
+        # user's eye starts at, and adding a 7th annotation slot just for
+        # the date would mean more index bookkeeping in the JS below for
+        # no real gain (the crosshair itself has no visual date marker
+        # otherwise, which is the actual gap this closes).
+        date_label = hr_date.strftime("%d %b %Y")
         hover_lookup[date_key] = [
-            None if pd.isna(hr["close"]) else f"Harga: Rp {hr['close']:,.0f}",
+            None if pd.isna(hr["close"]) else f"{date_label} · Harga: Rp {hr['close']:,.0f}",
             None if pd.isna(hr["volume"]) else f"Vol: {_fmt_volume_id(hr['volume'])}",
             None if pd.isna(hr["rsi_14"]) else f"RSI: {hr['rsi_14']:.1f}",
             None if pd.isna(hr["macd_hist"]) else f"MACD Hist: {hr['macd_hist']:.2f}",
