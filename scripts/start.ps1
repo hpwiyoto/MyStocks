@@ -86,17 +86,63 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # --- 2. Scheduler: skip if one's already running (avoid duplicate daily
-# jobs), matching docker-compose's restart:unless-stopped idempotency. ---
-$schedulerRunning = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and $_.CommandLine -like "*scripts.scheduler_loop*" }
-if ($schedulerRunning) {
-    Write-Host "-> scheduler sudah berjalan (PID $($schedulerRunning.ProcessId)), tidak dijalankan ulang"
-} else {
+# jobs), matching docker-compose's restart:unless-stopped idempotency.
+#
+# The Get-CimInstance process-list check alone is racy: two `start`
+# invocations within the same second or two (two terminals, a double-
+# click) can BOTH run this check before either has actually launched a
+# scheduler, both see "not running", and both launch -- confirmed live on
+# this machine (two scheduler_loop.py processes running since 2026-09-05,
+# traced back to exactly this window). Harmless in practice so far (only
+# ONE actually reached its 16:30 WIB slot and ran the daily pipeline each
+# day -- data/logs/pipeline.log never showed two "=== Daily run: start
+# ===" on the same day), but wasteful and not something to rely on staying
+# lucky about.
+#
+# Fix: an exclusive-create lock file as the actual mutex. New-Item without
+# -Force is a single atomic filesystem operation (fails if the file
+# already exists) -- unlike "check with Get-CimInstance, then decide,
+# then launch", there's no gap between "is it free" and "claim it" for a
+# second `start` to land in. A stale lock (process crashed/was killed
+# without cleanup) is detected and cleared first so a legitimate restart
+# is never blocked forever by a dead PID.
+$SchedulerLockFile = Join-Path $RepoRoot "data\scheduler.lock"
+
+function Test-StaleSchedulerLock {
+    if (-not (Test-Path $SchedulerLockFile)) { return }
+    $lockedPid = Get-Content $SchedulerLockFile -ErrorAction SilentlyContinue
+    $stillRunning = $false
+    if ($lockedPid) {
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $lockedPid" -ErrorAction SilentlyContinue
+        if ($proc -and $proc.CommandLine -like "*scripts.scheduler_loop*") { $stillRunning = $true }
+    }
+    if (-not $stillRunning) {
+        Write-Host "-> lock scheduler basi ditemukan (proses PID $lockedPid sudah tidak jalan) -- dibersihkan"
+        Remove-Item $SchedulerLockFile -ErrorAction SilentlyContinue
+    }
+}
+Test-StaleSchedulerLock
+
+$acquiredSchedulerLock = $false
+try {
+    New-Item -ItemType File -Path $SchedulerLockFile -ErrorAction Stop | Out-Null
+    $acquiredSchedulerLock = $true
+} catch {
+    Write-Host "-> scheduler sudah berjalan (lock aktif), tidak dijalankan ulang"
+}
+
+if ($acquiredSchedulerLock) {
     Write-Host "-> menjalankan scheduler (diminimalkan, cek taskbar kalau perlu lihat log)..."
-    Start-Process powershell -WindowStyle Minimized -ArgumentList @(
+    $schedulerProc = Start-Process powershell -WindowStyle Minimized -PassThru -ArgumentList @(
         "-NoExit", "-Command",
         "`$host.UI.RawUI.WindowTitle = 'MyStocks - Scheduler'; Set-Location '$RepoRoot'; & '$VenvPython' -m scripts.scheduler_loop"
     )
+    # Recorded for THIS start.ps1 run's own staleness check only (next
+    # `start` after this one) -- the actual scheduler_loop.py PID may
+    # differ (Windows sometimes launches python.exe as a parent+child
+    # pair here), but this minimized host process's presence is a
+    # reasonable, cheap proxy for "still running" without a second lookup.
+    Set-Content -Path $SchedulerLockFile -Value $schedulerProc.Id
 }
 
 # --- 3. Streamlit app: skip (re)launch if something's already answering on
