@@ -63,8 +63,15 @@ def fetch_news_headlines(query: str, max_items: int = MAX_ITEMS) -> list[dict]:
         logger.warning("news fetch failed for %r after %d attempt(s): %s", query, MAX_ATTEMPTS, last_error)
         return []
 
+    # Parse EVERY item the feed returned (not just the first max_items) --
+    # Google's RSS ordering leans recent/relevant but isn't a guaranteed
+    # strict newest-first sort, so slicing before sorting could silently
+    # drop a genuinely newer item sitting past position `max_items` in the
+    # feed's own order while keeping an older one ahead of it. Sorting the
+    # full set first, then taking the top max_items, guarantees both "these
+    # are the actual newest items" and "they're in newest-first order".
     items = []
-    for item in root.findall(".//item")[:max_items]:
+    for item in root.findall(".//item"):
         title = (item.findtext("title") or "").strip()
         link = (item.findtext("link") or "").strip()
         pub_date_raw = item.findtext("pubDate")
@@ -83,4 +90,8 @@ def fetch_news_headlines(query: str, max_items: int = MAX_ITEMS) -> list[dict]:
         if not headline:
             continue
         items.append({"title": headline, "source": source, "link": link, "pub_date": pub_date})
-    return items
+    # Newest first; an item with no parseable date sorts last rather than
+    # crashing the comparison (None isn't orderable against a datetime) or
+    # being silently treated as "newest" via some sentinel.
+    items.sort(key=lambda it: it["pub_date"] or dt.datetime.min, reverse=True)
+    return items[:max_items]
