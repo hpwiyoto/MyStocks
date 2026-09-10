@@ -22,6 +22,18 @@ slot, is a real case the first condition alone missed entirely --
 confirmed live, it just sat waiting several more hours for data that was
 already over a week stale). run_daily() is fully idempotent (see its own
 docstring), so this is safe even if it ends up racing a normal run.
+
+The main loop no longer does one long `time.sleep()` straight to the next
+16:30 -- on a laptop that suspends, that single sleep's deadline is pinned
+to the wall time it was computed at, and Windows pauses the sleep timer
+while the system is suspended, so a machine off across 16:30 WIB has its
+one scheduled run for the day slide silently past the whole day even
+though the process stays alive the entire time (confirmed real: 09-10-2026,
+PID alive since the day before, zero run_daily activity that day, data
+frozen at 09-09). Instead it polls every SLICE_SECONDS and re-checks the
+clock + LAST_RUN_MARKER, so "the slot just arrived" and "we woke up well
+past it" both trip the same catch-up, and last_run_date() keeps it to one
+run per calendar day.
 """
 import datetime as dt
 import os
@@ -37,6 +49,10 @@ logger = get_logger("scripts.scheduler_loop")
 WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
 RUN_HOUR = int(os.getenv("SCHEDULER_RUN_HOUR", "16"))
 RUN_MINUTE = int(os.getenv("SCHEDULER_RUN_MINUTE", "30"))
+# How often the loop re-checks the clock instead of sleeping straight to the
+# target. Short enough that a resume-from-suspend past 16:30 fires within a
+# few minutes; long enough to be effectively free. Override for tests.
+SLICE_SECONDS = int(os.getenv("SCHEDULER_POLL_SECONDS", "600"))
 
 
 def next_run_time(now: dt.datetime) -> dt.datetime:
@@ -91,20 +107,44 @@ def catch_up_if_missed(now: dt.datetime) -> None:
         logger.exception("Catch-up run_daily crashed unexpectedly")
 
 
+def run_is_due(now: dt.datetime) -> bool:
+    """Should run_daily fire right now? True when no successful run has
+    completed on today's date AND either today's 16:30 slot has arrived, or
+    the last run is more than a full day stale (don't wait for the clock to
+    catch up a machine that was suspended for days). Same two conditions as
+    catch_up_if_missed, evaluated every poll rather than only at startup --
+    that's what makes a resume-from-suspend past the slot get caught."""
+    last_run = last_run_date()
+    if last_run == now.date():
+        return False
+    target_today = now.replace(hour=RUN_HOUR, minute=RUN_MINUTE, second=0, microsecond=0)
+    missed_todays_slot = now >= target_today
+    missed_a_prior_day = last_run is None or (now.date() - last_run).days > 1
+    return missed_todays_slot or missed_a_prior_day
+
+
 def main():
-    logger.info("Scheduler started. Target run time: %02d:%02d WIB daily.", RUN_HOUR, RUN_MINUTE)
+    logger.info(
+        "Scheduler started. Target run time: %02d:%02d WIB daily, poll tiap %ds.",
+        RUN_HOUR, RUN_MINUTE, SLICE_SECONDS,
+    )
     catch_up_if_missed(dt.datetime.now(WIB))
+    last_logged_target = None
     while True:
         now = dt.datetime.now(WIB)
-        target = next_run_time(now)
-        sleep_seconds = (target - now).total_seconds()
-        logger.info("Next run at %s (dalam %.1f jam)", target.isoformat(), sleep_seconds / 3600)
-        time.sleep(sleep_seconds)
-        logger.info("Waktunya jalan -- memulai run_daily")
-        try:
-            run_daily()
-        except Exception:
-            logger.exception("run_daily crashed unexpectedly in scheduler loop")
+        if run_is_due(now):
+            logger.info("Waktunya jalan (belum ada run sukses %s) -- memulai run_daily", now.date().isoformat())
+            try:
+                run_daily()
+            except Exception:
+                logger.exception("run_daily crashed unexpectedly in scheduler loop")
+            last_logged_target = None  # force a fresh "next run at" line afterwards
+        else:
+            target = next_run_time(now)
+            if target != last_logged_target:  # log once per target, not every poll
+                logger.info("Next run at %s (dalam %.1f jam)", target.isoformat(), (target - now).total_seconds() / 3600)
+                last_logged_target = target
+        time.sleep(SLICE_SECONDS)
 
 
 if __name__ == "__main__":

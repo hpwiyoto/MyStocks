@@ -1,11 +1,9 @@
-import datetime as dt
 import os
 import sys
 import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -17,6 +15,7 @@ from app.style import (
     COLOR_BUY,
     TEXT_MUTED,
     badge_html,
+    data_freshness_note,
     format_traded_value,
     inject_base_css,
     liquidity_sidebar_filter,
@@ -74,28 +73,9 @@ st.info(
 # feature_daily, yang cuma seaktual scheduler harian (lihat
 # scripts/scheduler_loop.py) -- kalau mesin yang menjalankan scheduler
 # sempat mati/tidur, datanya bisa diam-diam basi tanpa tanda apa pun.
-# Ditampilkan eksplisit di sini setelah kejadian nyata: 4 hari basi tanpa
-# ada yang sadar sampai ditanyakan langsung.
-_freshness = load_data_freshness()
-if _freshness is not None:
-    # Business days elapsed, not calendar days -- IDX doesn't trade on
-    # weekends, so a plain calendar diff falsely accuses the scheduler of
-    # having missed a run every single Sunday (2 calendar days since
-    # Friday's close) even when nothing is wrong. np.busday_count excludes
-    # Sat/Sun by default (doesn't know IDX public holidays specifically,
-    # but that's a much rarer false positive than every weekend).
-    _age_days = int(np.busday_count(_freshness, dt.date.today()))
-    if _age_days >= 2:
-        st.warning(
-            f"⚠️ Data harga & indikator terakhir per **{_freshness.strftime('%d %b %Y')}** "
-            f"({_age_days} hari lalu) -- scheduler kemungkinan sempat tidak jalan (mis. laptop "
-            "mati/tidur). Sedang di-update otomatis di background; refresh halaman ini beberapa "
-            "menit lagi untuk data terbaru.",
-        )
-    elif _age_days == 1:
-        st.caption(f"🕒 Data per {_freshness.strftime('%d %b %Y')} (kemarin) -- normal untuk pagi hari sebelum jadwal update sore ini.")
-    else:
-        st.caption(f"✅ Data per {_freshness.strftime('%d %b %Y')} (hari ini).")
+# Ditampilkan di semua halaman lewat helper bersama (dulu hanya di sini)
+# setelah kejadian nyata: data basi berhari-hari tanpa ada yang sadar.
+data_freshness_note(load_data_freshness())
 
 DIVERGENCE_LABELS = {0: "🔥 Ganda (RSI+MACD)", 1: "Tunggal", 2: "-"}
 DIVERGENCE_COLORS = {0: "#A855F7", 1: ACCENT, 2: TEXT_MUTED}

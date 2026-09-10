@@ -8,8 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices
-from app.style import decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context
+from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices
+from app.style import data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context
 from engine.predict import run as predict_run
 from features.build_features import run as build_features_run
 from pipeline.ingest_price import run as ingest_price_run
@@ -37,6 +37,7 @@ def entry_range(price: float) -> tuple[float, float]:
 
 st.title("🎯 Swing Screener")
 st.caption("Prediksi harian saham IDX — probabilitas naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.")
+data_freshness_note(load_data_freshness())
 
 # This page uses the classic file-based pages/ structure, where -- unlike the
 # newer st.navigation API -- widget-keyed session_state is NOT reliably kept

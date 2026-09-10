@@ -12,8 +12,8 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import require_login
-from app.data import load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_latest_turnaround_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
-from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
+from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_latest_turnaround_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
+from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
 
@@ -34,6 +34,8 @@ render_developer_footer()
 
 if st.button("← Kembali ke Home"):
     st.switch_page("Home.py")
+
+data_freshness_note(load_data_freshness())
 
 stocks_df = load_stock_list()
 if stocks_df.empty:

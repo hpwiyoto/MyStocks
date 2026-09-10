@@ -9,6 +9,7 @@ import streamlit as st
 
 from app.auth import require_login
 from app.data import (
+    load_data_freshness,
     load_latest_predictions,
     load_latest_turnaround_predictions,
     load_liquidity,
@@ -19,6 +20,7 @@ from app.style import (
     ACCENT,
     TEXT_MUTED,
     badge_html,
+    data_freshness_note,
     format_traded_value,
     inject_base_css,
     liquidity_sidebar_filter,
@@ -63,6 +65,7 @@ st.info(
     "masing-masing; status Momentum Screener persis sama dengan kolom ✅ Tervalidasi di sana.",
     icon="ℹ️",
 )
+data_freshness_note(load_data_freshness())
 
 TIER_LABELS = {3: "🌟 Semua Sepakat (3/3)", 2: "2 dari 3 Sepakat", 1: "1 dari 3"}
 TIER_COLORS = {3: "#FBBF24", 2: ACCENT, 1: TEXT_MUTED}

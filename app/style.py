@@ -1,5 +1,6 @@
 """Shared color palette, CSS, and small render helpers used across all pages.
 Colors mirror .streamlit/config.toml so badges/charts match the app theme."""
+import datetime as dt
 import textwrap
 
 import streamlit as st
@@ -156,6 +157,42 @@ def render_developer_footer():
         """,
         unsafe_allow_html=True,
     )
+
+
+def data_freshness_note(freshness_date, *, sidebar: bool = False) -> None:
+    """One-line 'data per <tanggal>' status, shown on every page so a
+    silently-stale scheduler (laptop asleep past the 16:30 WIB slot -- a
+    real incident, see scripts/scheduler_loop.py) is visible everywhere,
+    not just on the Momentum Screener where this check first lived.
+
+    `freshness_date` is app.data.load_data_freshness()'s return -- the most
+    recent date in feature_daily -- or None. Passed in by the caller rather
+    than imported here to keep app.style free of an app.data dependency.
+    `sidebar=True` renders into st.sidebar (for pages whose main column
+    opens with a big custom header)."""
+    target = st.sidebar if sidebar else st
+    if freshness_date is None:
+        target.caption("⚠️ Status kesegaran data tidak diketahui (feature_daily kosong).")
+        return
+    today = dt.date.today()
+    # Weekday-only gap: IDX doesn't trade Sat/Sun, so a plain calendar diff
+    # would falsely flag every Monday as stale. Doesn't know IDX public
+    # holidays specifically -- a much rarer false positive than weekends.
+    age = sum(
+        1 for i in range(1, (today - freshness_date).days + 1)
+        if (freshness_date + dt.timedelta(days=i)).weekday() < 5
+    )
+    label = freshness_date.strftime("%d %b %Y")
+    if age >= 2:
+        target.warning(
+            f"⚠️ Data harga & indikator terakhir per **{label}** ({age} hari bursa lalu) -- "
+            "scheduler kemungkinan sempat tidak jalan (mis. laptop mati/tidur). Kalau update "
+            "otomatis sedang jalan, refresh halaman ini beberapa menit lagi."
+        )
+    elif age == 1:
+        target.caption(f"🕒 Data per {label} (kemarin) -- normal untuk pagi hari sebelum jadwal update sore ini.")
+    else:
+        target.caption(f"✅ Data per {label} (hari ini).")
 
 
 # (label, threshold in Rupiah). First entry (None) is the default -- a
