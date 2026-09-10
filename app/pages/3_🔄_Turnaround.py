@@ -8,8 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_latest_turnaround_predictions, load_stock_list
-from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer
+from app.data import load_latest_turnaround_predictions, load_liquidity, load_stock_list
+from app.style import decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer
 
 st.set_page_config(page_title="MyStocks — Turnaround", page_icon="🔄", layout="wide")
 inject_base_css()
@@ -40,6 +40,8 @@ if df.empty:
     )
     st.stop()
 
+df = df.merge(load_liquidity(), on="stock_code", how="left")
+
 c1, c2, c3 = st.columns(3)
 c1.metric("Total kandidat (bearish/bottoming saat ini)", len(df))
 c2.metric("POTENSIAL", int((df["decision"] == "POTENSIAL").sum()))
@@ -55,8 +57,11 @@ with st.sidebar:
         help="Hanya mencari di antara kandidat yang SEDANG bearish/bottoming di bawah -- "
              "beda dari pencarian di Swing yang mencakup hampir seluruh saham.",
     )
+min_liq = liquidity_sidebar_filter("turnaround_liq")
 
 filtered = df[df["decision"].isin(decision_filter)]
+if min_liq is not None:
+    filtered = filtered[filtered["avg_traded_value"].fillna(0) >= min_liq]
 if search:
     q = search.strip().lower()
     filtered = filtered[
@@ -98,14 +103,16 @@ if filtered.empty:
 st.subheader(f"📋 {len(filtered)} Kandidat — urut berdasarkan probabilitas")
 st.caption("Klik header kolom untuk sortir ulang. Klik satu baris untuk buka halaman detail saham itu.")
 
-table_df = filtered[["stock_code", "name", "sector", "industry", "decision", "probability", "entry_price", "regime"]].reset_index(drop=True)
+table_df = filtered[["stock_code", "name", "sector", "industry", "decision", "probability", "entry_price", "regime", "avg_traded_value"]].reset_index(drop=True)
 table_df["probability"] = table_df["probability"].astype(float) * 100
+table_df["liq_display"] = table_df["avg_traded_value"].apply(format_traded_value)
 
 event = st.dataframe(
     table_df,
     width="stretch",
     hide_index=True,
     height=min(36 * (len(table_df) + 1) + 3, 600),
+    column_order=["stock_code", "name", "sector", "industry", "decision", "probability", "entry_price", "regime", "liq_display"],
     column_config={
         "stock_code": st.column_config.TextColumn("Kode"),
         "name": st.column_config.TextColumn("Nama"),
@@ -115,6 +122,7 @@ event = st.dataframe(
         "probability": st.column_config.ProgressColumn("Probabilitas", format="%.1f%%", min_value=0.0, max_value=100.0),
         "entry_price": st.column_config.NumberColumn("Harga Saat Ini", format="%.0f"),
         "regime": st.column_config.TextColumn("Regime"),
+        "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
     },
     on_select="rerun",
     selection_mode="single-row",
@@ -168,6 +176,7 @@ for row_chunk in rows:
             sub1.markdown(f"<span class='mystocks-muted'>Harga Saat Ini</span><br>{float(r['entry_price']):,.0f}", unsafe_allow_html=True)
             industry_display = "-" if pd.isna(r["industry"]) else r["industry"]
             sub2.markdown(f"<span class='mystocks-muted'>Sub-sektor</span><br>{industry_display}", unsafe_allow_html=True)
+            st.markdown(f"<span class='mystocks-muted'>Transaksi/hari (rata2 60h): {format_traded_value(r.get('avg_traded_value'))}</span>", unsafe_allow_html=True)
             if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")

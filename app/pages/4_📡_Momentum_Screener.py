@@ -10,14 +10,16 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_latest_predictions, load_screener_raw_panel, load_stock_list
+from app.data import load_data_freshness, load_latest_predictions, load_liquidity, load_screener_raw_panel, load_stock_list
 from app.style import (
     ACCENT,
     COLOR_AVOID,
     COLOR_BUY,
     TEXT_MUTED,
     badge_html,
+    format_traded_value,
     inject_base_css,
+    liquidity_sidebar_filter,
     regime_badge,
     render_developer_footer,
 )
@@ -144,6 +146,7 @@ df = df.merge(
     else pd.DataFrame(columns=["stock_code", "probability"]),
     on="stock_code", how="left",
 )
+df = df.merge(load_liquidity(), on="stock_code", how="left")
 
 with st.sidebar:
     st.header("🔎 Filter")
@@ -214,6 +217,8 @@ with st.sidebar:
 # characteristic the validated combination is built on).
 validated_total = int(df["validated_signal"].sum())
 
+min_liq = liquidity_sidebar_filter("momentum_liq")
+
 if validated_only:
     # Deliberately bypasses every other filter below -- RSI/MACD/CMF/Volume
     # were tuned around the ORIGINAL (pre-backtest) idea of what a good
@@ -261,6 +266,12 @@ else:
             filtered["stock_code"].str.lower().str.contains(q)
             | filtered["name"].fillna("").str.lower().str.contains(q)
         ]
+
+# Liquidity filter applies in BOTH modes (validated-only and normal) -- a
+# user who only wants tradeable names wants that regardless of which
+# signal set they're looking at. Default off (see liquidity_sidebar_filter).
+if min_liq is not None:
+    filtered = filtered[filtered["avg_traded_value"].fillna(0) >= min_liq]
 
 # Priority is the filter/divergence result, NOT the model. Six levels:
 # 1. validated_signal DESC -- the ONE combination actually proven to beat
@@ -316,10 +327,11 @@ table_df["money_flow"] = table_df["cmf_20"].apply(
 table_df["rvol_display"] = table_df["rvol_20"].apply(lambda v: "-" if pd.isna(v) else f"{v:.1f}x")
 table_df["probability_pct"] = table_df["probability"].astype(float) * 100
 table_df["validated_display"] = table_df["validated_signal"].apply(lambda v: "✅ Ya" if v else "-")
+table_df["liq_display"] = table_df["avg_traded_value"].apply(format_traded_value)
 
 display_cols = [
     "stock_code", "name", "validated_display", "close", "rsi_14", "macd_status", "momentum",
-    "money_flow", "rvol_display", "divergence_label", "probability_pct", "regime",
+    "money_flow", "rvol_display", "divergence_label", "probability_pct", "regime", "liq_display",
 ]
 
 event = st.dataframe(
@@ -340,6 +352,7 @@ event = st.dataframe(
         "divergence_label": st.column_config.TextColumn("Divergence"),
         "probability_pct": st.column_config.ProgressColumn("Probabilitas Swing", format="%.1f%%", min_value=0.0, max_value=100.0),
         "regime": st.column_config.TextColumn("Regime"),
+        "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
     },
     on_select="rerun",
     selection_mode="single-row",
@@ -411,6 +424,7 @@ for row_chunk in rows:
                         {"Akumulasi" if pd.notna(r['cmf_20']) and r['cmf_20'] > 0 else "Distribusi" if pd.notna(r['cmf_20']) else "-"}
                     </div>
                     <div style="margin-top:0.4rem;" class="mystocks-muted">Probabilitas Swing: {prob_txt}</div>
+                    <div style="margin-top:0.2rem;" class="mystocks-muted">Transaksi/hari: {format_traded_value(r.get('avg_traded_value'))}</div>
                 </div>
                 """)
             card_html = "\n".join(line for line in card_html.splitlines() if line.strip())

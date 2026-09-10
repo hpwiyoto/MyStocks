@@ -282,6 +282,46 @@ def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_liquidity(window_days: int = 60) -> pd.DataFrame:
+    """Average daily traded VALUE (close * volume, in Rupiah) over the last
+    ~`window_days` trading days, one row per ticker -- a display-only
+    liquidity gauge for the screener pages' optional "liquid names only"
+    filter. Deliberately NOT a model feature: scripts/test_liquidity_
+    filter.py backtested gating each screener's candidate pool on this and
+    found it does NOT improve (and noticeably hurt Swing's) top-2 win
+    rate, so it's surfaced as information + an opt-in filter, never a hard
+    universe cut. Raw share `volume` alone would be misleading (10M shares
+    of a Rp50 stock is Rp0.5b; 1M shares of a Rp10k stock is Rp10b) --
+    traded value is the standard cross-stock-comparable measure.
+
+    Same calendar-date-string WHERE clause style as load_screener_raw_panel
+    (SQLite-and-MySQL-safe, no dialect date math); the exact trailing
+    `window_days` count is taken in pandas after the fetch.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["price_history"]):
+        return pd.DataFrame(columns=["stock_code", "avg_traded_value"])
+    cutoff = (dt.date.today() - dt.timedelta(days=window_days * 2)).isoformat()
+    df = pd.read_sql(
+        text("""
+        SELECT stock_code, date, close, volume
+        FROM price_history
+        WHERE date >= :cutoff AND source_provider = 'yfinance'
+        ORDER BY stock_code, date
+        """),
+        engine,
+        params={"cutoff": cutoff},
+    )
+    if df.empty:
+        return pd.DataFrame(columns=["stock_code", "avg_traded_value"])
+    df["traded_value"] = df["close"].astype(float) * df["volume"].astype(float)
+    last_n = df.groupby("stock_code").tail(window_days)
+    out = last_n.groupby("stock_code")["traded_value"].mean().reset_index()
+    out.columns = ["stock_code", "avg_traded_value"]
+    return out
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_stock_list() -> pd.DataFrame:
     engine = get_engine()
     if _missing_tables(engine, ["stocks"]):

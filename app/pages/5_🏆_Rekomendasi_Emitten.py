@@ -11,6 +11,7 @@ from app.auth import require_login
 from app.data import (
     load_latest_predictions,
     load_latest_turnaround_predictions,
+    load_liquidity,
     load_screener_raw_panel,
     load_stock_list,
 )
@@ -18,7 +19,9 @@ from app.style import (
     ACCENT,
     TEXT_MUTED,
     badge_html,
+    format_traded_value,
     inject_base_css,
+    liquidity_sidebar_filter,
     regime_badge,
     render_developer_footer,
 )
@@ -108,6 +111,7 @@ df["swing_hit"] = df["swing_decision"].isin(["BUY", "WATCH"])
 df["turnaround_hit"] = df["turnaround_decision"] == "POTENSIAL"
 df["momentum_hit"] = df["validated_signal"].fillna(False)
 df["agreement_count"] = df[["swing_hit", "turnaround_hit", "momentum_hit"]].sum(axis=1).astype(int)
+df = df.merge(load_liquidity(), on="stock_code", how="left")
 
 with st.sidebar:
     st.header("🔎 Filter")
@@ -117,8 +121,11 @@ with st.sidebar:
         index=1,
     )
     search = st.text_input("Cari kode/nama saham", placeholder="mis. CYBR atau bank")
+min_liq = liquidity_sidebar_filter("rekomendasi_liq")
 
 filtered = df[df["agreement_count"] >= min_agreement].copy()
+if min_liq is not None:
+    filtered = filtered[filtered["avg_traded_value"].fillna(0) >= min_liq]
 if search:
     q = search.strip().lower()
     filtered = filtered[
@@ -155,8 +162,9 @@ table_df["turnaround_display"] = table_df.apply(
     lambda r: "-" if pd.isna(r["turnaround_decision"]) else f"{r['turnaround_decision']} ({fmt_pct(r['turnaround_prob'])})", axis=1,
 )
 table_df["momentum_display"] = table_df["momentum_hit"].apply(lambda v: "✅ Ya" if v else "-")
+table_df["liq_display"] = table_df["avg_traded_value"].apply(format_traded_value)
 
-display_cols = ["stock_code", "name", "tingkat", "close", "swing_display", "turnaround_display", "momentum_display", "regime"]
+display_cols = ["stock_code", "name", "tingkat", "close", "swing_display", "turnaround_display", "momentum_display", "regime", "liq_display"]
 
 event = st.dataframe(
     table_df[display_cols].reset_index(drop=True),
@@ -172,6 +180,7 @@ event = st.dataframe(
         "turnaround_display": st.column_config.TextColumn("Turnaround"),
         "momentum_display": st.column_config.TextColumn("Momentum"),
         "regime": st.column_config.TextColumn("Regime"),
+        "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
     },
     on_select="rerun",
     selection_mode="single-row",
@@ -228,7 +237,8 @@ for row_chunk in rows:
                     <div style="margin-top:0.6rem;" class="mystocks-muted">
                         <b>Swing</b>: {swing_txt}<br>
                         <b>Turnaround</b>: {turnaround_txt}<br>
-                        <b>Momentum</b>: {momentum_txt}
+                        <b>Momentum</b>: {momentum_txt}<br>
+                        <b>Transaksi/hari</b>: {format_traded_value(r.get('avg_traded_value'))}
                     </div>
                 </div>
                 """)

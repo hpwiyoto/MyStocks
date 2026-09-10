@@ -158,6 +158,55 @@ def render_developer_footer():
     )
 
 
+# (label, threshold in Rupiah). First entry (None) is the default -- a
+# hard liquidity cut was backtested (scripts/test_liquidity_filter.py) and
+# does NOT improve any screener's top-2 hit rate (it noticeably hurt
+# Swing's: 69% -> ~50%), so this filter is strictly opt-in, never on by
+# default.
+LIQUIDITY_FILTER_OPTIONS = [
+    ("Semua (tanpa filter likuiditas)", None),
+    ("≥ Rp 500 juta/hari", 0.5e9),
+    ("≥ Rp 1 miliar/hari", 1e9),
+    ("≥ Rp 2 miliar/hari", 2e9),
+    ("≥ Rp 5 miliar/hari", 5e9),
+]
+
+
+def format_traded_value(value) -> str:
+    """Rupiah traded-value, compact ('Rp 4,4 M' / 'Rp 710 jt' / 'Rp 12 rb').
+    NaN/None -> '-' (same SQL-NULL-is-float-NaN guard as safe_ratio)."""
+    if value is None or value != value:
+        return "-"
+    v = float(value)
+    if v >= 1e9:
+        return f"Rp {v / 1e9:,.1f} M".replace(",", ".")
+    if v >= 1e6:
+        return f"Rp {v / 1e6:,.0f} jt".replace(",", ".")
+    if v >= 1e3:
+        return f"Rp {v / 1e3:,.0f} rb".replace(",", ".")
+    return f"Rp {v:,.0f}".replace(",", ".")
+
+
+def liquidity_sidebar_filter(key: str) -> float | None:
+    """Sidebar selectbox for a minimum average-daily-traded-value gate,
+    shared by all four screener pages. Returns the threshold in Rupiah, or
+    None for 'no filter' (the default -- see LIQUIDITY_FILTER_OPTIONS).
+    `key` must be unique per page (Streamlit widget keys are global)."""
+    labels = [o[0] for o in LIQUIDITY_FILTER_OPTIONS]
+    choice = st.sidebar.selectbox(
+        "Likuiditas minimum (rata-rata transaksi 60 hari)",
+        labels, index=0, key=key,
+        help=(
+            "Saring ke saham yang cukup ramai ditransaksikan supaya sinyalnya lebih "
+            "mencerminkan harga yang benar-benar bisa dieksekusi (slippage/spread kecil). "
+            "Default: tanpa filter -- backtest menunjukkan filter ini TIDAK menaikkan "
+            "akurasi (malah menurunkan untuk Swing), jadi murni opsional untuk yang "
+            "hanya mau nama likuid."
+        ),
+    )
+    return dict(LIQUIDITY_FILTER_OPTIONS)[choice]
+
+
 def safe_ratio(value, fmt: str = "{:.2f}", max_abs: float = 100) -> str:
     """Format a valuation ratio (P/E, P/B), guarding against a confirmed
     upstream data quirk: yfinance's bookValue field is near-zero for some IDX

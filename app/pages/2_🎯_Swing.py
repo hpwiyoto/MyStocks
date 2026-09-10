@@ -8,8 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_ihsg_trend, load_latest_predictions, load_live_prices
-from app.style import decision_badge, inject_base_css, regime_badge, render_developer_footer, render_ihsg_context
+from app.data import load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices
+from app.style import decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context
 from engine.predict import run as predict_run
 from features.build_features import run as build_features_run
 from pipeline.ingest_price import run as ingest_price_run
@@ -91,6 +91,11 @@ if df.empty:
     )
     st.stop()
 
+# Liquidity: display-only column + opt-in "≥ Rp X/day" filter (default off
+# -- see scripts/test_liquidity_filter.py for why it's not on by default).
+df = df.merge(load_liquidity(), on="stock_code", how="left")
+min_liq = liquidity_sidebar_filter("swing_liq")
+
 regime_options = sorted(df["regime"].dropna().unique().tolist())
 # drop persisted selections that no longer exist in today's data (e.g.
 # after a Refresh) -- multiselect errors if default holds a value not in
@@ -107,6 +112,8 @@ filtered = df[
     & df["probability"].astype(float).ge(min_prob)
     & (df["regime"].isin(regime_filter) | df["regime"].isna())
 ]
+if min_liq is not None:
+    filtered = filtered[filtered["avg_traded_value"].fillna(0) >= min_liq]
 price = filtered["entry_price"].astype(float)
 if price_filter == "Di bawah 50":
     filtered = filtered[price < 50]
@@ -239,6 +246,7 @@ for row_chunk in rows:
             e3, e4 = st.columns(2)
             e3.markdown(f"<span class='mystocks-muted'>Stop Loss</span><br>{float(r['stop_loss_price']):,.0f}", unsafe_allow_html=True)
             e4.markdown(f"<span class='mystocks-muted'>Take Profit</span><br>{float(r['take_profit_price']):,.0f}", unsafe_allow_html=True)
+            st.markdown(f"<span class='mystocks-muted'>Transaksi/hari (rata2 60h): {format_traded_value(r.get('avg_traded_value'))}</span>", unsafe_allow_html=True)
             if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")
@@ -268,9 +276,10 @@ else:
     st.subheader(f"📋 Semua Saham ({len(filtered)}) — urut berdasarkan probabilitas")
 st.caption("Klik header kolom untuk sortir ulang. Klik satu baris untuk buka halaman detail saham itu.")
 
-table_df = table_source[["stock_code", "name", "decision", "probability", "regime", "entry_price", "stop_loss_price", "take_profit_price"]].reset_index(drop=True)
+table_df = table_source[["stock_code", "name", "decision", "probability", "regime", "entry_price", "stop_loss_price", "take_profit_price", "avg_traded_value"]].reset_index(drop=True)
 table_df["probability"] = table_df["probability"].astype(float) * 100  # ProgressColumn format="%.1f%%" doesn't auto-scale from 0-1
 table_df["entry_range"] = table_df["entry_price"].apply(lambda p: "{:,.0f} - {:,.0f}".format(*entry_range(p)))
+table_df["liq_display"] = table_df["avg_traded_value"].apply(format_traded_value)
 
 event = st.dataframe(
     table_df,
@@ -279,7 +288,7 @@ event = st.dataframe(
     height=min(36 * (len(table_df) + 1) + 3, 600),
     column_order=[
         "stock_code", "name", "decision", "probability", "regime",
-        "entry_price", "entry_range", "stop_loss_price", "take_profit_price",
+        "entry_price", "entry_range", "stop_loss_price", "take_profit_price", "liq_display",
     ],
     column_config={
         "stock_code": st.column_config.TextColumn("Kode"),
@@ -291,6 +300,7 @@ event = st.dataframe(
         "entry_range": st.column_config.TextColumn("Entry"),
         "stop_loss_price": st.column_config.NumberColumn("Stop Loss", format="%.0f"),
         "take_profit_price": st.column_config.NumberColumn("Take Profit", format="%.0f"),
+        "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
     },
     on_select="rerun",
     selection_mode="single-row",
