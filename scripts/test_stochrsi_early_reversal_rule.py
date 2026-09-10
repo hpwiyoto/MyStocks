@@ -12,19 +12,27 @@ The rule (an "early reversal, buy/watch before MACD confirms" setup):
   3. Stochastic RSI %K JUST crossed above %D from below -> k[t] > d[t] and
      k[t-1] <= d[t-1]. A leading oscillator turn, ahead of the lagging
      MACD-line/signal cross.
+  4. Volume confirmation ON the crossover bar -> rvol_20 >= threshold
+     (relative volume vs its own 20-day average). Added after a first run
+     without it landed exactly on the null baseline; tested at 1.0 / 1.2 /
+     1.5 to see if a volume spike on the turn separates a real move from
+     noise.
 
-Common yardstick + methodology are the SAME as every other screener
-backtest here (search_momentum_rules.py's 10-day/+5%/-2.5% triple-barrier
-outcome, 5-year no-lookahead as-of-date sampling), and the Swing /
+Two target definitions, both reported (the user restated the goal as
+"reaches >5%% within 10 days"):
+  - triple_barrier: +5%% BEFORE -2.5%% within 10 trading days -- the
+    project-standard label (Swing model, every momentum backtest here).
+  - touch_5pct_no_stop: high reaches entry*1.05 at any point in the next
+    10 trading days, ignoring any drawdown first -- the looser reading of
+    "sempat naik >5%%". Higher base rate by construction.
+
+Methodology (5-year no-lookahead as-of-date sampling) and the Swing /
 Turnaround / Momentum top-2 numbers are recomputed in THIS run on the
 identical as-of dates (reusing scripts/backtest_top2_screeners.py's exact
-scoring/ranking helpers) so the comparison is genuinely same-footing, not
-against numbers from a prior run.
-
+scoring/ranking helpers) so the comparison is genuinely same-footing.
 StochRSI isn't stored in feature_daily -- computed here from close via
-ta.momentum.StochRSIIndicator (window=14, smooth1=3, smooth2=3, the
-standard convention). Same optimism caveat as backtest_triple_
-intersection.py for any Swing/Turnaround probability involved.
+ta.momentum.StochRSIIndicator (14/3/3, standard). Same optimism caveat as
+backtest_triple_intersection.py for any Swing/Turnaround probability.
 
 Usage:
     python -m scripts.test_stochrsi_early_reversal_rule
@@ -49,16 +57,33 @@ from scripts.backtest_top2_screeners import (
     momentum_extra_indicators,
     swing_decision_tier,
 )
-from scripts.search_momentum_rules import AS_OF_STRIDE, HORIZON, LOOKBACK_DAYS, WARMUP_DATES, triple_barrier_outcome, wilson_lower_bound
+from scripts.search_momentum_rules import (
+    AS_OF_STRIDE,
+    HORIZON,
+    LOOKBACK_DAYS,
+    TARGET_PCT,
+    WARMUP_DATES,
+    triple_barrier_outcome,
+    wilson_lower_bound,
+)
 
 logger = get_logger("scripts.test_stochrsi_early_reversal_rule")
 
 EMA_BELOW_MA_MIN_DAYS = 9
 
 
+def touch_target_no_stop(fwd: pd.DataFrame, entry_price: float) -> int | None:
+    """Looser target: did HIGH reach entry*(1+TARGET_PCT) anywhere in the
+    next HORIZON bars, ignoring any drawdown first -- the "sempat naik >5%"
+    reading. Returns 1 if touched, 0 if not; None only if there isn't a
+    full HORIZON of forward data (caller already guards that)."""
+    target = entry_price * (1 + TARGET_PCT)
+    return 1 if (fwd["high"] >= target).any() else 0
+
+
 def add_rule_indicators(g: pd.DataFrame) -> pd.DataFrame:
-    """g: one ticker, ascending by date, already has ema_9/sma_20/macd_hist
-    from feature_daily + close from price_history. Adds the three
+    """g: one ticker, ascending by date, already has ema_9/sma_20/macd_hist/
+    rvol_20 from feature_daily + close from price_history. Adds the four
     sub-conditions and the full-combo flag, all no-lookahead (rolling/lag
     only)."""
     g = g.copy()
@@ -71,7 +96,14 @@ def add_rule_indicators(g: pd.DataFrame) -> pd.DataFrame:
     g["ema9_below_ma20_streak_ok"] = ema_below.rolling(EMA_BELOW_MA_MIN_DAYS).sum() >= EMA_BELOW_MA_MIN_DAYS
 
     g["macd_hist_red"] = g["macd_hist"] < 0
-    g["rule_hit"] = g["macd_hist_red"] & g["ema9_below_ma20_streak_ok"] & g["stochrsi_cross_up"]
+    # "volume di atas MA20" -- rvol_20 IS volume / volume.rolling(20).mean()
+    # (features/technical.py), so > 1 is exactly "above its 20-day average"
+    # ON this bar (the StochRSI-cross bar).
+    g["vol_above_ma20"] = g["rvol_20"] > 1
+    g["rule_hit"] = (
+        g["macd_hist_red"] & g["ema9_below_ma20_streak_ok"]
+        & g["stochrsi_cross_up"] & g["vol_above_ma20"]
+    )
     return g
 
 
@@ -118,6 +150,7 @@ def run():
             row = latest.to_dict()
             row["stock_code"] = code
             row["outcome"] = outcome
+            row["outcome_touch"] = touch_target_no_stop(fwd, float(latest["close"]))
             start = max(0, idx - LOOKBACK_DAYS + 1)
             window_df = g.iloc[start:idx + 1]
             row.update(detect_bullish_divergence(window_df))
@@ -155,8 +188,10 @@ def run():
                 "macd_hist_red": bool(r["macd_hist_red"]),
                 "ema9_below_ma20_streak_ok": bool(r["ema9_below_ma20_streak_ok"]),
                 "stochrsi_cross_up": bool(r["stochrsi_cross_up"]),
+                "vol_above_ma20": bool(r["vol_above_ma20"]),
                 "rule_hit": bool(r["rule_hit"]),
                 "outcome": r["outcome"],
+                "outcome_touch": r["outcome_touch"],
             })
         rule_pool = day_df[day_df["rule_hit"].fillna(False)]
         for _, r in rule_pool.iterrows():
@@ -180,24 +215,29 @@ def run():
             logger.info("... %d/%d as-of dates done (%d rule hits so far)", n_done + 1, len(as_of_dates), len(rule_rows))
 
     subcond = pd.DataFrame(subcond_rows)
-    null_rate = subcond["outcome"].mean()
-    logger.info("=" * 74)
-    logger.info("NULL BASELINE: n=%d win_rate=%.4f", len(subcond), null_rate)
-    logger.info("=" * 74)
+    logger.info("=" * 90)
+    logger.info("NULL BASELINE: n=%d | triple-barrier win_rate=%.4f | touch-+5%%-no-stop rate=%.4f",
+                len(subcond), subcond["outcome"].mean(), subcond["outcome_touch"].mean())
+    logger.info("=" * 90)
 
     def line(label, mask):
         sub = subcond[mask]
         n = len(sub)
-        w = int(sub["outcome"].sum())
-        wr = w / n if n else float("nan")
-        lb = wilson_lower_bound(w, n) if n else 0.0
-        logger.info("  %-52s n=%-6d win_rate=%.4f  wilson_lb=%.4f", label, n, wr, lb)
+        w_tb = int(sub["outcome"].sum())
+        w_t = int(sub["outcome_touch"].sum())
+        tb = w_tb / n if n else float("nan")
+        tch = w_t / n if n else float("nan")
+        logger.info("  %-46s n=%-6d | triple-barrier %.4f (LB %.4f) | touch-+5%% %.4f (LB %.4f)",
+                    label, n, tb, wilson_lower_bound(w_tb, n) if n else 0.0,
+                    tch, wilson_lower_bound(w_t, n) if n else 0.0)
 
-    logger.info("PROPOSED RULE -- each condition alone, then the full combo:")
-    line("1. MACD histogram merah (macd_hist < 0)", subcond["macd_hist_red"])
-    line(f"2. EMA9 < MA20 selama >= {EMA_BELOW_MA_MIN_DAYS} hari", subcond["ema9_below_ma20_streak_ok"])
+    logger.info("PROPOSED RULE -- each condition alone, then the full combo (now WITH volume>MA20):")
+    line("1. MACD histogram merah (macd_hist<0)", subcond["macd_hist_red"])
+    line(f"2. EMA9<MA20 selama >={EMA_BELOW_MA_MIN_DAYS} hari", subcond["ema9_below_ma20_streak_ok"])
     line("3. StochRSI %K cross %D dari bawah (fresh)", subcond["stochrsi_cross_up"])
-    line("FULL RULE (1 AND 2 AND 3)", subcond["rule_hit"])
+    line("4. Volume > MA20 (rvol_20 > 1)", subcond["vol_above_ma20"])
+    line("3+4: StochRSI cross AND volume>MA20", subcond["stochrsi_cross_up"] & subcond["vol_above_ma20"])
+    line("FULL RULE (1 AND 2 AND 3 AND 4)", subcond["rule_hit"])
 
     logger.info("=" * 74)
     logger.info("TOP-2 PER DAY -- proposed rule vs the three screeners, identical as-of dates")
