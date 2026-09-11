@@ -24,7 +24,20 @@ combo is found, the magnitude itself is worth re-tuning.
 Stage A: null baseline + per-regime breakdown (which regime(s) actually
 beat random for THIS target, unlike presuming bottoming).
 Stage B: within the best regime(s), sweep individual technical conditions
-(available feature_daily columns) for which ones separate winners.
+(available feature_daily columns) for which ones separate winners. Round
+2 (after a direct user question about why "rally speed" features weren't
+in round 1) added ret_10d_pct/ret_10d_atr_norm, macd_hist_accel_3d,
+ema20_accel_5d, bb_width_change_5d, higher_high+higher_low structure,
+distance_to_support_pct, obv_zscore_20, market_cap_log segment,
+sector_relative_strength_20d_pct, net_foreign_flow -- the rally-speed/
+acceleration group (ret_10d_atr_norm, ret_10d_pct, macd_hist_accel_3d,
+bb_width_change_5d) matched round 1's best single condition (rvol_20>=1.2,
+LB 37.7%) at up to 1.8x the coverage, and stacking the best three
+(ret_10d_atr_norm>1.0 AND rvol_20>=1.2 AND bb_width_change_5d>0) is the
+best combo found so far: n=2291, win_rate 40.0%, wilson_lb 38.0%. Size
+segment, uptrend-structure cleanliness, sector-relative strength, and
+foreign flow all tested negative-to-flat -- not dead ends worth chasing
+further here.
 
 Usage:
     python -m scripts.search_turnaround_v2_target
@@ -129,9 +142,22 @@ def run():
     n_base, wr_base, lb_base = _stat(base)
     logger.info("  (regime %s SAJA, tanpa syarat lain): n=%-6d win_rate=%.1f%% wilson_lb=%.1f%%", best_regimes, n_base, wr_base * 100, lb_base * 100)
 
+    # Round 1 (macd/cmf/rvol/rsi/ema-sma-cross/adx/relative-strength/obv-
+    # slope/higher_low/dist-to-resistance) covered the obvious technical
+    # families. Round 2 below adds the ones that round 1 skipped but are
+    # squarely on-point for an "overextended"/momentum-continuation
+    # finding specifically -- rally SPEED and ACCELERATION (not just
+    # direction), volatility expansion, price-structure cleanliness,
+    # support cushion, a properly normalized volume-flow z-score, size
+    # segment, sector-relative and foreign-flow context. Added after a
+    # direct user question about why these weren't in the first pass --
+    # they should have been from the start given the "overextended"
+    # result, not an afterthought.
+    median_mcap = base["market_cap_log"].median()
     conds = {
         "macd_hist_slope_3d>0":        base["macd_hist_slope_3d"] > 0,
         "macd_hist>0 (di atas nol)":   base["macd_hist"] > 0,
+        "macd_hist_accel_3d>0":        base["macd_hist_accel_3d"] > 0,
         "cmf_20<0 (distribusi)":       base["cmf_20"] < 0,
         "cmf_20>0 (akumulasi)":        base["cmf_20"] > 0,
         "rvol_20>=1.0":                base["rvol_20"] >= 1.0,
@@ -140,11 +166,23 @@ def run():
         "rsi_14 45-65":                base["rsi_14"].between(45, 65),
         "ema9>sma20":                  base["ema_9"] > base["sma_20"],
         "sma20>sma50":                 base["sma_20"] > base["sma_50"],
+        "ema20_slope_5d>0":            base["ema20_slope_5d"] > 0,
+        "ema20_accel_5d>0 (tren makin cepat)": base["ema20_accel_5d"] > 0,
         "adx_14>=20 (tren kuat)":      base["adx_14"] >= 20,
         "relative_strength_20d>0":     base["relative_strength_20d_pct"] > 0,
+        "sector_relative_strength_20d>0": base["sector_relative_strength_20d_pct"] > 0,
         "obv_slope_5d>0":              base["obv_slope_5d"] > 0,
+        "obv_zscore_20>0.5":           base["obv_zscore_20"] > 0.5,
         "higher_low_20d":              base["higher_low_20d"] == 1,
+        "higher_high_20d & higher_low_20d (struktur uptrend bersih)": (base["higher_high_20d"] == 1) & (base["higher_low_20d"] == 1),
         "dist_to_resistance>10%":      base["distance_to_resistance_pct"] > 10,
+        "dist_to_support>15% (bantalan aman)": base["distance_to_support_pct"] > 15,
+        "bb_width_change_5d>0 (volatilitas melebar)": base["bb_width_change_5d"] > 0,
+        "ret_10d_pct>5 (rally 10 hari)": base["ret_10d_pct"] > 5,
+        "ret_10d_atr_norm>1.0 (rally cepat rel. volatilitas)": base["ret_10d_atr_norm"] > 1.0,
+        "net_foreign_flow>0 (asing net beli)": base["net_foreign_flow"] > 0,
+        f"market_cap_log < median ({median_mcap:.2f}, cap kecil)":  base["market_cap_log"] < median_mcap,
+        f"market_cap_log >= median ({median_mcap:.2f}, cap besar)": base["market_cap_log"] >= median_mcap,
     }
     results = []
     for name, mask in conds.items():
