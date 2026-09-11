@@ -1,11 +1,19 @@
-"""Fase 6: daily orchestration -- ingest -> features -> predict (swing +
-turnaround) -> monitor.
+"""Fase 6: daily orchestration -- ingest -> features -> predict (swing) ->
+monitor.
 
 Meant to be triggered once per day (after IDX market close) by the
 scheduler service in docker-compose.yml. Each step is isolated: a failure
 in one step is logged and does NOT prevent later steps from attempting to
 run, since e.g. slightly stale features are still more useful than no
 predictions at all.
+
+The Turnaround model's daily scoring step was removed after the
+Turnaround page itself was retired (its top-2 real-world performance,
+and even its proposed 3-month replacement's, came in well below Swing's
+-- see scripts/compare_turnaround_v2_top2.py). engine/predict_turnaround.py
+and its training pipeline (scripts/train_turnaround.py etc.) are kept in
+the repo as historical/reusable research, just no longer wired into the
+daily run.
 
 Usage:
     python -m scripts.run_daily
@@ -50,29 +58,16 @@ def run():
     except Exception:
         logger.exception("predict step raised unexpectedly")
 
-    # Was missing entirely until found via a user report ("Turnaround
-    # kosong") -- the scheduler ran ingest/features/swing-predict daily but
-    # never re-scored the turnaround model, so its predictions table only
-    # ever reflected whichever candidates were bearish/bottoming on
-    # whatever date someone last ran engine.predict_turnaround by hand.
-    turnaround_result = {"failures": []}
-    try:
-        from engine.predict_turnaround import run as predict_turnaround_run
-        turnaround_result = predict_turnaround_run()
-    except Exception:
-        logger.exception("predict_turnaround step raised unexpectedly")
-
     try:
         from scripts.monitor import check_and_alert
-        # predict/turnaround failures weren't wired in until a real incident
-        # (a missing DB column failed every prediction, but check_and_alert
-        # only ever looked at ingest_failures + price_history staleness --
-        # both fine, since ingest itself worked -- so this reported "all
-        # good" the whole time predictions were completely broken).
+        # predict failures weren't wired in until a real incident (a missing
+        # DB column failed every prediction, but check_and_alert only ever
+        # looked at ingest_failures + price_history staleness -- both fine,
+        # since ingest itself worked -- so this reported "all good" the
+        # whole time predictions were completely broken).
         check_and_alert(
             ingest_failures=ingest_result.get("failures"),
             predict_failures=predict_result.get("failures"),
-            turnaround_failures=turnaround_result.get("failures"),
         )
     except Exception:
         logger.exception("monitor step raised unexpectedly")

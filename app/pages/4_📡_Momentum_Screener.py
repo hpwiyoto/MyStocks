@@ -61,7 +61,7 @@ st.success(
     icon="✅",
 )
 st.info(
-    "**Beda dari Swing/Turnaround**: dua screener lain di aplikasi ini diurutkan oleh "
+    "**Beda dari Swing**: model ML lain di aplikasi ini diurutkan oleh "
     "probabilitas model machine learning. Screener ini sebaliknya -- urutannya murni "
     "dari aturan teknikal, sebagian besar masih heuristik (masuk akal tapi belum diuji), "
     "kecuali kategori Tervalidasi di atas. Kolom probabilitas tetap ditampilkan supaya Anda "

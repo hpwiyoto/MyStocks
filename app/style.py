@@ -29,7 +29,6 @@ REGIME_COLORS = {
 
 DECISION_COLORS = {
     "BUY": COLOR_BUY, "WATCH": COLOR_WATCH, "AVOID": COLOR_AVOID,
-    "POTENSIAL": COLOR_BUY, "BELUM": COLOR_WATCH,  # turnaround screener's own decision tiers
 }
 
 

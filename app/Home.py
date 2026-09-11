@@ -11,7 +11,6 @@ from app.data import (
     load_ihsg_history,
     load_ihsg_trend,
     load_latest_predictions,
-    load_latest_turnaround_predictions,
     load_screener_raw_panel,
     load_stock_list,
 )
@@ -40,8 +39,8 @@ data_freshness_note(load_data_freshness())
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
-# --- Pencarian cepat: langsung ke Detail Saham, tidak perlu lewat Swing/
-# Turnaround dulu kalau Anda sudah tahu kode sahamnya. ---
+# --- Pencarian cepat: langsung ke Detail Saham, tidak perlu lewat Swing
+# dulu kalau Anda sudah tahu kode sahamnya. ---
 st.subheader("🔎 Cari Saham")
 stocks_df = load_stock_list()
 codes = stocks_df["code"].tolist() if not stocks_df.empty else []
@@ -61,7 +60,6 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 st.subheader("📊 Pilih Mode Screening")
 
 swing_df = load_latest_predictions()
-turnaround_df = load_latest_turnaround_predictions()
 # Momentum Screener is rule-based (not a trained model, see the page itself
 # for the full backtest story) -- computed here too, cheaply, just for the
 # "berapa sinyal tervalidasi hari ini" count below. Previously this whole
@@ -75,15 +73,17 @@ validated_total = int(momentum_df["validated_signal"].sum()) if not momentum_df.
 # Cheap set-membership version of Rekomendasi Emitten's own agreement-count
 # logic (see that page for the full merge/display) -- just enough here for
 # a "sekian saham disepakati" headline count, not a full recomputation.
+# Turnaround dropped from this consensus entirely (see app/pages/5's
+# docstring/comments -- its top-2 real-world performance came in well
+# below Swing's even on Turnaround's OWN proposed target, and the existing
+# 6-month model is retired) -- Swing + Momentum only now, 2 alat, not 3.
 swing_hit = set(swing_df.loc[swing_df["decision"].isin(["BUY", "WATCH"]), "stock_code"]) if not swing_df.empty else set()
-turnaround_hit = set(turnaround_df.loc[turnaround_df["decision"] == "POTENSIAL", "stock_code"]) if not turnaround_df.empty else set()
 momentum_hit = set(momentum_df.loc[momentum_df["validated_signal"], "stock_code"]) if not momentum_df.empty else set()
 all_codes = stocks_df["code"].tolist() if not stocks_df.empty else []
-agreement_counts = [(c in swing_hit) + (c in turnaround_hit) + (c in momentum_hit) for c in all_codes]
-consensus_3of3 = sum(1 for a in agreement_counts if a == 3)
-consensus_2plus = sum(1 for a in agreement_counts if a >= 2)
+agreement_counts = [(c in swing_hit) + (c in momentum_hit) for c in all_codes]
+consensus_2of2 = sum(1 for a in agreement_counts if a == 2)
 
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 
 with c1:
     st.markdown(
@@ -105,25 +105,6 @@ with c1:
         st.switch_page("pages/2_🎯_Swing.py")
 
 with c2:
-    st.markdown(
-        """
-        <div class="mystocks-card">
-            <div class="mystocks-ticker" style="font-size:1.3rem;">🔄 Turnaround</div>
-            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Saham bearish/bottoming yang berpotensi berbalik arah dalam 6 bulan.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if not turnaround_df.empty:
-        t1, t2 = st.columns(2)
-        t1.metric("POTENSIAL", int((turnaround_df["decision"] == "POTENSIAL").sum()))
-        t2.metric("Total kandidat", len(turnaround_df))
-    else:
-        st.caption("Belum ada data prediksi.")
-    if st.button("Buka Turnaround Screener →", key="goto_turnaround", width="stretch"):
-        st.switch_page("pages/3_🔄_Turnaround.py")
-
-with c3:
     st.markdown(
         """
         <div class="mystocks-card">
@@ -151,15 +132,13 @@ with d1:
         """
         <div class="mystocks-card">
             <div class="mystocks-ticker" style="font-size:1.3rem;">🏆 Rekomendasi Emitten</div>
-            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Saham yang disepakati lebih dari satu alat (Swing + Turnaround + Momentum) sekaligus.</div>
+            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Saham yang disepakati kedua alat (Swing + Momentum) sekaligus.</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
     if all_codes:
-        r1, r2 = st.columns(2)
-        r1.metric("🌟 Sepakat 3/3", consensus_3of3)
-        r2.metric("Sepakat ≥2/3", consensus_2plus)
+        st.metric("🌟 Keduanya Sepakat (2/2)", consensus_2of2)
     else:
         st.caption("Belum ada data.")
     if st.button("Buka Rekomendasi Emitten →", key="goto_rekomendasi", width="stretch"):

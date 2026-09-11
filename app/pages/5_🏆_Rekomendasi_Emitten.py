@@ -11,14 +11,12 @@ from app.auth import require_login
 from app.data import (
     load_data_freshness,
     load_latest_predictions,
-    load_latest_turnaround_predictions,
     load_liquidity,
     load_screener_raw_panel,
     load_stock_list,
 )
 from app.style import (
     ACCENT,
-    TEXT_MUTED,
     badge_html,
     data_freshness_note,
     format_traded_value,
@@ -39,45 +37,43 @@ if st.button("← Kembali ke Home"):
 
 st.title("🏆 Rekomendasi Emitten")
 st.caption(
-    "Menggabungkan tiga alat screening yang independen satu sama lain -- Swing (model ML, "
-    "horizon 10 hari), Turnaround (model ML, horizon 6 bulan), dan Momentum Screener (aturan "
-    "teknikal tervalidasi lewat backtest) -- untuk mencari saham yang mendapat sinyal dari LEBIH "
-    "DARI SATU alat pada saat yang sama, bukan cuma dari satu sudut pandang."
+    "Menggabungkan dua alat screening yang independen satu sama lain -- Swing (model ML, "
+    "horizon 10 hari) dan Momentum Screener (aturan teknikal tervalidasi lewat backtest) -- "
+    "untuk mencari saham yang mendapat sinyal dari KEDUANYA pada saat yang sama, bukan cuma "
+    "dari satu sudut pandang."
 )
 st.success(
-    "**Bukti historis (backtest 5 tahun, `scripts/backtest_triple_intersection.py`)**: saham yang "
-    "lolos Sinyal Tervalidasi Momentum Screener SENDIRIAN (termasuk kriteria Anchored VWAP, lihat "
-    "halaman Momentum Screener) menang **42,4%** dari kejadian (n=523). Kalau Swing (≥WATCH) DAN "
-    "Turnaround (POTENSIAL) juga sepakat pada saat bersamaan, win rate naik jadi **43,4%** (n=235, "
-    "batas bawah keyakinan 95%: 37,2%) -- kenaikan titik estimasi kecil, tapi batas bawahnya sendiri "
-    "praktis flat (bukan lonjakan besar seperti dari 30,6%→42,4% pada Momentum Screener sendirian) "
-    "karena sampelnya mengecil sekitar separuhnya (kriteria AVWAP membuat gerbang awal lebih ketat). "
-    "⚠️ **Catatan metodologi**: angka gabungan ini didapat dengan menjalankan model Swing/Turnaround "
-    "yang SAAT INI terlatih dari seluruh histori ke tanggal-tanggal masa lalu -- sedikit berpotensi "
-    "bias optimis dibanding pengujian Momentum Screener sendirian (yang sepenuhnya bebas dari risiko "
-    "itu karena aturan tetap, bukan model yang dilatih). Anggap angka gabungan ini sebagai indikasi "
-    "penguat, bukan bukti seketat walk-forward validation asli Swing/Turnaround.",
+    "**Bukti historis (backtest 5 tahun, `scripts/search_momentum_rules.py` + lanjutannya)**: saham "
+    "yang lolos Sinyal Tervalidasi Momentum Screener SENDIRIAN (termasuk kriteria Anchored VWAP, "
+    "lihat halaman Momentum Screener) menang **42,4%** dari kejadian (n=523, batas bawah keyakinan "
+    "95%: 38,3%) -- satu-satunya angka gabungan yang sudah diuji ketat lewat walk-forward validation "
+    "di halaman ini. Menambahkan syarat Swing ≥WATCH di atasnya BELUM diuji ulang secara terpisah "
+    "untuk kombinasi dua-alat ini -- anggap sebagai penyaring tambahan yang masuk akal, bukan angka "
+    "yang sudah terbukti sendiri.",
     icon="🏆",
 )
 st.info(
-    "Halaman ini murni **menyaring & menggabungkan** hasil dari tiga halaman lain -- tidak ada "
-    "perhitungan baru. Probabilitas Swing/Turnaround persis sama dengan yang tampil di halaman "
-    "masing-masing; status Momentum Screener persis sama dengan kolom ✅ Tervalidasi di sana.",
+    "Halaman ini murni **menyaring & menggabungkan** hasil dari dua halaman lain -- tidak ada "
+    "perhitungan baru. Probabilitas Swing persis sama dengan yang tampil di halamannya sendiri; "
+    "status Momentum Screener persis sama dengan kolom ✅ Tervalidasi di sana.\n\n"
+    "**Catatan**: halaman Turnaround (model 6-bulan) sudah dipensiunkan -- backtest top-2 "
+    "(`scripts/compare_turnaround_v2_top2.py`) menunjukkan performanya, dan bahkan usulan "
+    "penggantinya, keduanya jauh di bawah Swing untuk tujuan jangka pendek/menengah manapun -- "
+    "jadi tidak lagi ikut dihitung di sini.",
     icon="ℹ️",
 )
 data_freshness_note(load_data_freshness())
 
-TIER_LABELS = {3: "🌟 Semua Sepakat (3/3)", 2: "2 dari 3 Sepakat", 1: "1 dari 3"}
-TIER_COLORS = {3: "#FBBF24", 2: ACCENT, 1: TEXT_MUTED}
+TIER_LABELS = {2: "🌟 Keduanya Sepakat (2/2)", 1: "Salah Satu (1/2)"}
+TIER_COLORS = {2: "#FBBF24", 1: ACCENT}
 
 
 def fmt_pct(value) -> str:
     return "-" if pd.isna(value) else f"{float(value) * 100:.1f}%"
 
 
-with st.spinner("Menggabungkan hasil Swing, Turnaround, dan Momentum Screener..."):
+with st.spinner("Menggabungkan hasil Swing dan Momentum Screener..."):
     swing = load_latest_predictions()
-    turnaround = load_latest_turnaround_predictions()
     raw_panel = load_screener_raw_panel(lookback_days=60)
     momentum = compute_screener_panel(raw_panel)
     stocks_df = load_stock_list()
@@ -94,33 +90,26 @@ df = base.merge(
     on="stock_code", how="left",
 )
 df = df.merge(
-    turnaround[["stock_code", "decision", "probability"]].rename(
-        columns={"decision": "turnaround_decision", "probability": "turnaround_prob"}
-    ) if not turnaround.empty else pd.DataFrame(columns=["stock_code", "turnaround_decision", "turnaround_prob"]),
-    on="stock_code", how="left",
-)
-df = df.merge(
     momentum[["stock_code", "validated_signal", "regime", "macd_status", "close", "rsi_14"]]
     if not momentum.empty else pd.DataFrame(columns=["stock_code", "validated_signal", "regime", "macd_status", "close", "rsi_14"]),
     on="stock_code", how="left",
 )
 
 # swing_hit uses WATCH-or-better (probability >= base_rate, i.e. NOT AVOID) --
-# matches exactly what scripts/backtest_triple_intersection.py tested and
-# reported above; a full Swing BUY was found to essentially never co-occur
-# with the Momentum-validated bottoming regime historically (n=0), so
-# requiring BUY specifically here would empty this page out.
+# matches what scripts/backtest_triple_intersection.py originally tested;
+# a full Swing BUY was found to essentially never co-occur with the
+# Momentum-validated bottoming regime historically (n=0), so requiring
+# BUY specifically here would empty this page out.
 df["swing_hit"] = df["swing_decision"].isin(["BUY", "WATCH"])
-df["turnaround_hit"] = df["turnaround_decision"] == "POTENSIAL"
 df["momentum_hit"] = df["validated_signal"].fillna(False)
-df["agreement_count"] = df[["swing_hit", "turnaround_hit", "momentum_hit"]].sum(axis=1).astype(int)
+df["agreement_count"] = df[["swing_hit", "momentum_hit"]].sum(axis=1).astype(int)
 df = df.merge(load_liquidity(), on="stock_code", how="left")
 
 with st.sidebar:
     st.header("🔎 Filter")
     min_agreement = st.radio(
-        "Minimal kesepakatan", [1, 2, 3],
-        format_func=lambda n: {1: "1 dari 3 (semua yang dapat sinyal)", 2: "Minimal 2 dari 3", 3: "Hanya 3 dari 3 (paling ketat)"}[n],
+        "Minimal kesepakatan", [1, 2],
+        format_func=lambda n: {1: "1 dari 2 (semua yang dapat sinyal)", 2: "Keduanya (2 dari 2, paling ketat)"}[n],
         index=1,
     )
     search = st.text_input("Cari kode/nama saham", placeholder="mis. CYBR atau bank")
@@ -136,16 +125,14 @@ if search:
         | filtered["name"].fillna("").str.lower().str.contains(q)
     ]
 
-filtered["combined_score"] = filtered["swing_prob"].fillna(0) + filtered["turnaround_prob"].fillna(0)
 filtered = filtered.sort_values(
-    ["agreement_count", "combined_score"], ascending=[False, False],
+    ["agreement_count", "swing_prob"], ascending=[False, False], na_position="last",
 ).reset_index(drop=True)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3 = st.columns(3)
 c1.metric("Total ditampilkan", len(filtered))
-c2.metric("🌟 Sepakat semua (3/3)", int((df["agreement_count"] == 3).sum()))
-c3.metric("2 dari 3", int((df["agreement_count"] == 2).sum()))
-c4.metric("1 dari 3", int((df["agreement_count"] == 1).sum()))
+c2.metric("🌟 Keduanya Sepakat (2/2)", int((df["agreement_count"] == 2).sum()))
+c3.metric("1 dari 2", int((df["agreement_count"] == 1).sum()))
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
@@ -161,13 +148,10 @@ table_df["tingkat"] = table_df["agreement_count"].map(TIER_LABELS)
 table_df["swing_display"] = table_df.apply(
     lambda r: "-" if pd.isna(r["swing_decision"]) else f"{r['swing_decision']} ({fmt_pct(r['swing_prob'])})", axis=1,
 )
-table_df["turnaround_display"] = table_df.apply(
-    lambda r: "-" if pd.isna(r["turnaround_decision"]) else f"{r['turnaround_decision']} ({fmt_pct(r['turnaround_prob'])})", axis=1,
-)
 table_df["momentum_display"] = table_df["momentum_hit"].apply(lambda v: "✅ Ya" if v else "-")
 table_df["liq_display"] = table_df["avg_traded_value"].apply(format_traded_value)
 
-display_cols = ["stock_code", "name", "tingkat", "close", "swing_display", "turnaround_display", "momentum_display", "regime", "liq_display"]
+display_cols = ["stock_code", "name", "tingkat", "close", "swing_display", "momentum_display", "regime", "liq_display"]
 
 event = st.dataframe(
     table_df[display_cols].reset_index(drop=True),
@@ -180,7 +164,6 @@ event = st.dataframe(
         "tingkat": st.column_config.TextColumn("Tingkat Konsensus"),
         "close": st.column_config.NumberColumn("Harga", format="%.0f"),
         "swing_display": st.column_config.TextColumn("Swing"),
-        "turnaround_display": st.column_config.TextColumn("Turnaround"),
         "momentum_display": st.column_config.TextColumn("Momentum"),
         "regime": st.column_config.TextColumn("Regime"),
         "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
@@ -208,7 +191,6 @@ for row_chunk in rows:
             name = r["stock_code"] if pd.isna(r["name"]) else r["name"]
             tier_badge = badge_html(TIER_LABELS[r["agreement_count"]], TIER_COLORS[r["agreement_count"]])
             swing_txt = "-" if pd.isna(r["swing_decision"]) else f"{r['swing_decision']} · {fmt_pct(r['swing_prob'])}"
-            turnaround_txt = "-" if pd.isna(r["turnaround_decision"]) else f"{r['turnaround_decision']} · {fmt_pct(r['turnaround_prob'])}"
             momentum_txt = "✅ Tervalidasi" if r["momentum_hit"] else "-"
             # dedent() strips this f-string's ~16-space Python source
             # indentation, and the blank-line filter drops any line that
@@ -239,7 +221,6 @@ for row_chunk in rows:
                     <div style="margin-top:0.6rem;">{regime_badge(r['regime'])}</div>
                     <div style="margin-top:0.6rem;" class="mystocks-muted">
                         <b>Swing</b>: {swing_txt}<br>
-                        <b>Turnaround</b>: {turnaround_txt}<br>
                         <b>Momentum</b>: {momentum_txt}<br>
                         <b>Transaksi/hari</b>: {format_traded_value(r.get('avg_traded_value'))}
                     </div>

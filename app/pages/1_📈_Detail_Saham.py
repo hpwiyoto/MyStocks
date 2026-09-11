@@ -12,7 +12,7 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_latest_turnaround_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
+from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
@@ -249,22 +249,11 @@ else:
             momentum_status = "-"
         st.metric("Momentum Histogram (3 hari)", momentum_status)
 
-    prob1, prob2 = st.columns(2)
-    with prob1:
-        if row is not None:
-            st.metric("Probabilitas Swing", f"{float(row['probability'])*100:.1f}%", help=f"Keputusan: {row['decision']}")
-        else:
-            st.metric("Probabilitas Swing", "-")
-            st.caption("Belum ada prediksi Swing untuk saham ini.")
-    with prob2:
-        turnaround_preds = load_latest_turnaround_predictions()
-        ta_match = turnaround_preds[turnaround_preds["stock_code"] == selected] if not turnaround_preds.empty else turnaround_preds
-        if len(ta_match):
-            ta_row = ta_match.iloc[0]
-            st.metric("Probabilitas Turnaround", f"{float(ta_row['probability'])*100:.1f}%", help=f"Keputusan: {ta_row['decision']}")
-        else:
-            st.metric("Probabilitas Turnaround", "-")
-            st.caption("Bukan kandidat turnaround saat ini (regime saat ini bukan bearish/bottoming).")
+    if row is not None:
+        st.metric("Probabilitas Swing", f"{float(row['probability'])*100:.1f}%", help=f"Keputusan: {row['decision']}")
+    else:
+        st.metric("Probabilitas Swing", "-")
+        st.caption("Belum ada prediksi Swing untuk saham ini.")
 
     st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 

@@ -1,9 +1,8 @@
 """Fase 6 monitoring: detect distinct failure modes and alert.
 
-1. Explicit failures -- pipeline.ingest_price / engine.predict /
-   engine.predict_turnaround already retry + isolate per-ticker, but if a
-   ticker still ends up in one of their `failures` lists, that's worth
-   surfacing.
+1. Explicit failures -- pipeline.ingest_price / engine.predict already
+   retry + isolate per-ticker, but if a ticker still ends up in one of
+   their `failures` lists, that's worth surfacing.
 2. Silently-stale price data -- ingest can "succeed" (no exception) yet the
    latest price_history date hasn't advanced, e.g. yfinance quietly serving
    cached data. Can't be detected from exceptions alone, only from the data.
@@ -15,8 +14,12 @@
    check_and_alert() reported "semua up to date" the whole time predictions
    were completely broken. Checking the predictions table's own freshness
    independently of price_history closes that blind spot; a caller also
-   passing predict/turnaround failures surfaces the exact cause immediately
-   rather than waiting for the staleness threshold to trip.
+   passing predict failures surfaces the exact cause immediately rather
+   than waiting for the staleness threshold to trip.
+
+(Turnaround dropped from both PREDICTION_MODELS and check_and_alert's
+signature after the Turnaround page/daily step were retired -- see
+scripts/run_daily.py's docstring.)
 
 Alerting is pluggable: always logs (console + data/logs/pipeline.log via
 pipeline.logging_config), and ADDITIONALLY sends a Telegram message if
@@ -84,7 +87,6 @@ def check_stale_data(tickers: list[str] | None = None) -> list[str]:
 # price_history current still gets caught (see module docstring, point 3).
 PREDICTION_MODELS = [
     ("swing", "direction_xgboost_v5"),
-    ("turnaround", "turnaround_xgboost_v1"),
 ]
 
 
@@ -122,14 +124,12 @@ def _format_failures(label: str, failures: list[str] | None, limit: int = 10) ->
 def check_and_alert(
     ingest_failures: list[str] | None = None,
     predict_failures: list[str] | None = None,
-    turnaround_failures: list[str] | None = None,
 ) -> None:
     problems = []
 
     for text_line in [
         _format_failures("Gagal ingest eksplisit", ingest_failures),
         _format_failures("Gagal prediksi swing", predict_failures),
-        _format_failures("Gagal prediksi turnaround", turnaround_failures),
     ]:
         if text_line:
             problems.append(text_line)

@@ -9,7 +9,6 @@ from app.auth import require_login
 from app.data import days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
 from app.style import inject_base_css, render_developer_footer, render_ihsg_context
 from engine.decision import BUY_THRESHOLD, IHSG_DECLINE_BUY_THRESHOLD
-from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 
 st.set_page_config(page_title="MyStocks — Info Model", page_icon="🤖", layout="wide")
 inject_base_css()
@@ -21,7 +20,7 @@ if st.button("← Kembali ke Home"):
 
 st.title("🤖 Info Model")
 render_ihsg_context(load_ihsg_trend())
-st.caption("Detail kedua model machine learning yang dipakai aplikasi ini -- Swing dan Turnaround.")
+st.caption("Detail model machine learning yang dipakai aplikasi ini -- Swing.")
 
 
 def render_header(meta: dict, base_rate_label: str) -> None:
@@ -159,54 +158,3 @@ st.markdown(
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 render_features_and_tickers(meta)
-
-# ========================================================= TURNAROUND ===
-st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-st.header("🔄 Model Turnaround")
-
-try:
-    ta_meta = load_model_metadata(TURNAROUND_MODEL_VERSION)
-except FileNotFoundError:
-    st.caption("Model turnaround belum dilatih.")
-else:
-    ta_wf = ta_meta.get("walk_forward_validation") or {}
-    ta_ml = ta_wf.get("avg_ml_metrics") or {}
-    ta_threshold = ta_wf.get("buy_threshold", 0)
-
-    render_header(ta_meta, "Base rate (kandidat bearish/bottoming)")
-    tb1, tb2, tb3 = st.columns(3)
-    tb1.metric("Threshold POTENSIAL", f"{ta_threshold*100:.0f}%")
-    tb2.metric("Precision @ threshold (walk-forward)", f"{ta_ml.get('precision', 0)*100:.1f}%" if ta_ml else "-")
-    tb3.metric("ROC-AUC (walk-forward)", f"{ta_ml.get('roc_auc', 0):.3f}" if ta_ml else "-")
-    st.caption(
-        "Beda karakter dari model Swing di atas: base rate-nya sendiri sudah tinggi (~82%), jadi lift "
-        "di atas base rate lebih kecil (precision ~92% vs base 82%, bukan lompatan besar seperti BUY "
-        "swing vs base rate 30%-nya). Nilainya lebih ke menyisihkan kandidat yang kemungkinan besar "
-        "GAGAL berbalik arah, bukan menemukan yang pasti berhasil. Lihat halaman **Turnaround** untuk "
-        "kandidat yang sedang aktif."
-    )
-
-    st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-    render_retrain_reminder(ta_meta, current_rows, comparable=False)
-    st.caption(RETRAIN_DISCLAIMER)
-
-    st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-    st.subheader("🎯 Definisi target & aturan keputusan")
-    tt1, tt2, tt3 = st.columns(3)
-    tt1.metric("Syarat awal", "/".join(sorted(ta_meta.get("starting_regimes", []))) or "-")
-    tt2.metric("Target regime", "/".join(ta_meta.get("target_regimes", [])) or "-")
-    tt3.metric("Horizon", f"{ta_meta.get('horizon_trading_days', '-')} hari trading")
-    st.markdown(
-        f"""
-        - Hanya menyekor ticker yang **SAAT INI** berada di regime {"/".join(sorted(ta_meta.get("starting_regimes", [])))}
-          -- ticker di regime lain tidak dinilai model ini sama sekali (di luar apa yang dipelajari saat training).
-        - **POTENSIAL** — probabilitas ≥ {ta_threshold*100:.0f}% untuk berpindah ke
-          {"/".join(ta_meta.get("target_regimes", []))} dan **bertahan** di sana (tidak jatuh lagi ke
-          {"/".join(sorted(ta_meta.get("starting_regimes", [])))} atau overextended) selama
-          ≥{ta_meta.get("hold_trading_days", "-")} hari perdagangan, dalam {ta_meta.get("horizon_trading_days", "-")} hari ke depan.
-        - **BELUM** — probabilitas di bawah threshold itu.
-        """
-    )
-
-    st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-    render_features_and_tickers(ta_meta)

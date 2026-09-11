@@ -14,7 +14,6 @@ import yfinance as yf
 from sqlalchemy import bindparam, inspect, text, update
 
 from engine.predict import MODEL_VERSION
-from engine.predict_turnaround import MODEL_VERSION as TURNAROUND_MODEL_VERSION
 from features.db import feature_daily
 from features.news import fetch_news_headlines
 from pipeline.db import get_engine
@@ -79,39 +78,6 @@ def load_latest_predictions() -> pd.DataFrame:
         """),
         engine,
         params={"model_version": MODEL_VERSION},
-    )
-    return df
-
-
-@st.cache_data(ttl=CACHE_TTL)
-def load_latest_turnaround_predictions() -> pd.DataFrame:
-    """Same shape/joins as load_latest_predictions, separate function (not
-    a parameterized shared one) because the decision tiers are genuinely
-    different -- POTENSIAL/BELUM here, not BUY/WATCH/AVOID -- and the
-    turnaround model only ever scores tickers currently in bearish/
-    bottoming regime (see engine.predict_turnaround), so this is always a
-    small subset of the full universe, not a parallel ranking of everyone."""
-    engine = get_engine()
-    if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
-        return pd.DataFrame()
-    df = pd.read_sql(
-        text("""
-        SELECT p.stock_code, s.name, s.sector, s.industry, p.date, p.probability, p.decision,
-               p.entry_price, fd.regime
-        FROM predictions p
-        LEFT JOIN stocks s ON p.stock_code = s.code
-        LEFT JOIN feature_daily fd ON p.stock_code = fd.stock_code AND p.date = fd.date
-        INNER JOIN (
-            SELECT stock_code, MAX(date) AS max_date
-            FROM predictions
-            WHERE model_version = :model_version
-            GROUP BY stock_code
-        ) latest ON p.stock_code = latest.stock_code AND p.date = latest.max_date
-        WHERE p.model_version = :model_version
-        ORDER BY CASE p.decision WHEN 'POTENSIAL' THEN 0 ELSE 1 END, p.probability DESC
-        """),
-        engine,
-        params={"model_version": TURNAROUND_MODEL_VERSION},
     )
     return df
 
