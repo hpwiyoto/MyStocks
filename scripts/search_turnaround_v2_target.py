@@ -47,7 +47,7 @@ import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
 from pipeline.logging_config import get_logger
-from scripts.backtest_top2_screeners import load_full_panel
+from scripts.backtest_top2_screeners import load_full_panel, momentum_extra_indicators
 from scripts.search_momentum_rules import wilson_lower_bound
 
 logger = get_logger("scripts.search_turnaround_v2_target")
@@ -69,6 +69,12 @@ def build_dataset() -> pd.DataFrame:
         n = len(g)
         if n <= WARMUP + HORIZON:
             continue
+        # Anchored VWAP (from the rolling 50-day low) -- same computation
+        # already proven to help the Momentum Screener's 10-day rule
+        # (39.8%->42.4% there). Not a feature_daily column, so computed
+        # here the same way backtest_top2_screeners.py does it, per
+        # ticker, before the forward-outcome slicing below.
+        g = momentum_extra_indicators(g)
         high = g["high"].to_numpy(dtype=float)
         low = g["low"].to_numpy(dtype=float)
         close = g["close"].to_numpy(dtype=float)
@@ -183,6 +189,21 @@ def run():
         "net_foreign_flow>0 (asing net beli)": base["net_foreign_flow"] > 0,
         f"market_cap_log < median ({median_mcap:.2f}, cap kecil)":  base["market_cap_log"] < median_mcap,
         f"market_cap_log >= median ({median_mcap:.2f}, cap besar)": base["market_cap_log"] >= median_mcap,
+        # Round 3 (direct user question: "money flow dan VWAP sudah
+        # dipertimbangkan?"). Money flow so far only covered CMF/OBV/
+        # foreign-flow -- MFI (a volume-weighted RSI, a genuinely
+        # different oscillator family) was missing. VWAP wasn't tested at
+        # all: both the rolling 20-day price-vs-VWAP deviation already in
+        # feature_daily, AND the Anchored-VWAP-from-50d-low criterion
+        # already proven to help the Momentum Screener's 10-day rule
+        # (see close_above_avwap, computed above via
+        # backtest_top2_screeners.momentum_extra_indicators).
+        "mfi_14 < 50 (money flow index rendah)":  base["mfi_14"] < 50,
+        "mfi_14 >= 50":                            base["mfi_14"] >= 50,
+        "mfi_slope_5d>0 (MFI naik)":               base["mfi_slope_5d"] > 0,
+        "price_vs_vwap20_pct>0 (di atas VWAP 20h)": base["price_vs_vwap20_pct"] > 0,
+        "price_vs_vwap20_pct>5":                    base["price_vs_vwap20_pct"] > 5,
+        "close_above_avwap (Anchored VWAP dari low 50h)": base["close_above_avwap"] == True,  # noqa: E712
     }
     results = []
     for name, mask in conds.items():
@@ -200,6 +221,28 @@ def run():
     combo_mask = np.logical_and.reduce([conds[name].fillna(False) for name in top3])
     n, wr, lb = _stat(base[combo_mask])
     logger.info("  %s -> n=%-6d win_rate=%.1f%% wilson_lb=%.1f%%", " AND ".join(top3), n, wr * 100, lb * 100)
+
+    # Does adding a money-flow/VWAP condition on TOP of the best rally-
+    # speed combo from round 2 (ret_10d_atr_norm>1.0 AND rvol_20>=1.2 AND
+    # bb_width_change_5d>0, LB 38.0%) push it any further?
+    round2_combo_names = ["ret_10d_atr_norm>1.0 (rally cepat rel. volatilitas)", "rvol_20>=1.2", "bb_width_change_5d>0 (volatilitas melebar)"]
+    if all(name in conds for name in round2_combo_names):
+        round2_mask = np.logical_and.reduce([conds[name].fillna(False) for name in round2_combo_names])
+        n2, wr2, lb2 = _stat(base[round2_mask])
+        logger.info("-" * 100)
+        logger.info("Kombo round-2 (%s): n=%-6d win_rate=%.1f%% wilson_lb=%.1f%%",
+                    " AND ".join(round2_combo_names), n2, wr2 * 100, lb2 * 100)
+        logger.info("+ satu syarat money-flow/VWAP di atasnya:")
+        mf_vwap_names = [
+            "mfi_14 < 50 (money flow index rendah)", "mfi_14 >= 50", "mfi_slope_5d>0 (MFI naik)",
+            "price_vs_vwap20_pct>0 (di atas VWAP 20h)", "price_vs_vwap20_pct>5",
+            "close_above_avwap (Anchored VWAP dari low 50h)",
+        ]
+        for name in mf_vwap_names:
+            mask = round2_mask & conds[name].fillna(False)
+            n3, wr3, lb3 = _stat(base[mask])
+            logger.info("  + %-45s n=%-5d win_rate=%.1f%% wilson_lb=%.1f%%  (%+.1f%% vs round-2 combo)",
+                        name, n3, wr3 * 100, lb3 * 100, (lb3 - lb2) * 100)
 
 
 if __name__ == "__main__":
