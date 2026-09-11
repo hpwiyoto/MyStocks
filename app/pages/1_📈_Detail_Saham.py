@@ -13,7 +13,7 @@ from plotly.subplots import make_subplots
 
 from app.auth import require_login
 from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
-from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio
+from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
 
@@ -251,6 +251,17 @@ else:
 
     if row is not None:
         st.metric("Probabilitas Swing", f"{float(row['probability'])*100:.1f}%", help=f"Keputusan: {row['decision']}")
+        if row["decision"] == "BUY":
+            confidence_badge = swing_confidence_badge(row["decision"], current_regime)
+            if confidence_badge:
+                st.markdown(confidence_badge, unsafe_allow_html=True)
+            else:
+                st.caption(
+                    "Sinyal BUY ini sedang di regime **overextended** -- kelompok mayoritas (93% sinyal BUY historis), "
+                    "batas bawah keyakinan 95% pooled 77,0%, masih jauh di atas baseline acak tapi di bawah kelompok "
+                    "langka non-overextended (91,4%). Lihat `scripts/test_overextended_buy_filter.py`."
+                )
+            st.caption(SUSPENSION_RISK_NOTE)
     else:
         st.metric("Probabilitas Swing", "-")
         st.caption("Belum ada prediksi Swing untuk saham ini.")

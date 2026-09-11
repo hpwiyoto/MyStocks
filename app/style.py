@@ -110,6 +110,35 @@ def regime_badge(regime: str) -> str:
     return badge_html(regime.replace("_", " "), color)
 
 
+# scripts/test_overextended_buy_filter.py: 93% of Swing's BUY signals fire
+# while the stock is ALREADY in "overextended" regime -- pooled Wilson LB
+# 77.0% there vs 91.4% for the rare 7% of BUY signals that aren't (n=62,
+# small but a real gap, prompted by two real incidents in the same week:
+# LUCY crashed -33.7% and SAFE got suspended, both BUY'd while already
+# overextended). Deliberately a POSITIVE highlight on the rare stronger
+# case rather than a warning stacked onto the 93% majority -- a badge
+# nearly every BUY signal would carry stops meaning anything (alert
+# fatigue), see the conversation this was built from.
+CONFIDENCE_BADGE_COLOR = "#FBBF24"
+
+
+def swing_confidence_badge(decision: str, regime) -> str:
+    """'' for anything that isn't a non-overextended BUY, so callers can
+    drop this straight into an f-string unconditionally."""
+    if decision != "BUY" or not isinstance(regime, str) or regime == "overextended":
+        return ""
+    return badge_html("⭐ Keyakinan Tinggi", CONFIDENCE_BADGE_COLOR)
+
+
+SUSPENSION_RISK_NOTE = (
+    "⚠️ **Risiko yang stop-loss tidak bisa lindungi**: dari histori 5 tahun, sekitar **1 dari 44 "
+    "sinyal BUY** (~2,25%, kemungkinan sedikit lebih tinggi -- lihat `scripts/check_suspension_risk_v2.py`) "
+    "diikuti saham itu **disuspend** bursa dalam ~sebulan setelahnya -- posisi jadi tidak bisa dijual "
+    "sama sekali, bukan sekadar rugi -2,5%. Tidak ada cara memprediksi saham mana spesifik yang akan "
+    "kena; ini risiko dasar yang berlaku untuk semua sinyal BUY, bukan cuma yang ditandai overextended."
+)
+
+
 def render_ihsg_context(trend: dict | None):
     """Compact IHSG trend banner -- see app/data.py's load_ihsg_trend()
     docstring for the full reasoning (scripts/check_fold_drift.py found

@@ -7,7 +7,7 @@ import streamlit as st
 
 from app.auth import require_login
 from app.data import days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
-from app.style import inject_base_css, render_developer_footer, render_ihsg_context
+from app.style import SUSPENSION_RISK_NOTE, inject_base_css, render_developer_footer, render_ihsg_context
 from engine.decision import BUY_THRESHOLD, IHSG_DECLINE_BUY_THRESHOLD
 
 st.set_page_config(page_title="MyStocks — Info Model", page_icon="🤖", layout="wide")
@@ -148,6 +148,7 @@ st.caption(
     "wilayah WATCH (di atas base rate, belum cukup tinggi untuk BUY) -- itu model bekerja sesuai "
     "rancangannya, bukan tanda model gagal atau tidak akurat."
 )
+st.caption(SUSPENSION_RISK_NOTE)
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 render_retrain_reminder(meta, current_rows)

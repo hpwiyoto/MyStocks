@@ -9,7 +9,7 @@ import streamlit as st
 
 from app.auth import require_login
 from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices
-from app.style import data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context
+from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
 from engine.predict import run as predict_run
 from features.build_features import run as build_features_run
 from pipeline.ingest_price import run as ingest_price_run
@@ -38,6 +38,7 @@ def entry_range(price: float) -> tuple[float, float]:
 st.title("🎯 Swing Screener")
 st.caption("Prediksi harian saham IDX — probabilitas naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.")
 data_freshness_note(load_data_freshness())
+st.caption(SUSPENSION_RISK_NOTE)
 
 # This page uses the classic file-based pages/ structure, where -- unlike the
 # newer st.navigation API -- widget-keyed session_state is NOT reliably kept
@@ -216,6 +217,7 @@ for row_chunk in rows:
             # for real on Detail Saham's sector panel; guarded here too).
             name = r["stock_code"] if pd.isna(r["name"]) else r["name"]
             prob_pct = float(r["probability"]) * 100
+            confidence_badge = swing_confidence_badge(r["decision"], r["regime"])
             # dedent() + dropping any resulting blank line -- both load-
             # bearing, not cosmetic. See the full "why" (a real screenshot
             # bug, not a guess) at the identical card-rendering fix in
@@ -224,6 +226,12 @@ for row_chunk in rows:
             # as an indented CODE block instead of HTML; a blank line (from
             # a future empty interpolated value) would split the block the
             # same way, so the filter is kept here defensively too.
+            # min-height on the confidence-badge slot reserves room whether
+            # or not it's empty (only the rare non-overextended BUY gets
+            # one) -- same fixed-slot technique as Momentum Screener/
+            # Rekomendasi Emitten's own optional badges, for the same
+            # reason: without it a row where only one card has a badge
+            # renders at mismatched heights.
             card_html = textwrap.dedent(f"""
                 <div class="mystocks-card">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -233,7 +241,8 @@ for row_chunk in rows:
                         </div>
                         {decision_badge(r['decision'])}
                     </div>
-                    <div style="margin-top:0.7rem;">{regime_badge(r['regime'])}</div>
+                    <div style="margin-top:0.5rem; min-height:1.7em;">{confidence_badge}</div>
+                    <div style="margin-top:0.2rem;">{regime_badge(r['regime'])}</div>
                 </div>
                 """)
             card_html = "\n".join(line for line in card_html.splitlines() if line.strip())
@@ -281,6 +290,12 @@ table_df = table_source[["stock_code", "name", "decision", "probability", "regim
 table_df["probability"] = table_df["probability"].astype(float) * 100  # ProgressColumn format="%.1f%%" doesn't auto-scale from 0-1
 table_df["entry_range"] = table_df["entry_price"].apply(lambda p: "{:,.0f} - {:,.0f}".format(*entry_range(p)))
 table_df["liq_display"] = table_df["avg_traded_value"].apply(format_traded_value)
+# Plain-text version of swing_confidence_badge()'s HTML badge -- st.dataframe's
+# TextColumn doesn't render HTML, so the emoji label stands on its own here.
+table_df["confidence_display"] = table_df.apply(
+    lambda r: "⭐ Tinggi" if r["decision"] == "BUY" and isinstance(r["regime"], str) and r["regime"] != "overextended" else "-",
+    axis=1,
+)
 
 event = st.dataframe(
     table_df,
@@ -288,13 +303,14 @@ event = st.dataframe(
     hide_index=True,
     height=min(36 * (len(table_df) + 1) + 3, 600),
     column_order=[
-        "stock_code", "name", "decision", "probability", "regime",
+        "stock_code", "name", "decision", "confidence_display", "probability", "regime",
         "entry_price", "entry_range", "stop_loss_price", "take_profit_price", "liq_display",
     ],
     column_config={
         "stock_code": st.column_config.TextColumn("Kode"),
         "name": st.column_config.TextColumn("Nama"),
         "decision": st.column_config.TextColumn("Keputusan"),
+        "confidence_display": st.column_config.TextColumn("Keyakinan", help="⭐ Tinggi = sinyal BUY yang BUKAN sedang overextended -- kelompok langka (7% dari BUY historis) dengan Wilson LB 91,4% vs 77,0% mayoritas. Lihat scripts/test_overextended_buy_filter.py."),
         "probability": st.column_config.ProgressColumn("Probabilitas", format="%.1f%%", min_value=0.0, max_value=100.0),
         "regime": st.column_config.TextColumn("Regime"),
         "entry_price": st.column_config.NumberColumn("Harga Saat Ini", format="%.0f"),
