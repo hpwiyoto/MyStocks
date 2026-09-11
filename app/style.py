@@ -155,7 +155,7 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def render_ihsg_chart(hist, height: int = 110) -> None:
+def render_ihsg_chart(hist, height: int = 130) -> None:
     """Small line chart (sparkline-ish, not a full-size chart) of IHSG's
     own close over the lookback in `hist` (a date/close DataFrame from
     app.data.load_ihsg_history()), shown right under render_ihsg_context's
@@ -166,19 +166,34 @@ def render_ihsg_chart(hist, height: int = 110) -> None:
     nothing to sync with, so plotly's own built-in hover is simplest and
     sufficient. theme=None so the dark palette below applies as-is --
     Streamlit's default 'streamlit' plotly theme fights the app's dark
-    background otherwise. No-ops quietly if hist is None/empty (fetch
-    failed), same fail-soft contract as render_ihsg_context.
+    background otherwise.
+
+    Y-axis range is pinned tight to the data's own min/max (+ a small
+    padding) instead of trusting plotly's autorange -- IHSG only moves a
+    few percent over most of these lookbacks, and on a short 130px-tall
+    chart, autorange's default padding was flattening genuine moves into
+    what looked like a barely-visible line (real user feedback: "naik
+    turunnya tidak terlihat signifikan"). Pinning the range to the actual
+    data spread makes the same move fill the whole chart height instead.
+
+    Shows a caption instead of silently rendering nothing if hist is
+    None/empty (fetch failed) -- a prior version no-op'd here, which read
+    as "the chart is just broken" with zero indication why (real user
+    report: picking a period showed nothing, no error, no explanation).
     """
     import plotly.graph_objects as go
 
     if hist is None or hist.empty:
+        st.caption("📉 Grafik IHSG tidak tersedia (gagal ambil data dari sumbernya) -- coba lagi beberapa saat lagi.")
         return
     first, last = float(hist["close"].iloc[0]), float(hist["close"].iloc[-1])
     color = COLOR_BUY if last >= first else COLOR_AVOID
+    y_min, y_max = float(hist["close"].min()), float(hist["close"].max())
+    pad = (y_max - y_min) * 0.12 or y_max * 0.005  # flat-line guard (y_max==y_min)
     fig = go.Figure(go.Scatter(
         x=hist["date"], y=hist["close"], mode="lines",
-        line=dict(color=color, width=1.4),
-        fill="tozeroy", fillcolor=_hex_to_rgba(color, 0.1),
+        line=dict(color=color, width=1.6),
+        fill="tozeroy", fillcolor=_hex_to_rgba(color, 0.12),
         hovertemplate="%{x|%d %b %Y}<br>IHSG %{y:,.0f}<extra></extra>",
     ))
     fig.update_layout(
@@ -186,7 +201,10 @@ def render_ihsg_chart(hist, height: int = 110) -> None:
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color=TEXT_MUTED, size=10),
         xaxis=dict(showgrid=False, color=TEXT_MUTED, fixedrange=True),
-        yaxis=dict(showgrid=True, gridcolor=BORDER, color=TEXT_MUTED, tickformat=",.0f", nticks=3, fixedrange=True),
+        yaxis=dict(
+            showgrid=True, gridcolor=BORDER, color=TEXT_MUTED, tickformat=",.0f",
+            nticks=3, fixedrange=True, range=[y_min - pad, y_max + pad],
+        ),
         showlegend=False,
         hovermode="x unified",
     )

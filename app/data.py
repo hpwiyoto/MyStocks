@@ -405,24 +405,38 @@ def load_ihsg_trend() -> dict | None:
 
 
 @st.cache_data(ttl=IHSG_TREND_TTL)
+def _fetch_ihsg_history(period: str) -> pd.DataFrame:
+    """Cached raw fetch -- RAISES on failure/empty instead of catching, so
+    only a genuinely successful fetch ever gets cached. If this caught its
+    own exceptions and returned an empty DataFrame like load_ihsg_history()
+    below used to, st.cache_data would store that empty result for the
+    full IHSG_TREND_TTL (30 min) -- confirmed real risk on this Zscaler-
+    proxied network (yfinance has logged real transient failures here
+    before, e.g. 'Could not resolve host: query2.finance.yahoo.com'), and
+    the symptom is exactly a chart that stays silently blank for half an
+    hour after one bad blip, even once the network's fine again."""
+    hist = yf.Ticker("^JKSE").history(period=period)
+    if hist.empty:
+        raise ValueError(f"yfinance returned no IHSG history for period={period!r}")
+    return pd.DataFrame({"date": hist.index.tz_localize(None), "close": hist["Close"].astype(float)}).reset_index(drop=True)
+
+
 def load_ihsg_history(period: str = "6mo") -> pd.DataFrame:
     """Plain IHSG close series for the Home page chart -- companion to
     load_ihsg_trend() above (which only returns the summary %/last-value
-    dict, not the series a chart needs). Same fail-soft contract: an empty
-    DataFrame on fetch failure, never an exception, since this is a
-    supplementary context panel, not something that should block Home
-    from rendering. `period` is any string yfinance's history() accepts
-    (1mo/3mo/6mo/1y/...); cached per-period since Streamlit's
-    st.cache_data keys on all arguments.
+    dict, not the series a chart needs). Thin uncached wrapper around
+    _fetch_ihsg_history() so a failure is retried on the next rerun rather
+    than cached (see that function's docstring). Same fail-soft contract
+    as load_ihsg_trend: an empty DataFrame on fetch failure, never an
+    exception -- this is a supplementary context panel, not something
+    that should block Home from rendering. `period` is any string
+    yfinance's history() accepts (1mo/3mo/6mo/1y/...).
     """
     try:
-        hist = yf.Ticker("^JKSE").history(period=period)
+        return _fetch_ihsg_history(period)
     except Exception as exc:
         logger.warning("IHSG history fetch failed: %s", exc)
         return pd.DataFrame(columns=["date", "close"])
-    if hist.empty:
-        return pd.DataFrame(columns=["date", "close"])
-    return pd.DataFrame({"date": hist.index.tz_localize(None), "close": hist["Close"].astype(float)}).reset_index(drop=True)
 
 
 @st.cache_data(ttl=NEWS_TTL)
