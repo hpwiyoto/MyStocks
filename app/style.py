@@ -143,19 +143,31 @@ def render_ihsg_context(trend: dict | None):
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_ihsg_chart(hist, height: int = 260) -> None:
-    """Line chart of IHSG's own close over the lookback in `hist` (a
-    date/close DataFrame from app.data.load_ihsg_history()), shown right
-    under render_ihsg_context's text banner on Home. Plain st.plotly_chart
-    -- NOT the custom-JS cross-panel crosshair setup Detail Saham's
-    6-panel chart uses (see detail-saham-chart-architecture notes): that
-    machinery exists purely to keep several panels' crosshairs in sync,
-    and a single line here has nothing to sync with, so plotly's own
-    built-in hover is simplest and sufficient. theme=None so the dark
-    palette below applies as-is -- Streamlit's default 'streamlit' plotly
-    theme fights the app's dark background otherwise. No-ops quietly if
-    hist is None/empty (fetch failed), same fail-soft contract as
-    render_ihsg_context.
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """'#22C55E' + 0.1 -> 'rgba(34,197,94,0.1)'. Plotly's `fillcolor` only
+    accepts 6-digit hex/rgb/rgba/hsl/named colors -- NOT the 8-digit
+    hex-with-alpha shorthand ('#22C55E1A') the raw-HTML/CSS badges
+    elsewhere in this module can get away with (browsers accept that
+    syntax; plotly.py's own color validator rejects it outright, confirmed
+    live via a ValueError crash on this exact chart)."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def render_ihsg_chart(hist, height: int = 110) -> None:
+    """Small line chart (sparkline-ish, not a full-size chart) of IHSG's
+    own close over the lookback in `hist` (a date/close DataFrame from
+    app.data.load_ihsg_history()), shown right under render_ihsg_context's
+    text banner on Home. Plain st.plotly_chart -- NOT the custom-JS
+    cross-panel crosshair setup Detail Saham's 6-panel chart uses (see
+    detail-saham-chart-architecture notes): that machinery exists purely
+    to keep several panels' crosshairs in sync, and a single line here has
+    nothing to sync with, so plotly's own built-in hover is simplest and
+    sufficient. theme=None so the dark palette below applies as-is --
+    Streamlit's default 'streamlit' plotly theme fights the app's dark
+    background otherwise. No-ops quietly if hist is None/empty (fetch
+    failed), same fail-soft contract as render_ihsg_context.
     """
     import plotly.graph_objects as go
 
@@ -165,16 +177,16 @@ def render_ihsg_chart(hist, height: int = 260) -> None:
     color = COLOR_BUY if last >= first else COLOR_AVOID
     fig = go.Figure(go.Scatter(
         x=hist["date"], y=hist["close"], mode="lines",
-        line=dict(color=color, width=1.6),
-        fill="tozeroy", fillcolor=f"{color}1A",
+        line=dict(color=color, width=1.4),
+        fill="tozeroy", fillcolor=_hex_to_rgba(color, 0.1),
         hovertemplate="%{x|%d %b %Y}<br>IHSG %{y:,.0f}<extra></extra>",
     ))
     fig.update_layout(
-        height=height, margin=dict(l=0, r=0, t=8, b=0),
+        height=height, margin=dict(l=0, r=0, t=4, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=TEXT_MUTED, size=11),
+        font=dict(color=TEXT_MUTED, size=10),
         xaxis=dict(showgrid=False, color=TEXT_MUTED, fixedrange=True),
-        yaxis=dict(showgrid=True, gridcolor=BORDER, color=TEXT_MUTED, tickformat=",.0f", fixedrange=True),
+        yaxis=dict(showgrid=True, gridcolor=BORDER, color=TEXT_MUTED, tickformat=",.0f", nticks=3, fixedrange=True),
         showlegend=False,
         hovermode="x unified",
     )
