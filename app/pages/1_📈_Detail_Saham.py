@@ -12,7 +12,7 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list
+from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
@@ -104,6 +104,21 @@ load_foreign_flow(selected)
 foreign_flow_df = load_foreign_flow_history(selected, days=260)
 
 stock_name = stocks_df.loc[stocks_df["code"] == selected, "name"].iloc[0] if selected in stocks_df["code"].values else ""
+
+# Frozen quote + zero volume for SUSPENSION_FREEZE_DAYS -- see
+# app.data.load_suspended_tickers's docstring (confirmed real: SAFE,
+# frozen since the day after its own Swing BUY signal). Shown as a loud
+# banner here regardless of what any screener's decision/probability
+# says, since none of those numbers mean anything for a stock that
+# cannot currently be bought or sold at any price.
+if selected in load_suspended_tickers():
+    st.error(
+        f"🚫 **{selected} tampak sedang DISUSPEND** -- harga beku (tidak bergerak) dan volume nol "
+        "selama beberapa hari perdagangan terakhir, ciri khas saham yang dihentikan sementara oleh "
+        "bursa. Probabilitas/keputusan model di bawah ini TIDAK berarti apa-apa untuk saham yang "
+        "sedang tidak bisa diperdagangkan -- lihat `app.data.load_suspended_tickers`.",
+        icon="🚫",
+    )
 
 # Current price shown unconditionally, unlike the "Entry" metric below which
 # only appears when this ticker has a swing prediction row -- a

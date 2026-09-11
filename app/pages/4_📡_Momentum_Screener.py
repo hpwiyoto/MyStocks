@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_latest_predictions, load_liquidity, load_screener_raw_panel, load_stock_list
+from app.data import load_data_freshness, load_latest_predictions, load_liquidity, load_screener_raw_panel, load_stock_list, load_suspended_tickers
 from app.style import (
     ACCENT,
     COLOR_AVOID,
@@ -127,6 +127,14 @@ df = df.merge(
     on="stock_code", how="left",
 )
 df = df.merge(load_liquidity(), on="stock_code", how="left")
+
+# Suspended stocks (frozen quote, zero volume) excluded from ranking entirely --
+# see app.data.load_suspended_tickers's docstring for why this matters even for
+# a rule-based screener, not just Swing's model.
+suspended_tickers = load_suspended_tickers()
+n_suspended_hidden = int(df["stock_code"].isin(suspended_tickers).sum())
+if suspended_tickers:
+    df = df[~df["stock_code"].isin(suspended_tickers)]
 
 with st.sidebar:
     st.header("🔎 Filter")
@@ -288,6 +296,11 @@ c2.metric("✅ Sinyal Tervalidasi (total, semua saham)", validated_total,
           help="Tidak terpengaruh filter sidebar lain -- centang 'Hanya Sinyal Tervalidasi' untuk melihat daftarnya langsung.")
 c3.metric("🔥 Divergence ganda", int((filtered["divergence_tier"] == 0).sum()))
 c4.metric("Divergence tunggal", int((filtered["divergence_tier"] == 1).sum()))
+if n_suspended_hidden:
+    st.caption(
+        f"🚫 {n_suspended_hidden} saham disembunyikan dari daftar karena tampak sedang disuspend "
+        "(harga beku, volume nol beberapa hari terakhir)."
+    )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 

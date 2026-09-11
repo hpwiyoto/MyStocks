@@ -13,6 +13,7 @@ from app.data import (
     load_latest_predictions,
     load_screener_raw_panel,
     load_stock_list,
+    load_suspended_tickers,
 )
 from app.style import data_freshness_note, inject_base_css, render_developer_footer, render_ihsg_chart, render_ihsg_context
 from features.momentum_screener import compute_screener_panel
@@ -69,6 +70,17 @@ swing_df = load_latest_predictions()
 momentum_raw = load_screener_raw_panel(lookback_days=60)
 momentum_df = compute_screener_panel(momentum_raw) if not momentum_raw.empty else momentum_raw
 validated_total = int(momentum_df["validated_signal"].sum()) if not momentum_df.empty else 0
+
+# Suspended stocks (frozen quote, zero volume) excluded from every count
+# below -- see app.data.load_suspended_tickers's docstring; a screener
+# counting one as a live BUY/WATCH/validated signal is actively misleading.
+_suspended = load_suspended_tickers()
+if _suspended:
+    if not swing_df.empty:
+        swing_df = swing_df[~swing_df["stock_code"].isin(_suspended)]
+    if not momentum_df.empty:
+        momentum_df = momentum_df[~momentum_df["stock_code"].isin(_suspended)]
+        validated_total = int(momentum_df["validated_signal"].sum())
 
 # Cheap set-membership version of Rekomendasi Emitten's own agreement-count
 # logic (see that page for the full merge/display) -- just enough here for

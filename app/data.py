@@ -287,6 +287,57 @@ def load_liquidity(window_days: int = 60) -> pd.DataFrame:
     return out
 
 
+SUSPENSION_FREEZE_DAYS = 2  # consecutive most-recent trading days of flat OHLC + zero volume
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_suspended_tickers() -> set[str]:
+    """Stocks that look SUSPENDED right now: their most recent
+    SUSPENSION_FREEZE_DAYS trading days all show identical open/high/low/
+    close AND zero volume -- the signature yfinance/IDX actually produce
+    for a halted symbol (confirmed real, not a guess: SAFE, Swing BUY
+    2026-09-01, then every session since has been open=high=low=close=875
+    volume=0 -- see scripts/check_suspension_risk_v2.py). A screener
+    ranking a suspended stock as a live "opportunity" is actively
+    misleading -- you cannot buy OR sell it at any price -- so every
+    screener page excludes these from its ranked results, confirmed via a
+    real user report (SAFE still showing in Swing's Top 25 while
+    suspended).
+
+    2 consecutive days (not the 5+ used for the historical research in
+    check_suspension_risk_v2.py) -- this needs to catch a fresh suspension
+    fast for a LIVE screener, not just confirm one in hindsight; a single
+    zero-volume day alone is too common on a thin-but-not-suspended name
+    to use alone, but two in a row with a perfectly flat quote is a much
+    more specific signal.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["price_history"]):
+        return set()
+    cutoff = (dt.date.today() - dt.timedelta(days=15)).isoformat()
+    df = pd.read_sql(
+        text("""
+        SELECT stock_code, date, open, high, low, close, volume
+        FROM price_history
+        WHERE date >= :cutoff AND source_provider = 'yfinance'
+        ORDER BY stock_code, date
+        """),
+        engine,
+        params={"cutoff": cutoff},
+    )
+    if df.empty:
+        return set()
+    df["frozen"] = (
+        (df["open"] == df["close"]) & (df["high"] == df["close"]) & (df["low"] == df["close"]) & (df["volume"] == 0)
+    )
+    suspended = set()
+    for code, g in df.groupby("stock_code"):
+        tail = g.sort_values("date")["frozen"].tail(SUSPENSION_FREEZE_DAYS)
+        if len(tail) == SUSPENSION_FREEZE_DAYS and tail.all():
+            suspended.add(code)
+    return suspended
+
+
 @st.cache_data(ttl=CACHE_TTL)
 def load_stock_list() -> pd.DataFrame:
     engine = get_engine()

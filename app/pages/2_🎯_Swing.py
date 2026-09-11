@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices
+from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_suspended_tickers
 from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
 from engine.predict import run as predict_run
 from features.build_features import run as build_features_run
@@ -93,6 +93,15 @@ if df.empty:
     )
     st.stop()
 
+# Suspended stocks (frozen quote, zero volume -- see app.data.load_suspended_tickers)
+# excluded from ranking entirely: a screener listing one as a live "opportunity" is
+# actively misleading, you cannot buy or sell it at any price. Found via a real user
+# report (SAFE still showing in the Top 25 while suspended).
+suspended_tickers = load_suspended_tickers()
+n_suspended_hidden = int(df["stock_code"].isin(suspended_tickers).sum())
+if suspended_tickers:
+    df = df[~df["stock_code"].isin(suspended_tickers)]
+
 # Liquidity: display-only column + opt-in "≥ Rp X/day" filter (default off
 # -- see scripts/test_liquidity_filter.py for why it's not on by default).
 df = df.merge(load_liquidity(), on="stock_code", how="left")
@@ -145,6 +154,11 @@ col1.metric("Total ticker", len(df))
 col2.metric("BUY", int((df["decision"] == "BUY").sum()))
 col3.metric("WATCH", int((df["decision"] == "WATCH").sum()))
 col4.metric("Ditampilkan", len(filtered))
+if n_suspended_hidden:
+    st.caption(
+        f"🚫 {n_suspended_hidden} saham disembunyikan dari daftar karena tampak sedang disuspend "
+        "(harga beku, volume nol beberapa hari terakhir) -- lihat `app.data.load_suspended_tickers`."
+    )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 

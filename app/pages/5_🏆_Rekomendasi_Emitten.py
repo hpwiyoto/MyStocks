@@ -14,6 +14,7 @@ from app.data import (
     load_liquidity,
     load_screener_raw_panel,
     load_stock_list,
+    load_suspended_tickers,
 )
 from app.style import (
     ACCENT,
@@ -105,6 +106,13 @@ df["momentum_hit"] = df["validated_signal"].fillna(False)
 df["agreement_count"] = df[["swing_hit", "momentum_hit"]].sum(axis=1).astype(int)
 df = df.merge(load_liquidity(), on="stock_code", how="left")
 
+# Suspended stocks (frozen quote, zero volume) excluded from ranking entirely --
+# see app.data.load_suspended_tickers's docstring.
+suspended_tickers = load_suspended_tickers()
+n_suspended_hidden = int(df["stock_code"].isin(suspended_tickers).sum())
+if suspended_tickers:
+    df = df[~df["stock_code"].isin(suspended_tickers)]
+
 with st.sidebar:
     st.header("🔎 Filter")
     min_agreement = st.radio(
@@ -133,6 +141,11 @@ c1, c2, c3 = st.columns(3)
 c1.metric("Total ditampilkan", len(filtered))
 c2.metric("🌟 Keduanya Sepakat (2/2)", int((df["agreement_count"] == 2).sum()))
 c3.metric("1 dari 2", int((df["agreement_count"] == 1).sum()))
+if n_suspended_hidden:
+    st.caption(
+        f"🚫 {n_suspended_hidden} saham disembunyikan dari daftar karena tampak sedang disuspend "
+        "(harga beku, volume nol beberapa hari terakhir)."
+    )
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
