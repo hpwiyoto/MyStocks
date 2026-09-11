@@ -404,6 +404,27 @@ def load_ihsg_trend() -> dict | None:
     }
 
 
+@st.cache_data(ttl=IHSG_TREND_TTL)
+def load_ihsg_history(period: str = "6mo") -> pd.DataFrame:
+    """Plain IHSG close series for the Home page chart -- companion to
+    load_ihsg_trend() above (which only returns the summary %/last-value
+    dict, not the series a chart needs). Same fail-soft contract: an empty
+    DataFrame on fetch failure, never an exception, since this is a
+    supplementary context panel, not something that should block Home
+    from rendering. `period` is any string yfinance's history() accepts
+    (1mo/3mo/6mo/1y/...); cached per-period since Streamlit's
+    st.cache_data keys on all arguments.
+    """
+    try:
+        hist = yf.Ticker("^JKSE").history(period=period)
+    except Exception as exc:
+        logger.warning("IHSG history fetch failed: %s", exc)
+        return pd.DataFrame(columns=["date", "close"])
+    if hist.empty:
+        return pd.DataFrame(columns=["date", "close"])
+    return pd.DataFrame({"date": hist.index.tz_localize(None), "close": hist["Close"].astype(float)}).reset_index(drop=True)
+
+
 @st.cache_data(ttl=NEWS_TTL)
 def load_news(stock_code: str, stock_name: str = "") -> list[dict]:
     """Display-only headline panel (Detail Saham) -- see features.news for

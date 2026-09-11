@@ -8,13 +8,14 @@ import streamlit as st
 from app.auth import require_login
 from app.data import (
     load_data_freshness,
+    load_ihsg_history,
     load_ihsg_trend,
     load_latest_predictions,
     load_latest_turnaround_predictions,
     load_screener_raw_panel,
     load_stock_list,
 )
-from app.style import data_freshness_note, inject_base_css, render_developer_footer, render_ihsg_context
+from app.style import data_freshness_note, inject_base_css, render_developer_footer, render_ihsg_chart, render_ihsg_context
 from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Home", page_icon="🏠", layout="wide")
@@ -27,6 +28,14 @@ st.caption(
     "atau cari langsung satu saham tertentu."
 )
 render_ihsg_context(load_ihsg_trend())
+
+IHSG_PERIOD_OPTIONS = {"1 Bulan": "1mo", "3 Bulan": "3mo", "6 Bulan": "6mo", "1 Tahun": "1y"}
+_ihsg_period_label = st.radio(
+    "Periode grafik IHSG", list(IHSG_PERIOD_OPTIONS.keys()), index=2, horizontal=True,
+    label_visibility="collapsed", key="home_ihsg_period",
+)
+render_ihsg_chart(load_ihsg_history(IHSG_PERIOD_OPTIONS[_ihsg_period_label]))
+
 data_freshness_note(load_data_freshness())
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)

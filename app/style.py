@@ -143,6 +143,44 @@ def render_ihsg_context(trend: dict | None):
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_ihsg_chart(hist, height: int = 260) -> None:
+    """Line chart of IHSG's own close over the lookback in `hist` (a
+    date/close DataFrame from app.data.load_ihsg_history()), shown right
+    under render_ihsg_context's text banner on Home. Plain st.plotly_chart
+    -- NOT the custom-JS cross-panel crosshair setup Detail Saham's
+    6-panel chart uses (see detail-saham-chart-architecture notes): that
+    machinery exists purely to keep several panels' crosshairs in sync,
+    and a single line here has nothing to sync with, so plotly's own
+    built-in hover is simplest and sufficient. theme=None so the dark
+    palette below applies as-is -- Streamlit's default 'streamlit' plotly
+    theme fights the app's dark background otherwise. No-ops quietly if
+    hist is None/empty (fetch failed), same fail-soft contract as
+    render_ihsg_context.
+    """
+    import plotly.graph_objects as go
+
+    if hist is None or hist.empty:
+        return
+    first, last = float(hist["close"].iloc[0]), float(hist["close"].iloc[-1])
+    color = COLOR_BUY if last >= first else COLOR_AVOID
+    fig = go.Figure(go.Scatter(
+        x=hist["date"], y=hist["close"], mode="lines",
+        line=dict(color=color, width=1.6),
+        fill="tozeroy", fillcolor=f"{color}1A",
+        hovertemplate="%{x|%d %b %Y}<br>IHSG %{y:,.0f}<extra></extra>",
+    ))
+    fig.update_layout(
+        height=height, margin=dict(l=0, r=0, t=8, b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TEXT_MUTED, size=11),
+        xaxis=dict(showgrid=False, color=TEXT_MUTED, fixedrange=True),
+        yaxis=dict(showgrid=True, gridcolor=BORDER, color=TEXT_MUTED, tickformat=",.0f", fixedrange=True),
+        showlegend=False,
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, width="stretch", theme=None, config={"displayModeBar": False})
+
+
 def render_developer_footer():
     """Sidebar footer shown on every page -- developer contact info."""
     st.sidebar.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
