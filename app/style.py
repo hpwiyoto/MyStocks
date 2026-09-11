@@ -190,6 +190,16 @@ def render_ihsg_chart(hist, height: int = 130) -> None:
     color = COLOR_BUY if last >= first else COLOR_AVOID
     y_min, y_max = float(hist["close"].min()), float(hist["close"].max())
     pad = (y_max - y_min) * 0.12 or y_max * 0.005  # flat-line guard (y_max==y_min)
+    span_days = (hist["date"].max() - hist["date"].min()).days
+    # Fewer, cleanly-formatted ticks instead of plotly's own date auto-
+    # ticking, which (confirmed real: user feedback, dates along the
+    # bottom looked cramped/off) was free to pack in far more labels than
+    # a chart this short has vertical room for. "1 Bulan"/"3 Bulan" show
+    # day+month (the year never changes within the window, so it'd be
+    # redundant); "1 Tahun" switches to month+year since it crosses a
+    # year boundary and a bare day+month would be ambiguous about which
+    # occurrence.
+    x_tickformat = "%d %b" if span_days <= 200 else "%b '%y"
     fig = go.Figure(go.Scatter(
         x=hist["date"], y=hist["close"], mode="lines",
         line=dict(color=color, width=1.6),
@@ -197,10 +207,13 @@ def render_ihsg_chart(hist, height: int = 130) -> None:
         hovertemplate="%{x|%d %b %Y}<br>IHSG %{y:,.0f}<extra></extra>",
     ))
     fig.update_layout(
-        height=height, margin=dict(l=0, r=0, t=4, b=0),
+        height=height, margin=dict(l=0, r=0, t=4, b=22),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color=TEXT_MUTED, size=10),
-        xaxis=dict(showgrid=False, color=TEXT_MUTED, fixedrange=True),
+        xaxis=dict(
+            showgrid=False, color=TEXT_MUTED, fixedrange=True,
+            tickformat=x_tickformat, nticks=5, tickangle=0,
+        ),
         yaxis=dict(
             showgrid=True, gridcolor=BORDER, color=TEXT_MUTED, tickformat=",.0f",
             nticks=3, fixedrange=True, range=[y_min - pad, y_max + pad],
