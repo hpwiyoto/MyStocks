@@ -27,11 +27,14 @@ from pipeline.logging_config import get_logger
 logger = get_logger("scripts.run_daily")
 
 WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
-# Read by scripts.scheduler_loop on startup to decide whether a day (or
-# several -- e.g. a laptop left off/asleep over a weekend, the exact scenario
-# that surfaced this) was missed entirely and needs an immediate catch-up run
-# rather than silently waiting for tomorrow's scheduled slot. WIB date, not
-# server-local, to stay consistent with the scheduler's own WIB-based clock.
+# Read by scripts.scheduler_loop to decide whether a run is still due today.
+# Stores a full WIB timestamp, not just a date -- confirmed real incident
+# (2026-09-11): a bare date let a morning catch-up run (fetching only
+# YESTERDAY's close, since the market hadn't opened yet) satisfy "already
+# ran today" and permanently mask that same evening's real post-16:30 run,
+# which would have fetched TODAY's actual close. scripts.scheduler_loop's
+# run_is_due() compares this timestamp against the most recently PASSED
+# 16:30 WIB slot, not just the calendar date.
 LAST_RUN_MARKER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "last_daily_run.txt")
 
 
@@ -74,7 +77,7 @@ def run():
 
     try:
         with open(LAST_RUN_MARKER, "w") as f:
-            f.write(dt.datetime.now(WIB).date().isoformat())
+            f.write(dt.datetime.now(WIB).isoformat())
     except OSError:
         logger.warning("Could not write last-run marker (non-fatal, only affects scheduler catch-up detection)")
 
