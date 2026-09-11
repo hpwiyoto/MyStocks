@@ -88,14 +88,34 @@ st.caption(
 
 swing_wf = meta.get("walk_forward_validation") or {}
 swing_ml = swing_wf.get("avg_ml_metrics") or {}
+swing_pooled = swing_wf.get("pooled") or {}
 swing_wf_threshold = swing_wf.get("buy_threshold")
-sp1, sp2, sp3 = st.columns(3)
+sp1, sp2, sp3, sp4 = st.columns(4)
 sp1.metric(
-    f"Precision @ threshold {swing_wf_threshold*100:.0f}% (walk-forward)" if swing_wf_threshold else "Precision (walk-forward)",
-    f"{swing_ml.get('precision', 0)*100:.1f}%" if swing_ml else "-",
+    f"Precision @ threshold {swing_wf_threshold*100:.0f}% (pooled, walk-forward)" if swing_wf_threshold else "Precision (pooled, walk-forward)",
+    f"{swing_pooled.get('precision', swing_ml.get('precision', 0))*100:.1f}%" if (swing_pooled or swing_ml) else "-",
+    help="Dihitung per-transaksi di seluruh fold (bukan rata-rata sederhana antar fold) -- lihat catatan di bawah.",
 )
-sp2.metric("ROC-AUC (walk-forward)", f"{swing_ml.get('roc_auc', 0):.3f}" if swing_ml else "-")
-sp3.metric("BUY threshold saat ini (live)", f"{BUY_THRESHOLD*100:.0f}%")
+sp2.metric(
+    "Batas bawah keyakinan 95% (Wilson LB)",
+    f"{swing_pooled['wilson_lb_95']*100:.1f}%" if swing_pooled else "-",
+    help="Perkiraan konservatif dari precision di atas -- lebih aman dipakai untuk ekspektasi daripada titik estimasi saja.",
+)
+sp3.metric("ROC-AUC (walk-forward)", f"{swing_ml.get('roc_auc', 0):.3f}" if swing_ml else "-")
+sp4.metric("BUY threshold saat ini (live)", f"{BUY_THRESHOLD*100:.0f}%")
+if swing_pooled:
+    st.caption(
+        f"✅ **Angka precision di atas sudah di-pooling per-transaksi** ({swing_pooled['n_trades']} sinyal BUY, "
+        f"{swing_pooled['wins']} menang, di seluruh fold walk-forward digabung) -- bukan sekadar rata-rata "
+        f"precision antar fold. Bedanya nyata: rata-rata sederhana antar fold sempat menunjukkan **"
+        f"{swing_ml.get('precision', 0)*100:.1f}%**, lebih tinggi dari angka pooled **"
+        f"{swing_pooled['precision']*100:.1f}%** -- selisih itu murni artefak penghitungan (salah satu dari 5 "
+        "fold walk-forward hampir selalu punya ~0 sinyal BUY, tapi ikut dihitung sama beratnya dengan fold "
+        "yang punya ratusan transaksi sungguhan). Ditemukan lewat `scripts/tune_v5_extended.py` (pencarian "
+        "40 konfigurasi hyperparameter -- kandidat yang tampak menang di rata-rata-sederhana ternyata KALAH "
+        "begitu dicek pooled, termasuk konfigurasi yang SAAT INI dipakai model ini). Angka pooled di atas "
+        "yang seharusnya dipercaya untuk pertanyaan 'kalau saya ikuti tiap sinyal BUY, berapa peluang menang'."
+    )
 if swing_wf_threshold and abs(swing_wf_threshold - BUY_THRESHOLD) > 1e-6:
     st.caption(
         f"⚠️ Angka precision di atas diukur saat threshold BUY masih {swing_wf_threshold*100:.0f}% -- "
