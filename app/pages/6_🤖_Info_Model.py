@@ -8,7 +8,7 @@ import streamlit as st
 from app.auth import require_login
 from app.data import days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
 from app.style import SUSPENSION_RISK_NOTE, inject_base_css, render_developer_footer, render_ihsg_context
-from engine.decision import BUY_THRESHOLD, IHSG_DECLINE_BUY_THRESHOLD
+from engine.swing_configs import CONFIG_BY_ID, DEFAULT_CONFIG_ID, SWING_CONFIGS
 
 st.set_page_config(page_title="MyStocks — Info Model", page_icon="🤖", layout="wide")
 inject_base_css()
@@ -75,16 +75,54 @@ current_rows = feature_daily_row_count()
 
 # ============================================================ SWING =====
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-st.header("🎯 Model Swing (5 hari)")
+st.header("🎯 Model Swing")
 
-meta = load_model_metadata()
+# Same shared `persist_swing_config_id` session_state slot the Swing page's
+# config toggle (engine.swing_configs) writes -- picking a config here
+# updates it everywhere else too (Home/Swing/Detail Saham/Rekomendasi
+# Emitten), and vice versa, instead of this page silently locking to the
+# default while the rest of the app shows something else.
+_config_labels = [c["label"] for c in SWING_CONFIGS]
+_persisted_config_id = st.session_state.get("persist_swing_config_id", DEFAULT_CONFIG_ID)
+_persisted_config_label = CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID])["label"]
+_selected_label = st.selectbox(
+    "🎯 Konfigurasi target Swing", _config_labels,
+    index=_config_labels.index(_persisted_config_label) if _persisted_config_label in _config_labels else 0,
+)
+selected_config = next(c for c in SWING_CONFIGS if c["label"] == _selected_label)
+st.session_state["persist_swing_config_id"] = selected_config["id"]
+
+meta = load_model_metadata(selected_config["model_version"])
+st.caption(f"Konfigurasi #{selected_config['rank']} dari 20 (lift top-5% {selected_config['top5_lift']:+.3f} atas baseline acak).")
 render_header(meta, "Baseline win rate (base_rate)")
 st.caption(
-    "Ini angka **pembanding acak** (kalau asal pilih saham tanpa strategi apa pun, kira-kira segini "
-    "sering yang naik ≥10% sebelum -5% dalam 5 hari) -- bukan skor performa model. Model dianggap "
-    "bekerja kalau bisa MENGGESER probabilitas jauh dari angka ini: BUY seharusnya jauh di atas, "
-    "AVOID jauh di bawah. Lihat halaman **Swing** untuk win rate sesungguhnya per keputusan."
+    f"Ini angka **pembanding acak** (kalau asal pilih saham tanpa strategi apa pun, kira-kira segini "
+    f"sering yang naik ≥{meta['target_pct']*100:.0f}% sebelum -{meta['stop_pct']*100:.1f}% dalam "
+    f"{meta['horizon_days']} hari) -- bukan skor performa model. Model dianggap bekerja kalau bisa "
+    "MENGGESER probabilitas jauh dari angka ini: BUY seharusnya jauh di atas, AVOID jauh di bawah. "
+    "Lihat halaman **Swing** untuk win rate sesungguhnya per keputusan."
 )
+
+with st.expander("📊 Bandingkan semua 5 konfigurasi"):
+    _cmp_rows = []
+    for c in SWING_CONFIGS:
+        _cm = load_model_metadata(c["model_version"])
+        _cwf = _cm.get("walk_forward_validation") or {}
+        _cp = _cwf.get("pooled") or {}
+        _cmp_rows.append({
+            "Konfigurasi": c["label"], "Peringkat": c["rank"], "Lift top-5%": f"{c['top5_lift']:+.3f}",
+            "Threshold BUY": f"{_cwf.get('buy_threshold', 0)*100:.0f}%",
+            "Precision (pooled)": f"{_cp.get('precision', 0)*100:.1f}%" if _cp else "-",
+            "Wilson LB 95%": f"{_cp.get('wilson_lb_95', 0)*100:.1f}%" if _cp else "-",
+            "n sinyal BUY": _cp.get("n_trades", "-"),
+        })
+    st.dataframe(_cmp_rows, width="stretch", hide_index=True)
+    st.caption(
+        "Semua angka di sini dihitung pooled (trade-weighted) per konfigurasi masing-masing, bukan "
+        "dibandingkan pada threshold yang sama -- tiap konfigurasi punya threshold BUY-nya sendiri hasil "
+        "tuning terpisah. Lihat `scripts/search_swing_target.py` untuk metodologi pencarian 20 "
+        "konfigurasinya, dan `scripts/train_v5_variants.py` untuk cara 4 konfigurasi selain #1 dilatih."
+    )
 
 swing_wf = meta.get("walk_forward_validation") or {}
 swing_ml = swing_wf.get("avg_ml_metrics") or {}
@@ -102,7 +140,7 @@ sp2.metric(
     help="Perkiraan konservatif dari precision di atas -- lebih aman dipakai untuk ekspektasi daripada titik estimasi saja.",
 )
 sp3.metric("ROC-AUC (walk-forward)", f"{swing_ml.get('roc_auc', 0):.3f}" if swing_ml else "-")
-sp4.metric("BUY threshold saat ini (live)", f"{BUY_THRESHOLD*100:.0f}%")
+sp4.metric("BUY threshold saat ini (live)", f"{swing_wf_threshold*100:.0f}%" if swing_wf_threshold else "-")
 if swing_pooled:
     st.caption(
         f"✅ **Angka precision di atas sudah di-pooling per-transaksi** ({swing_pooled['n_trades']} sinyal BUY, "
@@ -116,29 +154,29 @@ if swing_pooled:
         "begitu dicek pooled, termasuk konfigurasi yang SAAT INI dipakai model ini). Angka pooled di atas "
         "yang seharusnya dipercaya untuk pertanyaan 'kalau saya ikuti tiap sinyal BUY, berapa peluang menang'."
     )
-if swing_wf_threshold and abs(swing_wf_threshold - BUY_THRESHOLD) > 1e-6:
+if selected_config["id"] == DEFAULT_CONFIG_ID:
     st.caption(
-        f"⚠️ Angka precision di atas diukur saat threshold BUY masih {swing_wf_threshold*100:.0f}% -- "
-        f"threshold LIVE sekarang {BUY_THRESHOLD*100:.0f}% (diturunkan atas permintaan eksplisit "
-        "supaya sinyal BUY tidak kosong berhari-hari berturut-turut, lihat `engine/decision.py`). "
-        "Konsekuensinya: precision BUY yang sesungguhnya sedikit lebih rendah dari angka di atas -- "
-        "berdasarkan pengecekan 250 hari perdagangan terakhir, sekitar 76-78%, bukan turun drastis, "
-        "tapi tetap bukan angka yang sama persis."
+        "⚠️ **Angka precision di atas adalah rata-rata 4 fold walk-forward, bukan angka tunggal yang "
+        "stabil.** Dicek per-fold secara terpisah (`scripts/check_fold_drift.py`): performanya bervariasi "
+        "72-88% antar fold, dan fold PALING BARU justru yang PALING LEMAH (~71-72%, sinyal BUY paling "
+        "jarang muncul) -- berkorelasi dengan periode IHSG sedang turun. Sudah dicoba diperbaiki dengan "
+        "menambahkan fitur tren IHSG, tapi terbukti memperparah drastis (`scripts/test_ihsg_regime_feature.py`), "
+        "jadi belum ada perbaikan yang diterapkan. Model ini perlu dipantau berkala, bukan dianggap "
+        "'sudah pasti bagus selamanya' hanya dari validasi sekali di tanggal training."
     )
-st.caption(
-    "⚠️ **Angka precision di atas adalah rata-rata 4 fold walk-forward, bukan angka tunggal yang "
-    "stabil.** Dicek per-fold secara terpisah (`scripts/check_fold_drift.py`): performanya bervariasi "
-    "72-88% antar fold, dan fold PALING BARU justru yang PALING LEMAH (~71-72%, sinyal BUY paling "
-    "jarang muncul) -- berkorelasi dengan periode IHSG sedang turun. Sudah dicoba diperbaiki dengan "
-    "menambahkan fitur tren IHSG, tapi terbukti memperparah drastis (`scripts/test_ihsg_regime_feature.py`), "
-    "jadi belum ada perbaikan yang diterapkan. Model ini perlu dipantau berkala, bukan dianggap "
-    "'sudah pasti bagus selamanya' hanya dari validasi sekali di tanggal training."
-)
-st.caption(
-    "🔎 **Pengingat pemantauan**: analisis drift terakhir dijalankan **7 September 2026**. Disarankan "
-    "jalankan `python -m scripts.check_fold_drift` lagi setiap 2-3 bulan, atau lebih cepat kalau IHSG "
-    "baru saja bergerak besar (naik/turun >10% dalam sebulan) -- bukan proses otomatis, perlu dijalankan manual."
-)
+    st.caption(
+        "🔎 **Pengingat pemantauan**: analisis drift terakhir dijalankan **7 September 2026** (untuk "
+        "target lama 5%/-2,5%/10 hari -- belum diulang untuk target baru 10%/-5%/5 hari). Disarankan "
+        "jalankan `python -m scripts.check_fold_drift` lagi setiap 2-3 bulan, atau lebih cepat kalau IHSG "
+        "baru saja bergerak besar (naik/turun >10% dalam sebulan) -- bukan proses otomatis, perlu dijalankan manual."
+    )
+else:
+    st.caption(
+        "🔎 Konfigurasi ini adalah salah satu dari 4 runner-up (`scripts/train_v5_variants.py`) -- belum "
+        "punya analisis drift per-fold terpisah (`scripts/check_fold_drift.py` baru pernah dijalankan "
+        "untuk konfigurasi default #1). Anggap validasi walk-forward di atas sebagai gambaran awal, bukan "
+        "pemantauan berkelanjutan."
+    )
 st.caption(
     "**Kenapa satu saham WATCH bisa menampilkan probabilitas serendah 30%an di Detail Saham**: "
     "probabilitas mentah dari model itu terus-menerus (0-100%), bukan skor keyakinan model pada "
@@ -162,14 +200,27 @@ t2.metric("Stop loss", f"{meta['stop_pct']*100:.1f}%")
 t3.metric("Horizon", f"{meta['horizon_days']} hari trading")
 _ihsg_trend_for_rule = load_ihsg_trend()
 _ihsg_declining_now = bool(_ihsg_trend_for_rule and _ihsg_trend_for_rule.get("ret_20d") is not None and _ihsg_trend_for_rule["ret_20d"] < 0)
-_active_buy_threshold = IHSG_DECLINE_BUY_THRESHOLD if _ihsg_declining_now else BUY_THRESHOLD
+# Per-config threshold, NOT engine.decision's module constants directly --
+# each of the 5 configs has its own metadata-stored buy_threshold, and
+# engine.predict.run() applies a uniform "+0.05 during IHSG decline" bump
+# to WHICHEVER threshold a config actually uses (see that function's
+# docstring) -- reproduced here so this page always shows the config
+# actually selected above, not always the default's numbers.
+_model_buy_threshold = swing_wf_threshold or 0.60
+_model_ihsg_decline_threshold = round(min(_model_buy_threshold + 0.05, 0.95), 2)
+_active_buy_threshold = _model_ihsg_decline_threshold if _ihsg_declining_now else _model_buy_threshold
+_ihsg_decline_note = (
+    "Terbukti lewat backtest (`scripts/test_regime_conditional_threshold.py`) untuk konfigurasi default: "
+    "sinyal BUY saat IHSG turun historisnya menang lebih jarang (71,6% vs 75,2%)."
+    if selected_config["id"] == DEFAULT_CONFIG_ID else
+    "Bump +5pp ini warisan dari konfigurasi default, BELUM divalidasi ulang secara terpisah untuk "
+    "konfigurasi ini (`scripts/test_regime_conditional_threshold.py` belum dijalankan ulang per-config)."
+)
 st.markdown(
     f"""
-    - **BUY** — probabilitas ≥ {BUY_THRESHOLD*100:.0f}% -- **kecuali saat IHSG sendiri sedang turun**
-      (return 20 hari negatif), di mana ambangnya naik ke {IHSG_DECLINE_BUY_THRESHOLD*100:.0f}%. Terbukti lewat
-      backtest (`scripts/test_regime_conditional_threshold.py`): sinyal BUY saat IHSG turun historisnya
-      menang lebih jarang (71,6% vs 75,2%) -- ambang lebih ketat khusus kondisi itu menutup celah tersebut
-      sambil tetap mempertahankan 93% volume sinyal. **Ambang yang berlaku hari ini: {_active_buy_threshold*100:.0f}%**
+    - **BUY** — probabilitas ≥ {_model_buy_threshold*100:.0f}% -- **kecuali saat IHSG sendiri sedang turun**
+      (return 20 hari negatif), di mana ambangnya naik ke {_model_ihsg_decline_threshold*100:.0f}%. {_ihsg_decline_note}
+      **Ambang yang berlaku hari ini: {_active_buy_threshold*100:.0f}%**
       ({"IHSG sedang turun" if _ihsg_declining_now else "IHSG tidak sedang turun"}).
     - **WATCH** — probabilitas ≥ base rate historis model, tapi < ambang BUY yang berlaku hari itu
     - **AVOID** — probabilitas di bawah base rate (tidak ada edge), atau harga saham ≤ Rp50 (floor gocap,

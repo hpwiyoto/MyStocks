@@ -40,6 +40,17 @@ models/*.json
 !models/.gitkeep
 !models/direction_xgboost_v5.json
 !models/direction_xgboost_v5_metadata.json
+# The 4 runner-up Swing target/stop/horizon configs (engine.swing_configs'
+# toggle, scripts/train_v5_variants.py) -- sibling production models, not
+# ad-hoc experiments, so un-ignored the same way as the default above.
+!models/direction_xgboost_v5_t7_h5.json
+!models/direction_xgboost_v5_t7_h5_metadata.json
+!models/direction_xgboost_v5_t10_h10.json
+!models/direction_xgboost_v5_t10_h10_metadata.json
+!models/direction_xgboost_v5_t7_h10.json
+!models/direction_xgboost_v5_t7_h10_metadata.json
+!models/direction_xgboost_v5_t5_h5.json
+!models/direction_xgboost_v5_t5_h5_metadata.json
 # Separate menu (Turnaround Screener), not a superseded version of the
 # swing model above -- both stay un-ignored together.
 !models/turnaround_xgboost_v1.json

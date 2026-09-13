@@ -103,14 +103,24 @@ GOCAP_PRICE_FLOOR = 50
 def decide(
     probability: float, base_rate: float, entry_price: float, target_pct: float, stop_pct: float,
     ihsg_declining: bool = False,
+    buy_threshold: float = BUY_THRESHOLD, ihsg_decline_buy_threshold: float = IHSG_DECLINE_BUY_THRESHOLD,
 ) -> dict:
     """`ihsg_declining`: whether IHSG's own trailing 20-day return is
     negative right now (see pipeline.yfinance_source.is_ihsg_declining) --
     a market-wide, same-for-every-ticker signal computed ONCE per
     prediction run and passed in, not looked up per row. Defaults to False
     (the original, less-restrictive behavior) so every existing caller
-    that doesn't pass it is unaffected."""
-    buy_threshold = IHSG_DECLINE_BUY_THRESHOLD if ihsg_declining else BUY_THRESHOLD
+    that doesn't pass it is unaffected.
+
+    `buy_threshold`/`ihsg_decline_buy_threshold`: override the module-level
+    defaults above -- needed because engine.swing_configs's toggle scores
+    with 5 DIFFERENT models, each independently threshold-tuned for its own
+    target/horizon (see scripts/train_v5_variants.py). The module constants
+    above are specifically the DEFAULT (shipped) config's live thresholds;
+    engine.predict.run() passes each model's OWN metadata-stored threshold
+    here instead of leaving every config to share the default's number,
+    which would silently mis-classify BUY/WATCH for every other config."""
+    buy_threshold = ihsg_decline_buy_threshold if ihsg_declining else buy_threshold
     if entry_price <= GOCAP_PRICE_FLOOR:
         decision = "AVOID"
     elif probability >= buy_threshold:

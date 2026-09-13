@@ -14,6 +14,7 @@ import yfinance as yf
 from sqlalchemy import bindparam, inspect, text, update
 
 from engine.predict import MODEL_VERSION
+from engine.swing_configs import DEFAULT_CONFIG_ID, model_version_for
 from features.db import feature_daily
 from features.news import fetch_news_headlines
 from pipeline.db import get_engine
@@ -45,8 +46,24 @@ def _missing_tables(engine, required: list[str]) -> list[str]:
     return [t for t in required if not inspector.has_table(t)]
 
 
+def selected_swing_model_version() -> str:
+    """Shared across every page that shows Swing results -- reads the same
+    `persist_swing_config_id` session_state slot the Swing page's config
+    toggle (engine.swing_configs) writes, so switching there stays
+    consistent everywhere (Home/Detail Saham/Momentum Screener/Rekomendasi
+    Emitten) instead of each page silently defaulting back to the shipped
+    config on its own. Falls back to the default when the user hasn't
+    opened the Swing page's toggle yet this session."""
+    config_id = st.session_state.get("persist_swing_config_id", DEFAULT_CONFIG_ID)
+    return model_version_for(config_id)
+
+
 @st.cache_data(ttl=CACHE_TTL)
-def load_latest_predictions() -> pd.DataFrame:
+def load_latest_predictions(model_version: str = MODEL_VERSION) -> pd.DataFrame:
+    """`model_version`: which Swing config's predictions to load -- see
+    engine.swing_configs for the toggle between the top-5 target/stop/
+    horizon configs. Defaults to the shipped model so every existing
+    caller that doesn't pass it is unaffected."""
     engine = get_engine()
     if _missing_tables(engine, ["predictions", "stocks", "feature_daily"]):
         return pd.DataFrame()
@@ -77,7 +94,7 @@ def load_latest_predictions() -> pd.DataFrame:
             p.probability DESC
         """),
         engine,
-        params={"model_version": MODEL_VERSION},
+        params={"model_version": model_version},
     )
     return df
 

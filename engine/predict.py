@@ -8,7 +8,7 @@ Usage:
 from sqlalchemy import inspect, select
 
 from engine.db import init_schema, predictions
-from engine.decision import IHSG_DECLINE_BUY_THRESHOLD, decide
+from engine.decision import BUY_THRESHOLD, decide
 from engine.model import build_feature_row, load_model_and_metadata, predict_probability
 from features.db import FEATURE_VERSION, feature_daily
 from pipeline.db import get_engine, price_history, upsert
@@ -48,7 +48,13 @@ def upsert_prediction(conn, record: dict) -> None:
     )
 
 
-def run(tickers=None):
+def run(tickers=None, model_version: str = MODEL_VERSION):
+    """`model_version`: which trained model to score with and tag every
+    written prediction row with -- defaults to the shipped Swing model, but
+    accepts any of the sibling configs in engine.swing_configs (the
+    predictions table's unique key is (stock_code, date, model_version), so
+    multiple configs' predictions coexist without clobbering each other --
+    see engine.swing_configs's docstring for why this exists)."""
     tickers = tickers or SEED_TICKERS
     engine_db = get_engine()
     init_schema(engine_db)
@@ -62,18 +68,33 @@ def run(tickers=None):
         )
         return {"scored": [], "skipped": [], "failures": [], "error": f"missing tables: {missing_tables}"}
 
-    booster, meta = load_model_and_metadata(MODEL_VERSION)
+    booster, meta = load_model_and_metadata(model_version)
     feature_cols = meta["feature_cols"]
     base_rate = meta["base_rate"]
     target_pct = meta["target_pct"]
     stop_pct = meta["stop_pct"]
+
+    # Per-model BUY threshold -- NOT engine.decision.BUY_THRESHOLD directly.
+    # That module constant is specifically the DEFAULT (shipped) config's
+    # live threshold; engine.swing_configs's toggle scores with 5 different
+    # models, each independently threshold-tuned for its own target/horizon
+    # (scripts/train_v5_variants.py) -- reusing the default's threshold for
+    # every config would silently mis-classify BUY/WATCH for the other 4.
+    # The IHSG-decline bump is a uniform "+0.05" heuristic applied to
+    # WHICHEVER threshold this model actually uses -- reproduces the
+    # default config's exact current live behavior (0.60 -> 0.65) and
+    # generalizes the same carried-over-heuristic caveat (documented in
+    # engine/decision.py) to every sibling config, none of which have had
+    # this specific bump independently re-validated either.
+    model_buy_threshold = meta.get("walk_forward_validation", {}).get("buy_threshold", BUY_THRESHOLD)
+    model_ihsg_decline_threshold = round(min(model_buy_threshold + 0.05, 0.95), 2)
 
     # Market-wide, same for every ticker today -- computed ONCE, not per
     # row. See engine/decision.py's IHSG_DECLINE_BUY_THRESHOLD docstring
     # for the empirical justification.
     ihsg_declining = is_ihsg_declining()
     if ihsg_declining:
-        logger.info("IHSG trailing 20d return is negative -- BUY threshold raised to %.2f today", IHSG_DECLINE_BUY_THRESHOLD)
+        logger.info("IHSG trailing 20d return is negative -- BUY threshold raised to %.2f today", model_ihsg_decline_threshold)
 
     scored = []
     skipped = []
@@ -105,12 +126,15 @@ def run(tickers=None):
                     logger.info("%s: %s NULL, predicting with the rest of the feature row anyway", code, missing)
 
                 probability = predict_probability(booster, X)
-                decision_result = decide(probability, base_rate, entry_price, target_pct, stop_pct, ihsg_declining)
+                decision_result = decide(
+                    probability, base_rate, entry_price, target_pct, stop_pct, ihsg_declining,
+                    buy_threshold=model_buy_threshold, ihsg_decline_buy_threshold=model_ihsg_decline_threshold,
+                )
 
                 record = {
                     "stock_code": code,
                     "date": feat_row["date"],
-                    "model_version": MODEL_VERSION,
+                    "model_version": model_version,
                     "probability": round(probability, 4),
                     **decision_result,
                 }

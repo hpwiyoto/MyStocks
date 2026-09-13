@@ -12,7 +12,7 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers
+from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, selected_swing_model_version
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
@@ -42,7 +42,8 @@ if stocks_df.empty:
     st.warning("Belum ada saham yang di-ingest. Jalankan pipeline terlebih dahulu dari halaman utama.")
     st.stop()
 
-predictions = load_latest_predictions()
+_swing_model_version = selected_swing_model_version()
+predictions = load_latest_predictions(model_version=_swing_model_version)
 
 # Pemilihan bebas: dari seluruh saham yang pernah di-ingest, bukan cuma yang
 # sudah punya prediksi hari ini -- tapi tetap kasih tahu mana yang belum.
@@ -151,7 +152,9 @@ with h2:
         st.markdown("<div class='mystocks-metric-value' style='font-size:2.2rem;'>-</div>", unsafe_allow_html=True)
 with h3:
     if row is not None:
-        st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥10% sebelum SL -5% (5 hari)</div>", unsafe_allow_html=True)
+        _det_meta = load_model_metadata(_swing_model_version)
+        _dt, _ds, _dh = _det_meta["target_pct"], _det_meta["stop_pct"], _det_meta["horizon_days"]
+        st.markdown(f"<div class='mystocks-muted'>Probabilitas naik ≥{_dt*100:.0f}% sebelum SL -{_ds*100:.1f}% ({_dh} hari)</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
         # Angka mentah (0-100%) sengaja BUKAN skor keyakinan model pada
         # dirinya sendiri -- ini probabilitas dari data historis, dan base
@@ -161,7 +164,7 @@ with h3:
         # acak, belum cukup untuk BUY) -- lihat halaman Info Model untuk
         # angka precision walk-forward per tingkat keputusan.
         try:
-            swing_base_rate = load_model_metadata()["base_rate"]
+            swing_base_rate = _det_meta["base_rate"]
             above_below = "di atas" if float(row["probability"]) >= swing_base_rate else "di bawah"
             st.caption(
                 f"Base rate acak: {swing_base_rate*100:.0f}% -- angka ini {above_below} itu, makanya "

@@ -11,9 +11,11 @@ from app.data import (
     load_ihsg_history,
     load_ihsg_trend,
     load_latest_predictions,
+    load_model_metadata,
     load_screener_raw_panel,
     load_stock_list,
     load_suspended_tickers,
+    selected_swing_model_version,
 )
 from app.style import data_freshness_note, inject_base_css, render_developer_footer, render_ihsg_chart, render_ihsg_context
 from features.momentum_screener import compute_screener_panel
@@ -60,7 +62,8 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 
 st.subheader("📊 Pilih Mode Screening")
 
-swing_df = load_latest_predictions()
+_swing_model_version = selected_swing_model_version()
+swing_df = load_latest_predictions(model_version=_swing_model_version)
 # Momentum Screener is rule-based (not a trained model, see the page itself
 # for the full backtest story) -- computed here too, cheaply, just for the
 # "berapa sinyal tervalidasi hari ini" count below. Previously this whole
@@ -98,11 +101,13 @@ consensus_2of2 = sum(1 for a in agreement_counts if a == 2)
 c1, c2 = st.columns(2)
 
 with c1:
+    _swing_meta = load_model_metadata(_swing_model_version)
+    _st, _ss, _sh = _swing_meta["target_pct"], _swing_meta["stop_pct"], _swing_meta["horizon_days"]
     st.markdown(
-        """
+        f"""
         <div class="mystocks-card">
-            <div class="mystocks-ticker" style="font-size:1.3rem;">🎯 Swing (5 hari)</div>
-            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Cari peluang naik ≥10% sebelum stop-loss -5% dalam 5 hari trading.</div>
+            <div class="mystocks-ticker" style="font-size:1.3rem;">🎯 Swing ({_sh} hari)</div>
+            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Cari peluang naik ≥{_st*100:.0f}% sebelum stop-loss -{_ss*100:.1f}% dalam {_sh} hari trading. Ganti konfigurasi di halaman Swing.</div>
         </div>
         """,
         unsafe_allow_html=True,

@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_latest_predictions, load_liquidity, load_screener_raw_panel, load_stock_list, load_suspended_tickers
+from app.data import load_data_freshness, load_latest_predictions, load_liquidity, load_screener_raw_panel, load_stock_list, load_suspended_tickers, selected_swing_model_version
 from app.style import (
     ACCENT,
     COLOR_AVOID,
@@ -118,7 +118,7 @@ if raw_panel.empty:
 
 screener_df = compute_screener_panel(raw_panel)
 stocks_df = load_stock_list()
-predictions = load_latest_predictions()
+predictions = load_latest_predictions(model_version=selected_swing_model_version())
 
 df = screener_df.merge(stocks_df, left_on="stock_code", right_on="code", how="left")
 df = df.merge(

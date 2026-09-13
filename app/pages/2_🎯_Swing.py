@@ -8,9 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_suspended_tickers
+from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers
 from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
 from engine.predict import run as predict_run
+from engine.swing_configs import CONFIG_BY_ID, DEFAULT_CONFIG_ID, SWING_CONFIGS
 from features.build_features import run as build_features_run
 from pipeline.ingest_price import run as ingest_price_run
 
@@ -36,9 +37,6 @@ def entry_range(price: float) -> tuple[float, float]:
     return price - half_width, price + half_width
 
 st.title("🎯 Swing Screener")
-st.caption("Prediksi harian saham IDX — probabilitas naik ≥10% sebelum stop-loss -5% dalam 5 hari trading.")
-data_freshness_note(load_data_freshness())
-st.caption(SUSPENSION_RISK_NOTE)
 
 # This page uses the classic file-based pages/ structure, where -- unlike the
 # newer st.navigation API -- widget-keyed session_state is NOT reliably kept
@@ -52,6 +50,41 @@ def _persisted(name, default):
 
 def _save_persisted(name, value):
     st.session_state[f"persist_{name}"] = value
+
+
+# Config toggle: direct user request ("bisa dikasih togle opsi 10%,-5%,10
+# hari, dst sampai dengan 5 besar dari urutan yang paling optimal") after
+# scripts/search_swing_target.py's 20-config search -- rather than shipping
+# only the single winner, the top-5 by top5_lift each got their own
+# independently walk-forward-validated + threshold-tuned model (see
+# engine.swing_configs's docstring). Stored under the SAME `persist_`
+# session_state slot other pages read (Home/Detail Saham/Rekomendasi
+# Emitten) so switching here stays consistent app-wide instead of each
+# page silently looking at a different config.
+_config_labels = [c["label"] for c in SWING_CONFIGS]
+_persisted_config_id = _persisted("swing_config_id", DEFAULT_CONFIG_ID)
+_persisted_config_label = CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID])["label"]
+selected_label = st.selectbox(
+    "🎯 Konfigurasi target Swing",
+    _config_labels,
+    index=_config_labels.index(_persisted_config_label) if _persisted_config_label in _config_labels else 0,
+    help="5 kombinasi target/stop/horizon teratas dari pencarian 20-konfigurasi "
+         "(`scripts/search_swing_target.py`), diurutkan dari yang paling optimal (lift tertinggi atas "
+         "baseline acak). Tiap konfigurasi punya model dan threshold BUY-nya sendiri, bukan model yang "
+         "sama dengan angka target yang berbeda.",
+)
+selected_config = next(c for c in SWING_CONFIGS if c["label"] == selected_label)
+_save_persisted("swing_config_id", selected_config["id"])
+selected_model_version = selected_config["model_version"]
+selected_meta = load_model_metadata(selected_model_version)
+_t, _s, _h = selected_meta["target_pct"], selected_meta["stop_pct"], selected_meta["horizon_days"]
+st.caption(
+    f"Prediksi harian saham IDX — probabilitas naik ≥{_t*100:.0f}% sebelum stop-loss -{_s*100:.1f}% "
+    f"dalam {_h} hari trading. Konfigurasi #{selected_config['rank']} dari 20 (lift top-5% "
+    f"{selected_config['top5_lift']:+.3f} atas baseline acak -- lihat `scripts/search_swing_target.py`)."
+)
+data_freshness_note(load_data_freshness())
+st.caption(SUSPENSION_RISK_NOTE)
 
 
 PRICE_FILTER_OPTIONS = ["Semua", "Di bawah 50", "50 - 100", "100 - 1.000", "Di atas 1.000"]
@@ -84,7 +117,7 @@ with st.sidebar:
     _save_persisted("price_filter", price_filter)
 
 with st.spinner("Memuat prediksi terbaru..."):
-    df = load_latest_predictions()
+    df = load_latest_predictions(model_version=selected_model_version)
 
 if df.empty:
     st.warning(
@@ -203,7 +236,7 @@ with st.sidebar:
             with st.spinner(f"Mengambil harga terbaru untuk {len(refresh_codes)} ticker..."):
                 ingest_price_run(tickers=refresh_codes)
                 build_features_run(tickers=refresh_codes)
-                predict_run(tickers=refresh_codes)
+                predict_run(tickers=refresh_codes, model_version=selected_model_version)
             st.cache_data.clear()
             st.rerun()
 

@@ -12,9 +12,11 @@ from app.data import (
     load_data_freshness,
     load_latest_predictions,
     load_liquidity,
+    load_model_metadata,
     load_screener_raw_panel,
     load_stock_list,
     load_suspended_tickers,
+    selected_swing_model_version,
 )
 from app.style import (
     ACCENT,
@@ -36,12 +38,16 @@ render_developer_footer()
 if st.button("← Kembali ke Home"):
     st.switch_page("Home.py")
 
+_swing_model_version = selected_swing_model_version()
+_reko_meta = load_model_metadata(_swing_model_version)
+_reko_h = _reko_meta["horizon_days"]
+
 st.title("🏆 Rekomendasi Emitten")
 st.caption(
-    "Menggabungkan dua alat screening yang independen satu sama lain -- Swing (model ML, "
-    "horizon 10 hari) dan Momentum Screener (aturan teknikal tervalidasi lewat backtest) -- "
-    "untuk mencari saham yang mendapat sinyal dari KEDUANYA pada saat yang sama, bukan cuma "
-    "dari satu sudut pandang."
+    f"Menggabungkan dua alat screening yang independen satu sama lain -- Swing (model ML, "
+    f"horizon {_reko_h} hari, konfigurasi bisa diganti di halaman Swing) dan Momentum Screener "
+    "(aturan teknikal tervalidasi lewat backtest) -- untuk mencari saham yang mendapat sinyal dari "
+    "KEDUANYA pada saat yang sama, bukan cuma dari satu sudut pandang."
 )
 st.success(
     "**Bukti historis (backtest 5 tahun, `scripts/search_momentum_rules.py` + lanjutannya)**: saham "
@@ -74,7 +80,7 @@ def fmt_pct(value) -> str:
 
 
 with st.spinner("Menggabungkan hasil Swing dan Momentum Screener..."):
-    swing = load_latest_predictions()
+    swing = load_latest_predictions(model_version=_swing_model_version)
     raw_panel = load_screener_raw_panel(lookback_days=60)
     momentum = compute_screener_panel(raw_panel)
     stocks_df = load_stock_list()
