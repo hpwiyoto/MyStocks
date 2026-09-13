@@ -36,7 +36,7 @@ def entry_range(price: float) -> tuple[float, float]:
     return price - half_width, price + half_width
 
 st.title("🎯 Swing Screener")
-st.caption("Prediksi harian saham IDX — probabilitas naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.")
+st.caption("Prediksi harian saham IDX — probabilitas naik ≥10% sebelum stop-loss -5% dalam 5 hari trading.")
 data_freshness_note(load_data_freshness())
 st.caption(SUSPENSION_RISK_NOTE)
 
@@ -324,7 +324,7 @@ event = st.dataframe(
         "stock_code": st.column_config.TextColumn("Kode"),
         "name": st.column_config.TextColumn("Nama"),
         "decision": st.column_config.TextColumn("Keputusan"),
-        "confidence_display": st.column_config.TextColumn("Keyakinan", help="⭐ Tinggi = sinyal BUY yang BUKAN sedang overextended -- kelompok langka (7% dari BUY historis) dengan Wilson LB 91,4% vs 77,0% mayoritas. Lihat scripts/test_overextended_buy_filter.py."),
+        "confidence_display": st.column_config.TextColumn("Keyakinan", help="⭐ Tinggi = sinyal BUY yang BUKAN sedang overextended -- kelompok sangat langka (kini hanya ~3% dari BUY historis, n=22) dengan Wilson LB 72,2% vs 68,0% mayoritas -- gap tipis & sampel kecil, jangan terlalu diandalkan. Lihat scripts/test_overextended_buy_filter.py."),
         "probability": st.column_config.ProgressColumn("Probabilitas", format="%.1f%%", min_value=0.0, max_value=100.0),
         "regime": st.column_config.TextColumn("Regime"),
         "entry_price": st.column_config.NumberColumn("Harga Saat Ini", format="%.0f"),

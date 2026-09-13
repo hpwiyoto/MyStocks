@@ -75,13 +75,13 @@ current_rows = feature_daily_row_count()
 
 # ============================================================ SWING =====
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-st.header("🎯 Model Swing (10 hari)")
+st.header("🎯 Model Swing (5 hari)")
 
 meta = load_model_metadata()
 render_header(meta, "Baseline win rate (base_rate)")
 st.caption(
     "Ini angka **pembanding acak** (kalau asal pilih saham tanpa strategi apa pun, kira-kira segini "
-    "sering yang naik ≥5% sebelum -2.5% dalam 10 hari) -- bukan skor performa model. Model dianggap "
+    "sering yang naik ≥10% sebelum -5% dalam 5 hari) -- bukan skor performa model. Model dianggap "
     "bekerja kalau bisa MENGGESER probabilitas jauh dari angka ini: BUY seharusnya jauh di atas, "
     "AVOID jauh di bawah. Lihat halaman **Swing** untuk win rate sesungguhnya per keputusan."
 )

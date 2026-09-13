@@ -110,15 +110,21 @@ def regime_badge(regime: str) -> str:
     return badge_html(regime.replace("_", " "), color)
 
 
-# scripts/test_overextended_buy_filter.py: 93% of Swing's BUY signals fire
+# scripts/test_overextended_buy_filter.py: 97% of Swing's BUY signals fire
 # while the stock is ALREADY in "overextended" regime -- pooled Wilson LB
-# 77.0% there vs 91.4% for the rare 7% of BUY signals that aren't (n=62,
-# small but a real gap, prompted by two real incidents in the same week:
-# LUCY crashed -33.7% and SAFE got suspended, both BUY'd while already
-# overextended). Deliberately a POSITIVE highlight on the rare stronger
-# case rather than a warning stacked onto the 93% majority -- a badge
-# nearly every BUY signal would carry stops meaning anything (alert
-# fatigue), see the conversation this was built from.
+# 68.0% there vs 72.2% for the rare non-overextended slice (n=22 -- see
+# note below). Deliberately a POSITIVE highlight on the rare stronger case
+# rather than a warning stacked onto the majority -- a badge nearly every
+# BUY signal would carry stops meaning anything (alert fatigue), see the
+# conversation this was built from.
+#
+# NOTE (2026-09-13, after the target/horizon change to 10%/5%/5d): this
+# split re-ran on the new label and the gap shrank hard -- was 93%/7% with
+# a +13pp Wilson-LB gap (77.0% vs 91.4%, n=62), now 97%/3% with only a
+# +4pp gap (68.0% vs 72.2%, n=22). The badge still points the right
+# direction but is now backed by a much thinner, less reliable sample --
+# worth re-checking again once more live data accumulates under the new
+# target rather than treating today's numbers as final.
 CONFIDENCE_BADGE_COLOR = "#FBBF24"
 
 
@@ -130,11 +136,19 @@ def swing_confidence_badge(decision: str, regime) -> str:
     return badge_html("⭐ Keyakinan Tinggi", CONFIDENCE_BADGE_COLOR)
 
 
+# Re-run 2026-09-13 after the target/horizon change to 10%/5%/5d: rate
+# moved from ~2.25% (1-in-44, n=890 BUY signals under the old 5%/2.5%/10d
+# label) to ~3.28% (1-in-30, n=762 under the new label) -- the absolute
+# hit count is similar (20 vs 25) but the new label produces fewer total
+# BUY signals, so the same real-world risk shows up as a slightly higher
+# rate. Same caveat as before: this is a plausible floor, not a ceiling
+# (see scripts/check_suspension_risk_v2.py's docstring on the parquet-
+# snapshot/feature-NULL gap that misses at least one known real case).
 SUSPENSION_RISK_NOTE = (
-    "⚠️ **Risiko yang stop-loss tidak bisa lindungi**: dari histori 5 tahun, sekitar **1 dari 44 "
-    "sinyal BUY** (~2,25%, kemungkinan sedikit lebih tinggi -- lihat `scripts/check_suspension_risk_v2.py`) "
+    "⚠️ **Risiko yang stop-loss tidak bisa lindungi**: dari histori 5 tahun, sekitar **1 dari 30 "
+    "sinyal BUY** (~3,28%, kemungkinan sedikit lebih tinggi -- lihat `scripts/check_suspension_risk_v2.py`) "
     "diikuti saham itu **disuspend** bursa dalam ~sebulan setelahnya -- posisi jadi tidak bisa dijual "
-    "sama sekali, bukan sekadar rugi -2,5%. Tidak ada cara memprediksi saham mana spesifik yang akan "
+    "sama sekali, bukan sekadar kena stop-loss -5%. Tidak ada cara memprediksi saham mana spesifik yang akan "
     "kena; ini risiko dasar yang berlaku untuk semua sinyal BUY, bukan cuma yang ditandai overextended."
 )
 

@@ -101,8 +101,8 @@ with c1:
     st.markdown(
         """
         <div class="mystocks-card">
-            <div class="mystocks-ticker" style="font-size:1.3rem;">🎯 Swing (10 hari)</div>
-            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Cari peluang naik ≥5% sebelum stop-loss -2.5% dalam 10 hari trading.</div>
+            <div class="mystocks-ticker" style="font-size:1.3rem;">🎯 Swing (5 hari)</div>
+            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Cari peluang naik ≥10% sebelum stop-loss -5% dalam 5 hari trading.</div>
         </div>
         """,
         unsafe_allow_html=True,

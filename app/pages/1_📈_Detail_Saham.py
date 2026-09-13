@@ -151,7 +151,7 @@ with h2:
         st.markdown("<div class='mystocks-metric-value' style='font-size:2.2rem;'>-</div>", unsafe_allow_html=True)
 with h3:
     if row is not None:
-        st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥5% sebelum SL -2.5% (10 hari)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='mystocks-muted'>Probabilitas naik ≥10% sebelum SL -5% (5 hari)</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='mystocks-metric-value' style='font-size:2.2rem;'>{float(row['probability'])*100:.1f}%</div>", unsafe_allow_html=True)
         # Angka mentah (0-100%) sengaja BUKAN skor keyakinan model pada
         # dirinya sendiri -- ini probabilitas dari data historis, dan base
@@ -272,9 +272,10 @@ else:
                 st.markdown(confidence_badge, unsafe_allow_html=True)
             else:
                 st.caption(
-                    "Sinyal BUY ini sedang di regime **overextended** -- kelompok mayoritas (93% sinyal BUY historis), "
-                    "batas bawah keyakinan 95% pooled 77,0%, masih jauh di atas baseline acak tapi di bawah kelompok "
-                    "langka non-overextended (91,4%). Lihat `scripts/test_overextended_buy_filter.py`."
+                    "Sinyal BUY ini sedang di regime **overextended** -- kelompok mayoritas (97% sinyal BUY historis), "
+                    "batas bawah keyakinan 95% pooled 68,0%, masih jauh di atas baseline acak tapi di bawah kelompok "
+                    "non-overextended (72,2%) -- sampelnya kini sangat kecil (n=22) dan selisihnya tipis, jadi "
+                    "jangan terlalu diandalkan. Lihat `scripts/test_overextended_buy_filter.py`."
                 )
             st.caption(SUSPENSION_RISK_NOTE)
     else:
