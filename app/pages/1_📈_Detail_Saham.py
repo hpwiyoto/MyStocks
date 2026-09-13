@@ -13,9 +13,10 @@ from plotly.subplots import make_subplots
 
 from app.auth import require_login
 from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, selected_swing_model_version
-from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge
+from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge, wyckoff_badge
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
+from features.wyckoff import compute_wyckoff_features
 
 def _notna(value):
     """`feat`/`fund` here are dicts built from a pandas row via .to_dict()
@@ -95,6 +96,19 @@ fund = load_latest_fundamental(selected)
 with st.spinner("Memuat data harga..."):
     price_df = load_price_history(selected, days=260)
 
+# Wyckoff status: display-only (scripts/test_wyckoff_feature.py found it
+# does NOT help Swing's predictions as a training feature -- same
+# rejected-but-still-informational fate as the RapidAPI foreign-flow
+# panel below). Computed on-demand from the 260-day price_df already
+# loaded above, same pattern as compute_pivot_levels's on-the-fly S/R --
+# not backfilled into feature_daily since it isn't a model input.
+wyckoff_row = None
+if not price_df.empty:
+    _wyckoff_df = compute_wyckoff_features(price_df.assign(stock_code=selected))
+    _wyckoff_last = _wyckoff_df.iloc[-1]
+    if pd.notna(_wyckoff_last["wyckoff_phase"]):
+        wyckoff_row = _wyckoff_last
+
 # On-demand foreign-flow fetch+persist for whichever ticker is being
 # viewed right now (see app/data.py's load_foreign_flow) -- display-only
 # complement, deliberately NOT a model input (scripts/test_foreign_flow_feature.py
@@ -135,7 +149,14 @@ current_price = live_price if live_price is not None else last_close
 # --- Header ---
 h1, h2, h3 = st.columns([2.2, 1, 1])
 with h1:
-    badges = f"{decision_badge(row['decision'])} &nbsp; {regime_badge(row['regime'])}" if row is not None else ""
+    _wyckoff_event = None
+    if wyckoff_row is not None:
+        if wyckoff_row["wyckoff_spring"] == 1.0:
+            _wyckoff_event = "spring"
+        elif wyckoff_row["wyckoff_upthrust"] == 1.0:
+            _wyckoff_event = "upthrust"
+    _wyckoff_html = wyckoff_badge(wyckoff_row["wyckoff_phase"] if wyckoff_row is not None else None, _wyckoff_event)
+    badges = f"{decision_badge(row['decision'])} &nbsp; {regime_badge(row['regime'])} &nbsp; {_wyckoff_html}" if row is not None else _wyckoff_html
     st.markdown(
         f"""
         <div class="mystocks-ticker" style="font-size:2rem;">{selected} <span class="mystocks-muted" style="font-size:1.1rem;">{stock_name}</span></div>
@@ -143,6 +164,23 @@ with h1:
         """,
         unsafe_allow_html=True,
     )
+    if wyckoff_row is not None:
+        _wyckoff_captions = {
+            "accumulation": "Sedang membangun basis setelah tren turun -- volatilitas menyempit, harga cenderung sideways.",
+            "distribution": "Sedang membangun puncak setelah tren naik -- volatilitas menyempit, harga cenderung sideways.",
+            "markup": "Baru saja lepas dari basis akumulasi, bergerak naik.",
+            "markdown": "Baru saja lepas dari puncak distribusi, bergerak turun.",
+        }
+        _event_captions = {
+            "spring": " ⚡ **Spring**: harga sempat menembus bawah lalu langsung pulih -- sinyal klasik Wyckoff untuk potensi shakeout jual sebelum naik, bukan konfirmasi pasti.",
+            "upthrust": " ⚡ **Upthrust**: harga sempat menembus atas lalu langsung gagal bertahan -- sinyal klasik Wyckoff untuk potensi jebakan beli sebelum turun, bukan konfirmasi pasti.",
+        }
+        st.caption(
+            (_wyckoff_captions.get(wyckoff_row["wyckoff_phase"], "") + _event_captions.get(_wyckoff_event, ""))
+            + " Status Wyckoff ini proksi sederhana (jendela rolling, bukan analisis multi-hari penuh) dan "
+            "TERBUKTI TIDAK membantu model Swing setelah diuji (`scripts/test_wyckoff_feature.py`) -- "
+            "murni informasi tambahan, bukan bagian dari probabilitas di atas."
+        )
 with h2:
     st.markdown("<div class='mystocks-muted'>Harga Saat Ini</div>", unsafe_allow_html=True)
     if current_price is not None:

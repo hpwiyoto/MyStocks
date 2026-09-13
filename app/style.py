@@ -27,6 +27,21 @@ REGIME_COLORS = {
     "overextended": "#F97316",
 }
 
+# features.wyckoff's simplified Wyckoff-cycle status -- a SEPARATE
+# classification from REGIME_COLORS above (different module, different
+# rules, see features/wyckoff.py's docstring), shown alongside it rather
+# than replacing it. accumulation/markup share regime's own bullish-leaning
+# colors, distribution/markdown share its bearish-leaning ones -- same
+# color vocabulary, not a coincidence, since both are describing related
+# ideas from different angles.
+WYCKOFF_PHASE_COLORS = {
+    "accumulation": "#3B82F6",
+    "markup": "#22C55E",
+    "distribution": "#F97316",
+    "markdown": "#EF4444",
+    "indeterminate": "#8B95A7",
+}
+
 DECISION_COLORS = {
     "BUY": COLOR_BUY, "WATCH": COLOR_WATCH, "AVOID": COLOR_AVOID,
 }
@@ -108,6 +123,20 @@ def regime_badge(regime: str) -> str:
         return badge_html("unknown", TEXT_MUTED)
     color = REGIME_COLORS.get(regime, TEXT_MUTED)
     return badge_html(regime.replace("_", " "), color)
+
+
+def wyckoff_badge(phase, event: str | None = None) -> str:
+    """`event`: "spring" or "upthrust" if either fired on the latest bar --
+    appended to the label since these are the signature actionable Wyckoff
+    signals (a Spring inside accumulation, an Upthrust inside distribution),
+    not just informational. See features/wyckoff.py's docstring."""
+    if not isinstance(phase, str):
+        return badge_html("Wyckoff: -", TEXT_MUTED)
+    color = WYCKOFF_PHASE_COLORS.get(phase, TEXT_MUTED)
+    label = f"Wyckoff: {phase}"
+    if event:
+        label += f" ({event})"
+    return badge_html(label, color)
 
 
 # scripts/test_overextended_buy_filter.py: 97% of Swing's BUY signals fire
