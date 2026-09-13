@@ -47,6 +47,20 @@ precision cost (78.1% -> 76.5% in that same 250-day check; walk-forward
 win_rate 78.1% pooled, not the 84.5% headline number, which was the
 stricter 4-fold walk-forward figure) -- a deliberate trade of a few points
 of precision for a usable BUY tier that isn't empty on a routine basis.
+
+Target/stop/horizon changed 2026-09-13 (5%/2.5%/10d -> 10%/5%/5d, see
+scripts/train_v5.py's docstring for the full search that justified this --
+direct user request to search the target definition itself). Re-tuned via
+scripts/tune_v5_new_target_threshold.py's pooled walk-forward sweep on the
+NEW label: unlike the old label, this one shows no interior peak --
+precision/profit_factor rise monotonically with threshold (n_trades
+collapses to single digits above 0.75). 0.60 kept as the threshold: pooled
+precision 71.9% (Wilson LB 68.6%), profit_factor 5.1, ~1.9 BUY signals/day
+across ~900 tickers -- a real, expected drop in frequency from the old
+label's ~4.2/day (a 10%-move-in-5-days setup is mechanically rarer than a
+5%-move-in-10-days one), but 0.65+ thins out to <1.2/day, risking the same
+"empty for days straight" complaint that moved the old threshold down in
+the first place.
 """
 
 BUY_THRESHOLD = 0.60
@@ -63,6 +77,14 @@ BUY_THRESHOLD = 0.60
 # (combined win rate 75.7%, LB 73.2%) while keeping 93% of signal volume
 # (only the weakest, IHSG-decline-specific slice of the 0.60-0.65 band is
 # demoted to WATCH instead of BUY).
+#
+# NOTE (2026-09-13): kept at 0.65 (the next rung up from the new
+# BUY_THRESHOLD=0.60 in scripts/tune_v5_new_target_threshold.py's sweep --
+# precision 74.4%, Wilson LB 70.3% there) as a carried-over heuristic after
+# the target/horizon change to 10%/5%/5d. NOT independently re-validated
+# for the new label -- the original test_regime_conditional_threshold.py
+# analysis (IHSG-decline BUY signals winning less often) was run against
+# the OLD 5%/2.5%/10d label and hasn't been rerun against the new one yet.
 IHSG_DECLINE_BUY_THRESHOLD = 0.65
 
 # IDX's practical price floor ("gocap") -- confirmed by checking real Home

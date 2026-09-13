@@ -28,14 +28,29 @@ MODEL_DIR = "models"
 FEATURES_PATH = "data/export_for_colab_features.parquet"
 PRICES_PATH = "data/export_for_colab_prices.parquet"
 
-HORIZON = 10
-TARGET_PCT = 0.05
-STOP_PCT = 0.025
-BUY_THRESHOLD = 0.65  # tuned via scripts/tune_v5.py's pooled out-of-sample sweep: 0.65 beat both
-                      # 0.60 (precision 75.0%->81.7%, profit_factor 6.00->8.92, max_dd -16.2%->-9.8%)
-                      # AND 0.70 (which regressed slightly on profit_factor/drawdown despite fewer
-                      # trades) -- unlike v4's sweep, which improved monotonically all the way to
-                      # 0.70, v5's peaks at 0.65.
+# Target/stop/horizon re-optimized 2026-09-13 via scripts/search_swing_
+# target.py -- direct user request to search the target definition itself
+# rather than assume 5%/2.5%/10d was optimal. 20-config grid (4 target/stop
+# pairs x 5 horizons, rank-based top-5%/10% lift over each config's own
+# null baseline, the only fair cross-config metric since a bigger target
+# mechanically shifts the null win rate). Winner: 10%/5%/5 trading days
+# (top5_lift +0.228 vs the old 5%/2.5%/10d's +0.168, ranked 8th of 20).
+# Confirmed with the user this is a deliberate product-identity change
+# (10-day swing -> 5-day fast trade, same 2:1 reward:risk but double the
+# absolute risk per trade) before adopting it, not a silent tuning tweak.
+HORIZON = 5
+TARGET_PCT = 0.10
+STOP_PCT = 0.05
+BUY_THRESHOLD = 0.60  # re-tuned for the new target via scripts/tune_v5_new_target_threshold.py's
+                      # pooled out-of-sample sweep (2026-09-13): unlike the old 5%/2.5%/10d label,
+                      # this one has no interior peak -- precision/profit_factor rise monotonically
+                      # with threshold all the way to 0.75 (n collapses to 73 trades there, and to 1
+                      # by 0.80, too thin to trust). 0.60 picked as the balance point: precision
+                      # 71.9% (Wilson LB 68.6%), profit_factor 5.1, ~1.9 BUY signals/day pooled
+                      # across ~900 tickers -- comparable usable frequency to what 0.60 gave under
+                      # the OLD label (~4.2/day), whereas 0.65+ drops below ~1.2/day, thin enough to
+                      # risk the same "empty for several days straight" complaint that got the old
+                      # threshold lowered in the first place (see engine/decision.py's docstring).
 
 NON_FEATURE_COLS = {"id", "stock_code", "date", "feature_version", "created_at"}
 BOOL_COLS = ["higher_high_20d", "higher_low_20d", "lower_high_20d", "lower_low_20d"]
