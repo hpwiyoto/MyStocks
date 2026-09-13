@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers
+from app.data import best_swing_config_id, load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers
 from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
 from engine.predict import run as predict_run
 from engine.swing_configs import CONFIG_BY_ID, DEFAULT_CONFIG_ID, SWING_CONFIGS
@@ -61,19 +61,36 @@ def _save_persisted(name, value):
 # session_state slot other pages read (Home/Detail Saham/Rekomendasi
 # Emitten) so switching here stays consistent app-wide instead of each
 # page silently looking at a different config.
-_config_labels = [c["label"] for c in SWING_CONFIGS]
+# ⭐ marks the config with the highest pooled Wilson LB across the 5 --
+# direct user request ("kasih bintang untuk pilihan yang lebih oke secara
+# angka"). Deliberately NOT the same thing as "(default, paling optimal)"
+# in config #1's own label -- that's top5_lift (separating a config's
+# top-5% from its OWN null baseline, the fair way to compare configs with
+# different labels), while the star is pooled Wilson LB (the practical
+# "if I follow every BUY signal, what's my floor win rate" number). The
+# two can and do disagree -- see the help text below.
+_best_id = best_swing_config_id()
+
+
+def _display_label(c: dict) -> str:
+    return ("⭐ " if c["id"] == _best_id else "") + c["label"]
+
+
+_config_display = [_display_label(c) for c in SWING_CONFIGS]
 _persisted_config_id = _persisted("swing_config_id", DEFAULT_CONFIG_ID)
-_persisted_config_label = CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID])["label"]
-selected_label = st.selectbox(
+_persisted_display = _display_label(CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID]))
+selected_display = st.selectbox(
     "🎯 Konfigurasi target Swing",
-    _config_labels,
-    index=_config_labels.index(_persisted_config_label) if _persisted_config_label in _config_labels else 0,
+    _config_display,
+    index=_config_display.index(_persisted_display) if _persisted_display in _config_display else 0,
     help="5 kombinasi target/stop/horizon teratas dari pencarian 20-konfigurasi "
-         "(`scripts/search_swing_target.py`), diurutkan dari yang paling optimal (lift tertinggi atas "
-         "baseline acak). Tiap konfigurasi punya model dan threshold BUY-nya sendiri, bukan model yang "
-         "sama dengan angka target yang berbeda.",
+         "(`scripts/search_swing_target.py`). Diurutkan dari yang paling optimal secara metodologi "
+         "pencarian (lift atas baseline acaknya sendiri -- angka yang adil untuk membandingkan target "
+         "berbeda). ⭐ menandai precision/Wilson LB pooled TERTINGGI di antara ke-5 -- angka praktis "
+         "'kalau saya ikuti tiap sinyal BUY-nya, berapa peluang menang' -- yang bisa saja BUKAN "
+         "konfigurasi #1. Tiap konfigurasi punya model dan threshold BUY-nya sendiri.",
 )
-selected_config = next(c for c in SWING_CONFIGS if c["label"] == selected_label)
+selected_config = SWING_CONFIGS[_config_display.index(selected_display)]
 _save_persisted("swing_config_id", selected_config["id"])
 selected_model_version = selected_config["model_version"]
 selected_meta = load_model_metadata(selected_model_version)

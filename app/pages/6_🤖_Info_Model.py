@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import streamlit as st
 
 from app.auth import require_login
-from app.data import days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
+from app.data import best_swing_config_id, days_since, feature_daily_row_count, load_ihsg_trend, load_model_metadata
 from app.style import SUSPENSION_RISK_NOTE, inject_base_css, render_developer_footer, render_ihsg_context
 from engine.swing_configs import CONFIG_BY_ID, DEFAULT_CONFIG_ID, SWING_CONFIGS
 
@@ -82,14 +82,24 @@ st.header("🎯 Model Swing")
 # updates it everywhere else too (Home/Swing/Detail Saham/Rekomendasi
 # Emitten), and vice versa, instead of this page silently locking to the
 # default while the rest of the app shows something else.
-_config_labels = [c["label"] for c in SWING_CONFIGS]
+_best_id = best_swing_config_id()
+
+
+def _display_label(c: dict) -> str:
+    return ("⭐ " if c["id"] == _best_id else "") + c["label"]
+
+
+_config_display = [_display_label(c) for c in SWING_CONFIGS]
 _persisted_config_id = st.session_state.get("persist_swing_config_id", DEFAULT_CONFIG_ID)
-_persisted_config_label = CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID])["label"]
-_selected_label = st.selectbox(
-    "🎯 Konfigurasi target Swing", _config_labels,
-    index=_config_labels.index(_persisted_config_label) if _persisted_config_label in _config_labels else 0,
+_persisted_display = _display_label(CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID]))
+_selected_display = st.selectbox(
+    "🎯 Konfigurasi target Swing", _config_display,
+    index=_config_display.index(_persisted_display) if _persisted_display in _config_display else 0,
+    help="⭐ = precision/Wilson LB pooled TERTINGGI di antara ke-5 konfigurasi -- bisa saja BUKAN "
+         "konfigurasi #1 (yang diurutkan berdasarkan lift atas baseline acaknya sendiri, metrik "
+         "berbeda -- lihat tabel perbandingan di bawah).",
 )
-selected_config = next(c for c in SWING_CONFIGS if c["label"] == _selected_label)
+selected_config = SWING_CONFIGS[_config_display.index(_selected_display)]
 st.session_state["persist_swing_config_id"] = selected_config["id"]
 
 meta = load_model_metadata(selected_config["model_version"])
@@ -110,7 +120,7 @@ with st.expander("📊 Bandingkan semua 5 konfigurasi"):
         _cwf = _cm.get("walk_forward_validation") or {}
         _cp = _cwf.get("pooled") or {}
         _cmp_rows.append({
-            "Konfigurasi": c["label"], "Peringkat": c["rank"], "Lift top-5%": f"{c['top5_lift']:+.3f}",
+            "Konfigurasi": _display_label(c), "Peringkat": c["rank"], "Lift top-5%": f"{c['top5_lift']:+.3f}",
             "Threshold BUY": f"{_cwf.get('buy_threshold', 0)*100:.0f}%",
             "Precision (pooled)": f"{_cp.get('precision', 0)*100:.1f}%" if _cp else "-",
             "Wilson LB 95%": f"{_cp.get('wilson_lb_95', 0)*100:.1f}%" if _cp else "-",
@@ -118,8 +128,10 @@ with st.expander("📊 Bandingkan semua 5 konfigurasi"):
         })
     st.dataframe(_cmp_rows, width="stretch", hide_index=True)
     st.caption(
-        "Semua angka di sini dihitung pooled (trade-weighted) per konfigurasi masing-masing, bukan "
-        "dibandingkan pada threshold yang sama -- tiap konfigurasi punya threshold BUY-nya sendiri hasil "
+        "⭐ = Wilson LB pooled tertinggi (angka praktis \"kalau saya ikuti tiap sinyal BUY-nya, berapa "
+        "peluang menang\"), bukan berarti peringkat #1. Semua angka di sini dihitung pooled (trade-"
+        "weighted) per konfigurasi masing-masing, bukan dibandingkan pada threshold yang sama -- tiap "
+        "konfigurasi punya threshold BUY-nya sendiri hasil "
         "tuning terpisah. Lihat `scripts/search_swing_target.py` untuk metodologi pencarian 20 "
         "konfigurasinya, dan `scripts/train_v5_variants.py` untuk cara 4 konfigurasi selain #1 dilatih."
     )

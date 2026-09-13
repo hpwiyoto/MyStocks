@@ -378,6 +378,33 @@ def load_model_metadata(model_version: str = MODEL_VERSION) -> dict:
         return json.load(f)
 
 
+def best_swing_config_id() -> str:
+    """Which of engine.swing_configs' 5 configs has the highest pooled
+    Wilson LB (95%) -- direct user request for a star/marker on "the one
+    that's numerically better". Wilson LB, not top5_lift (the metric
+    scripts/search_swing_target.py's own ranking/`rank`/`label` use):
+    top5_lift answers "how well does this config's own top-5%-of-
+    predictions separate from ITS OWN null baseline", the right question
+    for comparing configs whose underlying labels differ, but not the
+    question a user picking a config to actually trade day-to-day is
+    asking -- "if I follow every real BUY signal, what's my actual floor
+    win rate". Deliberately recomputed live from each config's own
+    metadata (not cached in engine.swing_configs) so this stays correct
+    if any config gets retrained."""
+    from engine.swing_configs import SWING_CONFIGS, DEFAULT_CONFIG_ID
+
+    best_id, best_lb = DEFAULT_CONFIG_ID, -1.0
+    for c in SWING_CONFIGS:
+        try:
+            meta = load_model_metadata(c["model_version"])
+        except (OSError, json.JSONDecodeError):
+            continue
+        lb = (meta.get("walk_forward_validation") or {}).get("pooled", {}).get("wilson_lb_95")
+        if lb is not None and lb > best_lb:
+            best_id, best_lb = c["id"], lb
+    return best_id
+
+
 def days_since(date_str: str) -> int:
     trained = dt.date.fromisoformat(date_str)
     return (dt.date.today() - trained).days
