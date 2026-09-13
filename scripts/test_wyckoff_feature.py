@@ -23,11 +23,13 @@ fold-averaging can mislead).
   - wyckoff_range_position_pct: where in the trailing range price sits
     (0-100), a continuous generalization of the phase categories
 
-RESULT (2026-09-13): REJECTED as a training feature -- not adopted.
+RESULT (2026-09-13, rerun 2026-09-14 after fixing wyckoff_phase to
+exactly 4 categories -- see features/wyckoff.py's docstring, no change
+in conclusion): REJECTED as a training feature -- not adopted.
 Pooled BUY-zone (prob>=0.60): baseline n=762 wins=548 precision=71.92%
-wilson_lb=68.62%; with the 7 Wyckoff columns n=921 wins=648
-precision=70.36% wilson_lb=67.33%. Delta: roc_auc +0.0021 (essentially
-noise), wilson_lb -1.29pp (worse), n_signals +159 (21% MORE signals at
+wilson_lb=68.62%; with the 7 Wyckoff columns n=907 wins=635
+precision=70.01% wilson_lb=66.95%. Delta: roc_auc +0.0027 (essentially
+noise), wilson_lb -1.67pp (worse), n_signals +145 (19% MORE signals at
 LOWER precision -- the model got looser, not sharper). Consistent with
 this project's other rejected technical-analysis-lore features
 (Fibonacci retracement, MACD z-score, Anchored VWAP): a real, named
@@ -71,13 +73,13 @@ NEW_COLS = WYCKOFF_ONEHOT_COLS + ["wyckoff_spring", "wyckoff_upthrust", "wyckoff
 
 def add_wyckoff_features(features: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
     wyckoff_df = compute_wyckoff_features(prices)
+    # features.wyckoff's phase is exactly 4 categories now (no
+    # "indeterminate" 5th bucket -- direct user request), so all 4 get
+    # their own dummy column, same convention as scripts/train_v5.py's
+    # prepare_panel does for features.regime's 7 categories (every one
+    # gets a dummy, including "sideways" -- there's no dropped baseline
+    # there either).
     phase_dummies = pd.get_dummies(wyckoff_df["wyckoff_phase"], prefix="wyckoff_phase", dtype=float)
-    # "indeterminate" deliberately dropped -- it's the majority class (57%
-    # of rows), left as the implicit baseline the 4 phase dummies are
-    # relative to, same convention as every other one-hot set in this
-    # project (e.g. features.regime's "sideways" isn't its own dummy
-    # either -- see scripts/train_v5.py's prepare_panel).
-    phase_dummies = phase_dummies.drop(columns=["wyckoff_phase_indeterminate"], errors="ignore")
     wyckoff_df = pd.concat([wyckoff_df.drop(columns=["wyckoff_phase"]), phase_dummies], axis=1)
 
     merged = features.merge(

@@ -16,7 +16,12 @@ trading range, so every row is computable with NO lookahead (only past +
 current-bar data), same convention as every other feature in this
 project.
 
-Definitions:
+Definitions -- deliberately EXHAUSTIVE over exactly 4 phases (direct user
+request: "gunakan hanya 4 fase saja"), no 5th "indeterminate" bucket the
+way the first version had (that version required a near-range-boundary
+condition for markup/markdown on top of ranging/trend, which left a large
+share of rows -- price that's actively trending but not yet near either
+edge of its own window -- unclassified):
 - A trailing WYCKOFF_WINDOW-day high/low stands in for "the trading
   range" (a fixed window, not a detected swing/pivot range, for the same
   no-lookahead simplicity as features/test_fibonacci_feature.py's window).
@@ -27,11 +32,20 @@ Definitions:
   building" range at all (same rank-based compression idea as
   features/regime.py's own accumulation rule, generalized to also cover
   distribution, which regime.py's regime classifier does NOT have a
-  matching label for).
-- The trend BEFORE the range began (PRIOR_TREND_WINDOW days ending where
-  the current range window starts) decides accumulation (prior downtrend)
-  vs distribution (prior uptrend) -- Wyckoff's own definition of what each
-  phase follows.
+  matching label for). Every row is either ranging or not -- exhaustive
+  by construction, since rank() always returns a value once warmed up.
+- Ranging -> accumulation (prior trend down) or distribution (prior trend
+  up), by the SIGN of the trend in the PRIOR_TREND_WINDOW days ending
+  where the current range window starts -- no minimum-magnitude gate, so
+  every ranging row lands in one or the other (a dead-flat prior trend,
+  sign exactly zero, defaults to distribution, an arbitrary but rare
+  tie-break -- ranging is already a real-valued rank comparison, so an
+  exact zero prior trend is a measure-zero edge case in practice).
+- NOT ranging (i.e. actively trending) -> markup (price now above where
+  it was WYCKOFF_WINDOW days ago) or markdown (below) -- this is the
+  piece that changed from the first version: no longer gated on ALSO
+  being near the range's own high/low, which is what created the old
+  "indeterminate" majority.
 - spring / upthrust: today's low/high pokes past the PRIOR day's already-
   established range boundary (shift(1), so today's own extreme can't
   inflate the boundary it's being compared to) by SPRING_TOLERANCE_PCT,
@@ -54,7 +68,6 @@ WYCKOFF_WINDOW = 50          # trading days -- matches this project's existing "
 PRIOR_TREND_WINDOW = 50      # trading days immediately before the range window
 WYCKOFF_RANK_WINDOW = 100    # trailing history the range-width percentile is computed against
 RANGING_RANK_THRESHOLD = 0.35  # bottom 35% width percentile = "compressed enough to call a range"
-PRIOR_TREND_PCT_THRESHOLD = 8.0  # %% move before the range began, to call it a real prior trend either way
 SPRING_TOLERANCE_PCT = 1.5   # matches features/support_resistance.py's DEFAULT_TOLERANCE_PCT for "a level"
 
 NEW_COLS = ["wyckoff_phase", "wyckoff_spring", "wyckoff_upthrust", "wyckoff_range_position_pct"]
@@ -80,36 +93,38 @@ def compute_wyckoff_features(prices: pd.DataFrame) -> pd.DataFrame:
     # range window starts -- shift(WYCKOFF_WINDOW) anchors "today" back to
     # the range's own start, shift(WYCKOFF_WINDOW + PRIOR_TREND_WINDOW)
     # anchors PRIOR_TREND_WINDOW days before that, so this never overlaps
-    # the range being classified.
+    # the range being classified. Used to split RANGING rows into
+    # accumulation vs distribution.
     close_at_range_start = g["close"].transform(lambda s: s.shift(WYCKOFF_WINDOW))
     close_before_range_start = g["close"].transform(lambda s: s.shift(WYCKOFF_WINDOW + PRIOR_TREND_WINDOW))
     prior_trend_pct = (close_at_range_start - close_before_range_start) / close_before_range_start * 100
+
+    # Trend over the CURRENT WYCKOFF_WINDOW itself (today vs WYCKOFF_WINDOW
+    # days ago) -- used to split NOT-ranging (actively trending) rows into
+    # markup vs markdown. A different window than prior_trend_pct above on
+    # purpose: this one describes the move happening RIGHT NOW, not what
+    # preceded it.
+    recent_trend_pct = (prices["close"] - close_at_range_start) / close_at_range_start * 100
 
     range_position_pct = np.where(
         range_high > range_low, (prices["close"] - range_low) / (range_high - range_low) * 100, np.nan,
     )
 
-    was_downtrend = prior_trend_pct <= -PRIOR_TREND_PCT_THRESHOLD
-    was_uptrend = prior_trend_pct >= PRIOR_TREND_PCT_THRESHOLD
-    near_range_high = range_position_pct >= 70
-    near_range_low = range_position_pct <= 30
-
-    # was_downtrend/was_uptrend already only look at PRIOR bars (via the
-    # close_at_range_start/close_before_range_start shifts above), so
-    # markup/markdown can use them directly -- no additional shift needed,
-    # and none would be safe here anyway (a plain .shift(1) on a flat
-    # Series spanning multiple tickers would leak the previous ticker's
-    # last row into the next ticker's first).
-    accumulation = is_ranging & was_downtrend
-    distribution = is_ranging & was_uptrend
-    markup = ~is_ranging & was_downtrend & near_range_high    # broke out of a (former) accumulation range, upward
-    markdown = ~is_ranging & was_uptrend & near_range_low     # broke down out of a (former) distribution range
+    accumulation = is_ranging & (prior_trend_pct <= 0)
+    distribution = is_ranging & (prior_trend_pct > 0)
+    markup = ~is_ranging & (recent_trend_pct > 0)
+    markdown = ~is_ranging & (recent_trend_pct <= 0)
 
     conditions = [accumulation, distribution, markup, markdown]
     choices = ["accumulation", "distribution", "markup", "markdown"]
-    phase = pd.Series(np.select(conditions, choices, default="indeterminate"), index=prices.index)
+    # No default/"indeterminate" bucket -- the 4 conditions above already
+    # exhaustively cover every row where the inputs are non-NaN (is_ranging
+    # is always True or False once warmed up; whichever trend measure
+    # applies is always > 0 or <= 0). default="" here only ever fires on
+    # the warmup rows the has_data mask below blanks out anyway.
+    phase = pd.Series(np.select(conditions, choices, default=""), index=prices.index)
 
-    required = [range_high, range_low, range_width_rank, prior_trend_pct]
+    required = [range_high, range_low, range_width_rank, prior_trend_pct, recent_trend_pct]
     has_data = pd.concat(required, axis=1).notna().all(axis=1)
     phase = phase.where(has_data)
 

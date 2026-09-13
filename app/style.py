@@ -30,16 +30,16 @@ REGIME_COLORS = {
 # features.wyckoff's simplified Wyckoff-cycle status -- a SEPARATE
 # classification from REGIME_COLORS above (different module, different
 # rules, see features/wyckoff.py's docstring), shown alongside it rather
-# than replacing it. accumulation/markup share regime's own bullish-leaning
-# colors, distribution/markdown share its bearish-leaning ones -- same
-# color vocabulary, not a coincidence, since both are describing related
-# ideas from different angles.
+# than replacing it. Exactly these 4 phases (direct user request: "gunakan
+# hanya 4 fase saja") -- accumulation/markup share regime's own bullish-
+# leaning colors, distribution/markdown share its bearish-leaning ones --
+# same color vocabulary, not a coincidence, since both are describing
+# related ideas from different angles.
 WYCKOFF_PHASE_COLORS = {
     "accumulation": "#3B82F6",
     "markup": "#22C55E",
     "distribution": "#F97316",
     "markdown": "#EF4444",
-    "indeterminate": "#8B95A7",
 }
 
 DECISION_COLORS = {
