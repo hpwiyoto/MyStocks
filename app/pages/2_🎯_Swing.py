@@ -79,10 +79,34 @@ def _display_label(c: dict) -> str:
 _config_display = [_display_label(c) for c in SWING_CONFIGS]
 _persisted_config_id = _persisted("swing_config_id", DEFAULT_CONFIG_ID)
 _persisted_display = _display_label(CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID]))
-selected_display = st.selectbox(
+
+# key= + on_change, NOT index= recomputed from `_persisted_display` every
+# run -- that pattern (originally used here) needed TWO clicks to register
+# a change: recomputing `index` from a plain session_state var that itself
+# only gets written further down in the SAME script run made the widget's
+# on-screen value lag one run behind the user's actual click, so it took a
+# second click to catch up. `key=` makes Streamlit own the widget's value
+# directly (updated before the script reruns, no lag); the value is only
+# seeded from the persisted slot when the widget doesn't have one yet
+# (i.e. right after a page switch, which -- per the note above -- clears
+# this key but NOT the plain `persist_` slot), so an in-progress click is
+# never stomped by a stale reseed.
+_SWING_CONFIG_WIDGET_KEY = "swing_page_config_widget"
+
+
+def _on_swing_config_change():
+    picked = st.session_state[_SWING_CONFIG_WIDGET_KEY]
+    _save_persisted("swing_config_id", SWING_CONFIGS[_config_display.index(picked)]["id"])
+
+
+if _SWING_CONFIG_WIDGET_KEY not in st.session_state:
+    st.session_state[_SWING_CONFIG_WIDGET_KEY] = _persisted_display
+
+st.selectbox(
     "🎯 Konfigurasi target Swing",
     _config_display,
-    index=_config_display.index(_persisted_display) if _persisted_display in _config_display else 0,
+    key=_SWING_CONFIG_WIDGET_KEY,
+    on_change=_on_swing_config_change,
     help="5 kombinasi target/stop/horizon teratas dari pencarian 20-konfigurasi "
          "(`scripts/search_swing_target.py`). Diurutkan dari yang paling optimal secara metodologi "
          "pencarian (lift atas baseline acaknya sendiri -- angka yang adil untuk membandingkan target "
@@ -90,6 +114,7 @@ selected_display = st.selectbox(
          "'kalau saya ikuti tiap sinyal BUY-nya, berapa peluang menang' -- yang bisa saja BUKAN "
          "konfigurasi #1. Tiap konfigurasi punya model dan threshold BUY-nya sendiri.",
 )
+selected_display = st.session_state[_SWING_CONFIG_WIDGET_KEY]
 selected_config = SWING_CONFIGS[_config_display.index(selected_display)]
 _save_persisted("swing_config_id", selected_config["id"])
 selected_model_version = selected_config["model_version"]

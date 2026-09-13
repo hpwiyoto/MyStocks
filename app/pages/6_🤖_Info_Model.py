@@ -92,13 +92,35 @@ def _display_label(c: dict) -> str:
 _config_display = [_display_label(c) for c in SWING_CONFIGS]
 _persisted_config_id = st.session_state.get("persist_swing_config_id", DEFAULT_CONFIG_ID)
 _persisted_display = _display_label(CONFIG_BY_ID.get(_persisted_config_id, CONFIG_BY_ID[DEFAULT_CONFIG_ID]))
-_selected_display = st.selectbox(
+
+# key= + on_change, not index= recomputed every run -- see app/pages/
+# 2_Swing.py's identical toggle for why: recomputing `index` from a plain
+# session_state var that's only written further down the SAME run made
+# the widget lag one run behind the actual click (needed two clicks to
+# register). `key=` lets Streamlit own the value directly; only seeded
+# from the persisted slot when the widget doesn't have one yet (i.e.
+# right after a page switch, which clears this key but not `persist_
+# swing_config_id`), so an in-progress click is never stomped.
+_INFO_MODEL_CONFIG_WIDGET_KEY = "info_model_config_widget"
+
+
+def _on_info_model_config_change():
+    picked = st.session_state[_INFO_MODEL_CONFIG_WIDGET_KEY]
+    st.session_state["persist_swing_config_id"] = SWING_CONFIGS[_config_display.index(picked)]["id"]
+
+
+if _INFO_MODEL_CONFIG_WIDGET_KEY not in st.session_state:
+    st.session_state[_INFO_MODEL_CONFIG_WIDGET_KEY] = _persisted_display
+
+st.selectbox(
     "🎯 Konfigurasi target Swing", _config_display,
-    index=_config_display.index(_persisted_display) if _persisted_display in _config_display else 0,
+    key=_INFO_MODEL_CONFIG_WIDGET_KEY,
+    on_change=_on_info_model_config_change,
     help="⭐ = precision/Wilson LB pooled TERTINGGI di antara ke-5 konfigurasi -- bisa saja BUKAN "
          "konfigurasi #1 (yang diurutkan berdasarkan lift atas baseline acaknya sendiri, metrik "
          "berbeda -- lihat tabel perbandingan di bawah).",
 )
+_selected_display = st.session_state[_INFO_MODEL_CONFIG_WIDGET_KEY]
 selected_config = SWING_CONFIGS[_config_display.index(_selected_display)]
 st.session_state["persist_swing_config_id"] = selected_config["id"]
 
