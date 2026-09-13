@@ -112,8 +112,12 @@ def _on_info_model_config_change():
 if _INFO_MODEL_CONFIG_WIDGET_KEY not in st.session_state:
     st.session_state[_INFO_MODEL_CONFIG_WIDGET_KEY] = _persisted_display
 
-st.selectbox(
+# segmented_control, not selectbox -- direct user request for all 5
+# options visible horizontally instead of hidden behind a dropdown.
+st.segmented_control(
     "🎯 Konfigurasi target Swing", _config_display,
+    selection_mode="single",
+    required=True,
     key=_INFO_MODEL_CONFIG_WIDGET_KEY,
     on_change=_on_info_model_config_change,
     help="⭐ = precision/Wilson LB pooled TERTINGGI di antara ke-5 konfigurasi -- bisa saja BUKAN "

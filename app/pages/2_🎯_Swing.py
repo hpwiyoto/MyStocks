@@ -102,9 +102,16 @@ def _on_swing_config_change():
 if _SWING_CONFIG_WIDGET_KEY not in st.session_state:
     st.session_state[_SWING_CONFIG_WIDGET_KEY] = _persisted_display
 
-st.selectbox(
+# segmented_control, not selectbox -- direct user request ("tidak dibuat
+# dropdown, sehingga terlihat semua pilihannya bisa horizontal"): all 5
+# options visible at once as a row of toggle-buttons instead of hidden
+# behind a click-to-open list. required=True keeps exactly one config
+# always selected (can't click the active one to deselect down to None).
+st.segmented_control(
     "🎯 Konfigurasi target Swing",
     _config_display,
+    selection_mode="single",
+    required=True,
     key=_SWING_CONFIG_WIDGET_KEY,
     on_change=_on_swing_config_change,
     help="5 kombinasi target/stop/horizon teratas dari pencarian 20-konfigurasi "
