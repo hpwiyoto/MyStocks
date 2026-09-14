@@ -69,19 +69,23 @@ def has_active_position(user_email: str, stock_code: str) -> bool:
 
 
 def mark_position(
-    user_email: str, stock_code: str, model_version: str, entry_date, entry_price: float,
+    user_email: str, stock_code: str, model_version: str, entry_price: float,
     stop_loss_price: float, take_profit_price: float,
     entry_probability: float | None = None, entry_regime: str | None = None,
     entry_wyckoff_phase: str | None = None, entry_target_pct: float | None = None,
     entry_stop_pct: float | None = None, entry_horizon_days: int | None = None,
 ) -> None:
-    """`entry_date`: accepts a plain `datetime.date`, a `pandas.Timestamp`
-    (what a value read back from `predictions` via pd.read_sql actually
-    is, NOT a plain date -- found the hard way: SQLite's Date column type
-    rejects anything but a real `datetime.date`, so a Timestamp passed
-    straight through raised at insert time), or an ISO date string --
-    normalized here once so every caller (Swing's cards, Swing's quick-
-    mark expander, Detail Saham) is protected the same way.
+    """entry_date is always TODAY (dt.date.today()), not the prediction
+    row's own `date` column -- found the hard way from a real user report:
+    a stock's LATEST prediction can lag behind today (e.g. IDX still
+    open, or the daily pipeline just hasn't run yet post-close), so a
+    caller passing that prediction's `date` through here recorded the
+    WRONG day -- clicking "Tandai Beli" today showed up as bought "3 hari
+    lalu" simply because the most recent prediction happened to be 3
+    days old. "The day I marked/bought this" and "the day the underlying
+    prediction was computed" are two different things; only the former
+    belongs in entry_date, so it's fixed to today's real date here rather
+    than accepted from any caller at all.
 
     The `entry_*` snapshot args (all optional, default None so old call
     sites keep working) record what the Swing recommendation actually
@@ -91,7 +95,7 @@ def mark_position(
     rather than looked up live later."""
     engine = get_engine()
     init_schema(engine)
-    entry_date = pd.Timestamp(entry_date).date()
+    entry_date = dt.date.today()
     with engine.begin() as conn:
         conn.execute(
             tracked_positions.insert().values(

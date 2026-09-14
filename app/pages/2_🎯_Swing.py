@@ -367,7 +367,7 @@ for row_chunk in rows:
             elif bd2.button("📌 Tandai Beli", key=f"mark_{r['stock_code']}", width="stretch"):
                 _wyckoff_at_mark = load_wyckoff_status(r["stock_code"])
                 mark_position(
-                    st.user.email, r["stock_code"], selected_model_version, r["date"],
+                    st.user.email, r["stock_code"], selected_model_version,
                     float(r["entry_price"]), float(r["stop_loss_price"]), float(r["take_profit_price"]),
                     entry_probability=float(r["probability"]), entry_regime=r.get("regime"),
                     entry_wyckoff_phase=_wyckoff_at_mark["wyckoff_phase"] if _wyckoff_at_mark else None,
@@ -460,7 +460,7 @@ with st.expander("📌 Tandai saham dari daftar di atas sebagai sudah dibeli"):
     elif st.button("📌 Tandai Beli", key="mark_from_table_btn"):
         _wyckoff_at_mark = load_wyckoff_status(_mark_row["stock_code"])
         mark_position(
-            st.user.email, _mark_row["stock_code"], selected_model_version, _mark_row["date"],
+            st.user.email, _mark_row["stock_code"], selected_model_version,
             float(_mark_row["entry_price"]), float(_mark_row["stop_loss_price"]), float(_mark_row["take_profit_price"]),
             entry_probability=float(_mark_row["probability"]), entry_regime=_mark_row.get("regime"),
             entry_wyckoff_phase=_wyckoff_at_mark["wyckoff_phase"] if _wyckoff_at_mark else None,

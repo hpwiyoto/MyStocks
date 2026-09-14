@@ -228,7 +228,7 @@ if row is not None:
         st.caption("📌 Sudah ditandai sebagai posisi aktif -- lihat halaman **Posisi Saya**.")
     elif st.button("📌 Tandai Saya Beli Ini", key="mark_bought"):
         mark_position(
-            st.user.email, selected, _swing_model_version, row["date"],
+            st.user.email, selected, _swing_model_version,
             float(row["entry_price"]), float(row["stop_loss_price"]), float(row["take_profit_price"]),
             entry_probability=float(row["probability"]), entry_regime=row.get("regime"),
             entry_wyckoff_phase=wyckoff_row["wyckoff_phase"] if wyckoff_row is not None else None,
