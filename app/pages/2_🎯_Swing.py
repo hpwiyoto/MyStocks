@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
-from app.data import best_swing_config_id, load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers
+from app.data import best_swing_config_id, load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers, load_wyckoff_status
 from app.positions import has_active_position, mark_position
 from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
 from engine.predict import run as predict_run
@@ -365,9 +365,13 @@ for row_chunk in rows:
             if has_active_position(st.user.email, r["stock_code"]):
                 bd2.button("📌 Sudah Ditandai", key=f"marked_{r['stock_code']}", width="stretch", disabled=True)
             elif bd2.button("📌 Tandai Beli", key=f"mark_{r['stock_code']}", width="stretch"):
+                _wyckoff_at_mark = load_wyckoff_status(r["stock_code"])
                 mark_position(
                     st.user.email, r["stock_code"], selected_model_version, r["date"],
                     float(r["entry_price"]), float(r["stop_loss_price"]), float(r["take_profit_price"]),
+                    entry_probability=float(r["probability"]), entry_regime=r.get("regime"),
+                    entry_wyckoff_phase=_wyckoff_at_mark["wyckoff_phase"] if _wyckoff_at_mark else None,
+                    entry_target_pct=_t, entry_stop_pct=_s, entry_horizon_days=_h,
                 )
                 st.success(f"{r['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
                 st.rerun()
@@ -454,9 +458,13 @@ with st.expander("📌 Tandai saham dari daftar di atas sebagai sudah dibeli"):
     if has_active_position(st.user.email, _mark_row["stock_code"]):
         st.caption(f"📌 {_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
     elif st.button("📌 Tandai Beli", key="mark_from_table_btn"):
+        _wyckoff_at_mark = load_wyckoff_status(_mark_row["stock_code"])
         mark_position(
             st.user.email, _mark_row["stock_code"], selected_model_version, _mark_row["date"],
             float(_mark_row["entry_price"]), float(_mark_row["stop_loss_price"]), float(_mark_row["take_profit_price"]),
+            entry_probability=float(_mark_row["probability"]), entry_regime=_mark_row.get("regime"),
+            entry_wyckoff_phase=_wyckoff_at_mark["wyckoff_phase"] if _wyckoff_at_mark else None,
+            entry_target_pct=_t, entry_stop_pct=_s, entry_horizon_days=_h,
         )
         st.success(f"{_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
         st.rerun()

@@ -12,12 +12,11 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import require_login
-from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, selected_swing_model_version
+from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, load_wyckoff_status, selected_swing_model_version
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge, wyckoff_badge
 from app.positions import has_active_position, mark_position
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
-from features.wyckoff import compute_wyckoff_features
 
 def _notna(value):
     """`feat`/`fund` here are dicts built from a pandas row via .to_dict()
@@ -100,15 +99,9 @@ with st.spinner("Memuat data harga..."):
 # Wyckoff status: display-only (scripts/test_wyckoff_feature.py found it
 # does NOT help Swing's predictions as a training feature -- same
 # rejected-but-still-informational fate as the RapidAPI foreign-flow
-# panel below). Computed on-demand from the 260-day price_df already
-# loaded above, same pattern as compute_pivot_levels's on-the-fly S/R --
-# not backfilled into feature_daily since it isn't a model input.
-wyckoff_row = None
-if not price_df.empty:
-    _wyckoff_df = compute_wyckoff_features(price_df.assign(stock_code=selected))
-    _wyckoff_last = _wyckoff_df.iloc[-1]
-    if pd.notna(_wyckoff_last["wyckoff_phase"]):
-        wyckoff_row = _wyckoff_last
+# panel below). app.data.load_wyckoff_status also backs the "Tandai
+# Beli" entry-snapshot below, so both read the identical computation.
+wyckoff_row = load_wyckoff_status(selected)
 
 # On-demand foreign-flow fetch+persist for whichever ticker is being
 # viewed right now (see app/data.py's load_foreign_flow) -- display-only
@@ -237,6 +230,10 @@ if row is not None:
         mark_position(
             st.user.email, selected, _swing_model_version, row["date"],
             float(row["entry_price"]), float(row["stop_loss_price"]), float(row["take_profit_price"]),
+            entry_probability=float(row["probability"]), entry_regime=row.get("regime"),
+            entry_wyckoff_phase=wyckoff_row["wyckoff_phase"] if wyckoff_row is not None else None,
+            entry_target_pct=_det_meta["target_pct"], entry_stop_pct=_det_meta["stop_pct"],
+            entry_horizon_days=_det_meta["horizon_days"],
         )
         st.success("Ditandai. Pantau progresnya di halaman **Posisi Saya**.")
         st.rerun()

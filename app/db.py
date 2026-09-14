@@ -5,7 +5,7 @@ pipeline/db.py's docstring comments for the reasoning). This one is only
 ever touched by the Streamlit app itself (app/auth.py), never by the CLI
 data pipeline.
 """
-from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, MetaData, Numeric, String, Table, func
+from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, MetaData, Numeric, String, Table, func, inspect, text
 
 metadata = MetaData()
 
@@ -48,6 +48,21 @@ tracked_positions = Table(
     Column("entry_price", Numeric(14, 2), nullable=False),
     Column("stop_loss_price", Numeric(14, 2), nullable=False),
     Column("take_profit_price", Numeric(14, 2), nullable=False),
+    # Snapshot of what the Swing recommendation actually said AT THE
+    # MOMENT this was marked -- direct user request ("direcord... hasil
+    # rekomendasi swing nya apa saat di klik tandai beli"). Stored as a
+    # snapshot, not looked up live from the model's current metadata,
+    # because a config's OWN numbers can change later (the default config
+    # gets retrained in place under the same model_version -- see scripts/
+    # train_v5.py) -- without this, a position's recorded "5%/-2.5%/5
+    # hari" could silently become wrong history if the model is retrained
+    # again after this position was marked.
+    Column("entry_probability", Numeric(6, 4)),
+    Column("entry_regime", String(20)),
+    Column("entry_wyckoff_phase", String(20)),
+    Column("entry_target_pct", Numeric(6, 4)),
+    Column("entry_stop_pct", Numeric(6, 4)),
+    Column("entry_horizon_days", Integer),
     Column("status", String(12), nullable=False, default="active"),
     Column("closed_date", Date),
     Column("closed_price", Numeric(14, 2)),
@@ -55,6 +70,34 @@ tracked_positions = Table(
     Column("created_at", DateTime, server_default=func.now()),
 )
 
+# Columns added after tracked_positions first shipped -- metadata.create_
+# all() below only creates MISSING tables, it never alters an existing
+# one's columns, so a table created before this dict existed needs these
+# added explicitly. ALTER TABLE ADD COLUMN is simple/portable enough
+# (no default, no constraint) to work unchanged on both SQLite and MySQL.
+_TRACKED_POSITIONS_ADDED_COLUMNS = {
+    "entry_probability": "NUMERIC(6,4)",
+    "entry_regime": "VARCHAR(20)",
+    "entry_wyckoff_phase": "VARCHAR(20)",
+    "entry_target_pct": "NUMERIC(6,4)",
+    "entry_stop_pct": "NUMERIC(6,4)",
+    "entry_horizon_days": "INTEGER",
+}
+
+
+def _migrate_tracked_positions(engine) -> None:
+    inspector = inspect(engine)
+    if "tracked_positions" not in inspector.get_table_names():
+        return  # metadata.create_all() above already made a fully up-to-date table
+    existing = {c["name"] for c in inspector.get_columns("tracked_positions")}
+    missing = {c: t for c, t in _TRACKED_POSITIONS_ADDED_COLUMNS.items() if c not in existing}
+    if not missing:
+        return
+    with engine.begin() as conn:
+        for col, ddl_type in missing.items():
+            conn.execute(text(f"ALTER TABLE tracked_positions ADD COLUMN {col} {ddl_type}"))
+
 
 def init_schema(engine):
     metadata.create_all(engine)
+    _migrate_tracked_positions(engine)

@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
@@ -88,6 +89,44 @@ with tab_active:
                     st.write(f"{pos['take_profit_price']:,.0f}")
                     if pos["pct_to_target"] is not None:
                         st.caption(f"jarak {pos['pct_to_target']:.1f}%")
+
+                # Progress hari: divisualkan sebagai progress bar terhadap
+                # horizon model (bukan cuma angka) -- direct user request
+                # ("visualkan progress sudah berapa hari"). horizon_days
+                # dari snapshot entry_horizon_days kalau ada (lihat
+                # app.positions.load_positions_with_progress), fallback ke
+                # None untuk posisi lama sebelum kolom ini ada.
+                _horizon = pos.get("entry_horizon_days")
+                if pos["days_held"] is not None and pd.notna(_horizon) and _horizon > 0:
+                    _frac = min(pos["days_held"] / _horizon, 1.0)
+                    st.progress(_frac, text=f"Hari ke-{pos['days_held']} dari perkiraan {int(_horizon)} hari (horizon model saat ditandai)")
+
+                # Awal vs Sekarang -- direct user request ("direcord hasil
+                # rekomendasi swing nya apa saat di klik tandai beli...
+                # dan visualkan current statusnya"): what the recommendation
+                # said at mark-time, compared to what it says right now.
+                def _fmt_pct(v):
+                    return f"{float(v)*100:.1f}%" if v is not None and v == v else "-"
+
+                def _fmt_regime(v):
+                    return v.replace("_", " ") if isinstance(v, str) else "-"
+
+                cmp1, cmp2 = st.columns(2)
+                with cmp1:
+                    st.caption("📸 Saat Ditandai")
+                    if pd.notna(pos.get("entry_target_pct")) and pd.notna(pos.get("entry_horizon_days")):
+                        st.write(f"Konfigurasi: {_fmt_pct(pos['entry_target_pct'])} / -{_fmt_pct(pos['entry_stop_pct'])} / {int(pos['entry_horizon_days'])} hari")
+                    else:
+                        st.write("Konfigurasi: - (ditandai sebelum fitur ini ada)")
+                    st.write(f"Probabilitas: {_fmt_pct(pos.get('entry_probability'))}")
+                    st.write(f"Regime: {_fmt_regime(pos.get('entry_regime'))}")
+                    st.write(f"Fase Wyckoff: {_fmt_regime(pos.get('entry_wyckoff_phase'))}")
+                with cmp2:
+                    st.caption("📡 Sekarang")
+                    st.write(f"Probabilitas: {_fmt_pct(pos.get('current_probability'))}"
+                              + (f" ({pos['current_decision']})" if pos.get("current_decision") else ""))
+                    st.write(f"Regime: {_fmt_regime(pos.get('current_regime'))}")
+                    st.write(f"Fase Wyckoff: {_fmt_regime(pos.get('current_wyckoff_phase'))}")
 
                 if pos["status"] == "warning":
                     detail = pos["warning_detail"]

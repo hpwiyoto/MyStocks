@@ -71,6 +71,9 @@ def has_active_position(user_email: str, stock_code: str) -> bool:
 def mark_position(
     user_email: str, stock_code: str, model_version: str, entry_date, entry_price: float,
     stop_loss_price: float, take_profit_price: float,
+    entry_probability: float | None = None, entry_regime: str | None = None,
+    entry_wyckoff_phase: str | None = None, entry_target_pct: float | None = None,
+    entry_stop_pct: float | None = None, entry_horizon_days: int | None = None,
 ) -> None:
     """`entry_date`: accepts a plain `datetime.date`, a `pandas.Timestamp`
     (what a value read back from `predictions` via pd.read_sql actually
@@ -78,7 +81,14 @@ def mark_position(
     rejects anything but a real `datetime.date`, so a Timestamp passed
     straight through raised at insert time), or an ISO date string --
     normalized here once so every caller (Swing's cards, Swing's quick-
-    mark expander, Detail Saham) is protected the same way."""
+    mark expander, Detail Saham) is protected the same way.
+
+    The `entry_*` snapshot args (all optional, default None so old call
+    sites keep working) record what the Swing recommendation actually
+    said AT THE MOMENT this was marked -- direct user request ("direcord
+    hasil rekomendasi swing nya apa saat di klik tandai beli"). See
+    app/db.py's tracked_positions docstring for why these are snapshotted
+    rather than looked up live later."""
     engine = get_engine()
     init_schema(engine)
     entry_date = pd.Timestamp(entry_date).date()
@@ -88,6 +98,9 @@ def mark_position(
                 user_email=user_email, stock_code=stock_code, model_version=model_version,
                 entry_date=entry_date, entry_price=entry_price,
                 stop_loss_price=stop_loss_price, take_profit_price=take_profit_price,
+                entry_probability=entry_probability, entry_regime=entry_regime,
+                entry_wyckoff_phase=entry_wyckoff_phase, entry_target_pct=entry_target_pct,
+                entry_stop_pct=entry_stop_pct, entry_horizon_days=entry_horizon_days,
                 status="active",
             )
         )
@@ -128,13 +141,15 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
     feature row so the caller doesn't have to fetch those separately per
     row -- adds current_price, pct_change_from_entry, pct_to_stop,
     pct_to_target, the early-warning breakdown from engine.early_warning.
-    check_position, days_held, and an overall `status` (STATUS_LABELS key)
-    summarizing all of the above into one at-a-glance read."""
+    check_position, days_held, an overall `status` (STATUS_LABELS key),
+    and a `current_` snapshot (probability/regime/wyckoff_phase) to
+    compare against the `entry_` snapshot taken when the position was
+    marked -- direct user request for an entry-vs-now comparison."""
     positions = _load_positions_raw(user_email, status)
     if positions.empty:
         return positions
 
-    from app.data import load_latest_feature_row, load_live_prices, load_model_metadata, load_price_history
+    from app.data import load_current_prediction_snapshot, load_latest_feature_row, load_live_prices, load_model_metadata, load_price_history, load_wyckoff_status
 
     codes = tuple(positions["stock_code"].unique())
     live_prices = load_live_prices(codes)
@@ -160,11 +175,19 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
             warn = check_position(entry_price, feat_row, float(current_price))
         warning = bool(warn and warn["warning"])
 
-        horizon_days = None
-        try:
-            horizon_days = load_model_metadata(pos["model_version"])["horizon_days"]
-        except (OSError, KeyError):
-            pass  # a since-retired/renamed config -- status falls back gracefully without it
+        # Prefer the SNAPSHOT taken at mark-time (immune to the default
+        # config being retrained in place later, see app/db.py) -- fall
+        # back to a live lookup only for positions marked before this
+        # column existed.
+        horizon_days = pos.get("entry_horizon_days")
+        if horizon_days is None:
+            try:
+                horizon_days = load_model_metadata(pos["model_version"])["horizon_days"]
+            except (OSError, KeyError):
+                pass  # a since-retired/renamed config -- status falls back gracefully without it
+
+        current_snapshot = load_current_prediction_snapshot(code, pos["model_version"]) or {}
+        current_wyckoff = load_wyckoff_status(code) or {}
 
         row = pos.to_dict()
         row["current_price"] = current_price
@@ -175,5 +198,9 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
         row["warning"] = warning
         row["warning_detail"] = warn
         row["status"] = _position_status(current_price, entry_price, stop_loss_price, take_profit_price, days_held, horizon_days, warning)
+        row["current_probability"] = current_snapshot.get("probability")
+        row["current_decision"] = current_snapshot.get("decision")
+        row["current_regime"] = current_snapshot.get("regime")
+        row["current_wyckoff_phase"] = current_wyckoff.get("wyckoff_phase")
         rows.append(row)
     return pd.DataFrame(rows)

@@ -100,6 +100,31 @@ def load_latest_predictions(model_version: str = MODEL_VERSION) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_current_prediction_snapshot(stock_code: str, model_version: str) -> dict | None:
+    """One ticker's LATEST probability/decision/regime for a specific
+    config -- a lean single-row version of load_latest_predictions, so
+    app.positions.load_positions_with_progress can look up each tracked
+    position's CURRENT Swing read (for the entry-vs-now comparison the
+    user asked for) without pulling the whole ~900-row predictions table
+    per position in a loop."""
+    engine = get_engine()
+    if _missing_tables(engine, ["predictions", "feature_daily"]):
+        return None
+    df = pd.read_sql(
+        text("""
+        SELECT p.probability, p.decision, fd.regime
+        FROM predictions p
+        LEFT JOIN feature_daily fd ON p.stock_code = fd.stock_code AND p.date = fd.date
+        WHERE p.stock_code = :code AND p.model_version = :model_version
+        ORDER BY p.date DESC LIMIT 1
+        """),
+        engine,
+        params={"code": stock_code, "model_version": model_version},
+    )
+    return df.iloc[0].to_dict() if not df.empty else None
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
     engine = get_engine()
     if _missing_tables(engine, ["price_history"]):
@@ -116,6 +141,29 @@ def load_price_history(stock_code: str, days: int = 260) -> pd.DataFrame:
         params={"code": stock_code, "days": days},
     )
     return df.sort_values("date").reset_index(drop=True)
+
+
+@st.cache_data(ttl=CACHE_TTL)
+def load_wyckoff_status(stock_code: str) -> dict | None:
+    """Latest Wyckoff phase/spring/upthrust for one ticker -- computed
+    on-demand from load_price_history's 260-day window, same on-the-fly
+    pattern as features.support_resistance's chart-only S/R (not stored
+    in feature_daily, since it isn't a model input -- see features/
+    wyckoff.py's docstring). Shared by Detail Saham's display badge and
+    the "Tandai Beli" entry-snapshot (app.positions.mark_position) so
+    both read the exact same computation instead of two copies drifting
+    apart. Returns None during the warmup period a ticker's own history
+    hasn't cleared yet."""
+    from features.wyckoff import compute_wyckoff_features
+
+    price_df = load_price_history(stock_code, days=260)
+    if price_df.empty:
+        return None
+    wyckoff_df = compute_wyckoff_features(price_df.assign(stock_code=stock_code))
+    last = wyckoff_df.iloc[-1]
+    if pd.isna(last["wyckoff_phase"]):
+        return None
+    return last.to_dict()
 
 
 @st.cache_data(ttl=FOREIGN_FLOW_TTL)
