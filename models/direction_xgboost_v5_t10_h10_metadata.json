@@ -1,6 +1,6 @@
 {
   "model_version": "direction_xgboost_v5_t10_h10",
-  "trained_at": "2026-09-13",
+  "trained_at": "2026-09-14",
   "feature_cols": [
     "price_vs_sma50_pct",
     "ema9_vs_ema20_pct",
@@ -945,31 +945,31 @@
     "ZYRX"
   ],
   "hyperparameters": {
-    "max_depth": 3,
-    "eta": 0.05,
-    "min_child_weight": 1,
-    "subsample": 0.8,
-    "colsample_bytree": 0.8,
     "objective": "binary:logistic",
     "eval_metric": "logloss",
     "seed": 42,
+    "max_depth": 4,
+    "eta": 0.05,
+    "min_child_weight": 5,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
     "num_boost_round": 200
   },
   "walk_forward_validation": {
     "n_folds": 5,
     "buy_threshold": 0.65,
     "avg_ml_metrics": {
-      "precision": 0.745575221238938,
-      "roc_auc": 0.5745758961720719
+      "precision": 0.7573333333333333,
+      "roc_auc": 0.5775273286462821
     },
     "pooled": {
       "note": "Trade-weighted across all folds -- same methodology as models/direction_xgboost_v5_metadata.json's pooled block.",
       "threshold": 0.65,
-      "n_trades": 452,
-      "wins": 337,
-      "precision": 0.7456,
-      "wilson_lb_95": 0.7035
+      "n_trades": 750,
+      "wins": 568,
+      "precision": 0.7573,
+      "wilson_lb_95": 0.7254
     }
   },
-  "notes": "One of 4 runner-up configs (rank #3 of 20 by top5_lift =+0.1894) trained alongside the shipped winner (direction_xgboost_v5, target=10%/stop=5%/horizon=5d) from scripts/search_swing_target.py's search -- direct user request for a toggle between the top-5 configs, not just the single winner. Same feature set/hyperparameters as the winner; threshold independently re-tuned for THIS target via scripts/train_v5_variants.py's own pooled walk-forward sweep, picked to keep an estimated >=1 BUY signal/day where the sweep allows it."
+  "notes": "One of 4 runner-up configs (rank #3 of 20 by top5_lift =+0.1894) trained alongside the shipped winner (direction_xgboost_v5, target=10%/stop=5%/horizon=5d) from scripts/search_swing_target.py's search -- direct user request for a toggle between the top-5 configs, not just the single winner. Same feature set as the winner. Hyperparameters independently re-tuned for THIS config specifically (scripts/tune_v5_variants_hyperparams.py, +2.19pp pooled Wilson LB over the original shared defaults); threshold independently re-tuned for THIS target via scripts/train_v5_variants.py's own pooled walk-forward sweep, picked to keep an estimated >=1 BUY signal/day where the sweep allows it."
 }

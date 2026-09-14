@@ -19,10 +19,19 @@ Top 5 by top5_lift (from data/search_swing_target_results.csv):
   4. target=7%  stop=3.5% horizon=10d lift=+0.184
   5. target=5%  stop=2.5% horizon=5d  lift=+0.176
 
-Same XGB_PARAMS/NUM_BOOST_ROUND as scripts/train_v5.py for all 5 -- kept
+Originally all 5 configs shared IDENTICAL hyperparameters ("kept
 identical to what search_swing_target.py itself used, so every variant
 stays consistent with the research that ranked it, no re-tuned
-hyperparameters introducing a second uncontrolled variable per config.
+hyperparameters introducing a second uncontrolled variable per config").
+That changed 2026-09-14: scripts/tune_v5_variants_hyperparams.py's own
+per-config pooled grid search found t10_h10 benefits from DIFFERENT
+hyperparameters than the other 3 (+2.19pp Wilson LB, comparable
+magnitude to the default config's own verified finding in scripts/
+train_v5.py) -- so each variant below now carries its OWN explicit
+hyperparameters instead of implicitly inheriting scripts/train_v5.
+XGB_PARAMS (which itself changed independently when the default config
+got re-tuned -- decoupling here specifically prevents that change from
+silently also changing these 3 variants that were never re-verified).
 
 Threshold picked automatically per config (not eyeballed per curve, so
 this stays reproducible across configs): among thresholds in the pooled
@@ -31,7 +40,9 @@ usable-frequency floor scripts/tune_v5_new_target_threshold.py used to
 justify picking 0.60 for the winner over sparser 0.65+), pick the one
 with the highest Wilson LB; if none clears that floor, relax to >=0.5,
 then >=0.2, then fall back to the single best Wilson LB regardless of
-frequency.
+frequency. Re-run for t10_h10 after its hyperparameter change since a
+different model needs its own threshold check, same reasoning as the
+default config's re-tune.
 
 Usage:
     python -m scripts.train_v5_variants
@@ -51,7 +62,6 @@ from scripts.train_v5 import (
     MODEL_DIR,
     NUM_BOOST_ROUND,
     PRICES_PATH,
-    XGB_PARAMS,
     ml_metrics,
     prepare_panel,
     walk_forward_splits,
@@ -62,12 +72,25 @@ logger = get_logger("scripts.train_v5_variants")
 THRESHOLD_RANGE = np.arange(0.30, 0.91, 0.05)
 MIN_SIGNALS_PER_DAY_TIERS = [1.0, 0.5, 0.2, 0.0]
 
-# (target_pct, stop_pct, horizon, model_version, rank/lift -- for the notes field)
+BASE_XGB_PARAMS = {"objective": "binary:logistic", "eval_metric": "logloss", "seed": 42}
+# The ORIGINAL grid-search winner (scripts/tune_v5.py, config #0) -- still
+# correct for t7_h5, t7_h10, t5_h5 as of 2026-09-14 (t7_h5: shipped already
+# wins; t7_h10/t5_h5: apparent +0.85pp/+0.89pp improvements found but NOT
+# yet given the fine-sweep robustness check the default and t10_h10 got,
+# so treated as unconfirmed leads, not adopted -- scripts/tune_v5_variants_
+# hyperparams.py's docstring).
+LEGACY_HYPERPARAMS = {"max_depth": 3, "eta": 0.05, "min_child_weight": 1, "subsample": 0.8, "colsample_bytree": 0.8}
+# t10_h10's own re-tuned winner (scripts/tune_v5_variants_hyperparams.py):
+# +2.19pp pooled Wilson LB vs LEGACY_HYPERPARAMS, comparable magnitude to
+# the default config's own VERIFIED (fine-sweep-checked) finding.
+T10_H10_HYPERPARAMS = {"max_depth": 4, "eta": 0.05, "min_child_weight": 5, "subsample": 0.8, "colsample_bytree": 0.8}
+
+# (target_pct, stop_pct, horizon, model_version, rank/lift, hyperparams)
 VARIANTS = [
-    (0.07, 0.035, 5, "direction_xgboost_v5_t7_h5", 2, 0.202931),
-    (0.10, 0.050, 10, "direction_xgboost_v5_t10_h10", 3, 0.189419),
-    (0.07, 0.035, 10, "direction_xgboost_v5_t7_h10", 4, 0.183642),
-    (0.05, 0.025, 5, "direction_xgboost_v5_t5_h5", 5, 0.176246),
+    (0.07, 0.035, 5, "direction_xgboost_v5_t7_h5", 2, 0.202931, LEGACY_HYPERPARAMS),
+    (0.10, 0.050, 10, "direction_xgboost_v5_t10_h10", 3, 0.189419, T10_H10_HYPERPARAMS),
+    (0.07, 0.035, 10, "direction_xgboost_v5_t7_h10", 4, 0.183642, LEGACY_HYPERPARAMS),
+    (0.05, 0.025, 5, "direction_xgboost_v5_t5_h5", 5, 0.176246, LEGACY_HYPERPARAMS),
 ]
 
 
@@ -86,10 +109,10 @@ def _fold_data(df, feature_cols, splits):
     return folds
 
 
-def _threshold_sweep_pooled(folds, total_test_days):
+def _threshold_sweep_pooled(folds, total_test_days, xgb_params):
     pooled_y, pooled_prob = [], []
     for f in folds:
-        booster = xgb.train(XGB_PARAMS, f["dtrain"], num_boost_round=NUM_BOOST_ROUND)
+        booster = xgb.train(xgb_params, f["dtrain"], num_boost_round=NUM_BOOST_ROUND)
         prob = booster.predict(f["dtest"])
         pooled_y.append(f["y_test"])
         pooled_prob.append(prob)
@@ -119,9 +142,11 @@ def _pick_threshold(sweep: pd.DataFrame) -> dict:
     return sweep.iloc[0].to_dict()
 
 
-def train_variant(target_pct, stop_pct, horizon, model_version, features, prices):
+def train_variant(target_pct, stop_pct, horizon, model_version, features, prices, xgb_params):
+    xgb_params = {**BASE_XGB_PARAMS, **xgb_params}
     logger.info("=" * 100)
-    logger.info("VARIANT %s: target=%.1f%% stop=%.2f%% horizon=%dd", model_version, target_pct * 100, stop_pct * 100, horizon)
+    logger.info("VARIANT %s: target=%.1f%% stop=%.2f%% horizon=%dd hyperparams=%s",
+                model_version, target_pct * 100, stop_pct * 100, horizon, xgb_params)
     logger.info("=" * 100)
 
     labels = build_labels(prices, horizon, target_pct, stop_pct)
@@ -139,7 +164,7 @@ def train_variant(target_pct, stop_pct, horizon, model_version, features, prices
         test_dates.update(dates[mask].tolist())
     total_test_days = len(test_dates)
 
-    sweep = _threshold_sweep_pooled(folds, total_test_days)
+    sweep = _threshold_sweep_pooled(folds, total_test_days, xgb_params)
     logger.info("Threshold sweep:\n%s", sweep.to_string(index=False))
     chosen = _pick_threshold(sweep)
     buy_threshold = float(chosen["threshold"])
@@ -148,7 +173,7 @@ def train_variant(target_pct, stop_pct, horizon, model_version, features, prices
 
     logger.info("Training final model on all %d rows...", len(df))
     dall = xgb.DMatrix(df[feature_cols], label=df["label"])
-    final_booster = xgb.train(XGB_PARAMS, dall, num_boost_round=NUM_BOOST_ROUND)
+    final_booster = xgb.train(xgb_params, dall, num_boost_round=NUM_BOOST_ROUND)
 
     base_rate = float(df["label"].mean())
     model_path = f"{MODEL_DIR}/{model_version}.json"
@@ -165,7 +190,7 @@ def train_variant(target_pct, stop_pct, horizon, model_version, features, prices
         "stop_pct": stop_pct,
         "n_training_rows": len(df),
         "tickers": sorted(df["stock_code"].unique().tolist()),
-        "hyperparameters": {**XGB_PARAMS, "num_boost_round": NUM_BOOST_ROUND},
+        "hyperparameters": {**xgb_params, "num_boost_round": NUM_BOOST_ROUND},
         "walk_forward_validation": {
             "n_folds": len(folds),
             "buy_threshold": buy_threshold,
@@ -182,9 +207,16 @@ def train_variant(target_pct, stop_pct, horizon, model_version, features, prices
             f"={VARIANTS_BY_VERSION[model_version][5]:+.4f}) trained alongside the shipped winner "
             "(direction_xgboost_v5, target=10%/stop=5%/horizon=5d) from scripts/search_swing_target.py's "
             "search -- direct user request for a toggle between the top-5 configs, not just the single "
-            "winner. Same feature set/hyperparameters as the winner; threshold independently re-tuned for "
-            "THIS target via scripts/train_v5_variants.py's own pooled walk-forward sweep, picked to keep "
-            "an estimated >=1 BUY signal/day where the sweep allows it."
+            "winner. Same feature set as the winner. Hyperparameters "
+            + ("independently re-tuned for THIS config specifically (scripts/tune_v5_variants_hyperparams.py, "
+               "+2.19pp pooled Wilson LB over the original shared defaults)"
+               if xgb_params.get("max_depth") == T10_H10_HYPERPARAMS["max_depth"] and xgb_params.get("eta") == T10_H10_HYPERPARAMS["eta"]
+               and xgb_params.get("min_child_weight") == T10_H10_HYPERPARAMS["min_child_weight"]
+               else "kept at the original shared defaults (scripts/tune_v5_variants_hyperparams.py found an "
+                    "apparent improvement for this config too, but it hasn't had the same fine-sweep "
+                    "robustness check the default/t10_h10 configs got, so not yet adopted)")
+            + "; threshold independently re-tuned for THIS target via scripts/train_v5_variants.py's own "
+              "pooled walk-forward sweep, picked to keep an estimated >=1 BUY signal/day where the sweep allows it."
         ),
     }
     with open(meta_path, "w") as f:
@@ -202,8 +234,8 @@ def run():
     prices = pd.read_parquet(PRICES_PATH)
     logger.info("Loaded %d feature rows, %d price rows", len(features), len(prices))
 
-    for target_pct, stop_pct, horizon, model_version, rank, lift in VARIANTS:
-        train_variant(target_pct, stop_pct, horizon, model_version, features, prices)
+    for target_pct, stop_pct, horizon, model_version, rank, lift, hyperparams in VARIANTS:
+        train_variant(target_pct, stop_pct, horizon, model_version, features, prices, hyperparams)
 
     logger.info("=" * 100)
     logger.info("All %d variants trained.", len(VARIANTS))

@@ -51,6 +51,10 @@ BUY_THRESHOLD = 0.60  # re-tuned for the new target via scripts/tune_v5_new_targ
                       # the OLD label (~4.2/day), whereas 0.65+ drops below ~1.2/day, thin enough to
                       # risk the same "empty for several days straight" complaint that got the old
                       # threshold lowered in the first place (see engine/decision.py's docstring).
+                      # RE-VERIFIED 2026-09-14 after XGB_PARAMS changed (see below) -- re-ran the same
+                      # sweep with the new hyperparameters: 0.60 still balances well (precision 74.4%,
+                      # Wilson LB 71.25%, ~2.0 signals/day), 0.65+ again thins out below ~1.2/day. No
+                      # change needed.
 
 NON_FEATURE_COLS = {"id", "stock_code", "date", "feature_version", "created_at"}
 BOOL_COLS = ["higher_high_20d", "higher_low_20d", "lower_high_20d", "lower_low_20d"]
@@ -75,13 +79,19 @@ ABSOLUTE_SCALE_COLS = {
 }
 
 XGB_PARAMS = {
-    # max_depth=3 (not v4's 4): selected via scripts/tune_v5.py's 10-config
-    # walk-forward grid search, holistic pick (AUC + profit_factor +
-    # max_drawdown together) -- max_depth 5/6 had marginally higher AUC
-    # (0.587-0.588 vs 0.581) but noticeably worse profit_factor (6.6-6.9 vs
-    # 8.2) and drawdown (-17% to -18% vs -9.6%), the same overfitting
-    # signature v4's own hyperparameter search rejected.
-    "max_depth": 3, "eta": 0.05, "min_child_weight": 1,
+    # max_depth=4, eta=0.03 (2026-09-14): re-tuned via scripts/tune_v5_
+    # new_target_hyperparams.py's pooled 10-config grid search, specifically
+    # for the CURRENT target (10%/-5%/5d) -- the previous max_depth=3/eta=
+    # 0.05 was still the OLD 5%/-2.5%/10d target's winner, carried over
+    # unchanged when the target itself changed (direct user question: were
+    # hyperparameters ever re-verified for the new label? they hadn't been).
+    # Pooled Wilson LB 68.62% -> 71.25% (+2.63pp), WITH more trades (762 ->
+    # 804) and higher precision (71.9% -> 74.4%) -- a strict improvement,
+    # not a trade-off. Verified not a lucky single grid point: a finer eta
+    # sweep at max_depth=4 traced a smooth peak exactly at 0.03 (69.9% at
+    # 0.02, rising to 71.25% at 0.03, falling to 67.9% at 0.04) -- the
+    # opposite of an isolated noisy spike.
+    "max_depth": 4, "eta": 0.03, "min_child_weight": 1,
     "subsample": 0.8, "colsample_bytree": 0.8,
     "objective": "binary:logistic", "eval_metric": "logloss", "seed": 42,
 }
