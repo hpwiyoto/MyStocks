@@ -17,6 +17,7 @@ from app.data import (
     load_suspended_tickers,
     selected_swing_model_version,
 )
+from app.positions import count_active_positions
 from app.style import data_freshness_note, inject_base_css, render_developer_footer, render_ihsg_chart, render_ihsg_context
 from features.momentum_screener import compute_screener_panel
 
@@ -142,9 +143,23 @@ with c2:
 
 st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
 
-d1, d2 = st.columns(2)
+d1, d2, d3 = st.columns(3)
 
 with d1:
+    st.markdown(
+        """
+        <div class="mystocks-card">
+            <div class="mystocks-ticker" style="font-size:1.3rem;">📌 Posisi Saya</div>
+            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Saham yang sudah Anda tandai dibeli -- dipantau harian, peringatan dini sebelum kena stop-loss.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.metric("🟢 Posisi aktif", count_active_positions(st.user.email))
+    if st.button("Buka Posisi Saya →", key="goto_posisi", width="stretch"):
+        st.switch_page("pages/3_📌_Posisi_Saya.py")
+
+with d2:
     st.markdown(
         """
         <div class="mystocks-card">
@@ -161,7 +176,7 @@ with d1:
     if st.button("Buka Rekomendasi Emitten →", key="goto_rekomendasi", width="stretch"):
         st.switch_page("pages/5_🏆_Rekomendasi_Emitten.py")
 
-with d2:
+with d3:
     st.markdown(
         """
         <div class="mystocks-card" style="opacity:0.6;">

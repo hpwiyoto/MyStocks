@@ -14,6 +14,7 @@ from plotly.subplots import make_subplots
 from app.auth import require_login
 from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, selected_swing_model_version
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge, wyckoff_badge
+from app.positions import has_active_position, mark_position
 from features.momentum_screener import classify_macd_status
 from features.support_resistance import compute_pivot_levels, nearest_significant_level
 from features.wyckoff import compute_wyckoff_features
@@ -221,6 +222,22 @@ if row is not None:
     e2.metric("Stop Loss", f"{float(row['stop_loss_price']):,.0f}", delta=f"-{(1 - float(row['stop_loss_price'])/float(row['entry_price']))*100:.2f}%", delta_color="inverse")
     e3.metric("Take Profit", f"{float(row['take_profit_price']):,.0f}", delta=f"+{(float(row['take_profit_price'])/float(row['entry_price']) - 1)*100:.2f}%")
     e4.metric("Risk : Reward", f"1 : {float(row['risk_reward_ratio']):.1f}")
+
+    # Position tracking: direct user request -- once a stock is marked
+    # "bought", app/pages/3_Posisi_Saya.py watches it daily and warns
+    # early if it's drifting toward the stop (engine/early_warning.py).
+    # Restricted to BUY decisions -- marking a WATCH/AVOID as "bought"
+    # would track a position the app itself never recommended taking.
+    if row["decision"] == "BUY":
+        if has_active_position(st.user.email, selected):
+            st.caption("📌 Sudah ditandai sebagai posisi aktif -- lihat halaman **Posisi Saya**.")
+        elif st.button("📌 Tandai Saya Beli Ini", key="mark_bought"):
+            mark_position(
+                st.user.email, selected, _swing_model_version, row["date"],
+                float(row["entry_price"]), float(row["stop_loss_price"]), float(row["take_profit_price"]),
+            )
+            st.success("Ditandai. Pantau progresnya di halaman **Posisi Saya**.")
+            st.rerun()
 else:
     st.info(
         "Saham ini belum punya prediksi terbaru (belum di-scoring model, atau histori harganya masih terlalu pendek). "
