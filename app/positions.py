@@ -13,6 +13,46 @@ from app.db import init_schema, tracked_positions
 from engine.early_warning import check_position
 from pipeline.db import get_engine
 
+# Status shown per tracked position -- direct user request ("dtambah
+# statusnya... supaya ada progress prediksinya"), a single at-a-glance
+# read instead of making the user piece it together from the raw numbers.
+# Priority order matters: checked top to bottom, first match wins (e.g. a
+# position that's both past its horizon AND showing warning signals is
+# reported as EXPIRED first -- the model's own forecast window has
+# already lapsed, which matters more than a signal read within a window
+# that's no longer valid).
+STATUS_LABELS = {
+    "target_hit": "🎯 Target Tercapai",
+    "stop_hit": "🛑 Stop Loss Tercapai",
+    "expired": "⏳ Prediksi Kadaluarsa",
+    "warning": "⚠️ Peringatan Dini",
+    "under_pressure": "🟡 Dalam Tekanan",
+    "on_track": "✅ On Track",
+}
+# Trading-day horizons run on TRADING days; entry_date/today are calendar
+# days. Same approximation scripts/check_suspension_risk_v2.py already
+# uses elsewhere in this project (LOOKBACK_DAYS * 1.5) to convert one to
+# the other without a second price_history query just for a day-count.
+CALENDAR_TO_TRADING_DAY_BUFFER = 1.5
+
+
+def _position_status(current_price: float | None, entry_price: float, stop_loss_price: float,
+                      take_profit_price: float, days_held: int | None, horizon_days: int | None,
+                      warning: bool) -> str:
+    if current_price is None:
+        return "on_track"
+    if current_price >= take_profit_price:
+        return "target_hit"
+    if current_price <= stop_loss_price:
+        return "stop_hit"
+    if days_held is not None and horizon_days is not None and days_held > horizon_days * CALENDAR_TO_TRADING_DAY_BUFFER:
+        return "expired"
+    if warning:
+        return "warning"
+    if current_price < entry_price:
+        return "under_pressure"
+    return "on_track"
+
 
 def has_active_position(user_email: str, stock_code: str) -> bool:
     engine = get_engine()
@@ -79,13 +119,14 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
     """Every active position, joined with the ticker's LATEST close +
     feature row so the caller doesn't have to fetch those separately per
     row -- adds current_price, pct_change_from_entry, pct_to_stop,
-    pct_to_target, and the early-warning breakdown from engine.early_
-    warning.check_position (days_held too, for display)."""
+    pct_to_target, the early-warning breakdown from engine.early_warning.
+    check_position, days_held, and an overall `status` (STATUS_LABELS key)
+    summarizing all of the above into one at-a-glance read."""
     positions = _load_positions_raw(user_email, status)
     if positions.empty:
         return positions
 
-    from app.data import load_latest_feature_row, load_live_prices, load_price_history
+    from app.data import load_latest_feature_row, load_live_prices, load_model_metadata, load_price_history
 
     codes = tuple(positions["stock_code"].unique())
     live_prices = load_live_prices(codes)
@@ -101,20 +142,30 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
             price_df = load_price_history(code, days=1)
             current_price = float(price_df["close"].iloc[-1]) if not price_df.empty else None
         entry_price = float(pos["entry_price"])
+        stop_loss_price = float(pos["stop_loss_price"])
+        take_profit_price = float(pos["take_profit_price"])
         entry_date = pos["entry_date"]
         days_held = (dt.date.today() - entry_date).days if isinstance(entry_date, dt.date) else None
 
         warn = None
         if current_price is not None and feat_row:
             warn = check_position(entry_price, feat_row, float(current_price))
+        warning = bool(warn and warn["warning"])
+
+        horizon_days = None
+        try:
+            horizon_days = load_model_metadata(pos["model_version"])["horizon_days"]
+        except (OSError, KeyError):
+            pass  # a since-retired/renamed config -- status falls back gracefully without it
 
         row = pos.to_dict()
         row["current_price"] = current_price
         row["days_held"] = days_held
         row["pct_change_from_entry"] = (current_price - entry_price) / entry_price * 100 if current_price is not None else None
-        row["pct_to_stop"] = (current_price - float(pos["stop_loss_price"])) / current_price * 100 if current_price is not None else None
-        row["pct_to_target"] = (float(pos["take_profit_price"]) - current_price) / current_price * 100 if current_price is not None else None
-        row["warning"] = bool(warn and warn["warning"])
+        row["pct_to_stop"] = (current_price - stop_loss_price) / current_price * 100 if current_price is not None else None
+        row["pct_to_target"] = (take_profit_price - current_price) / current_price * 100 if current_price is not None else None
+        row["warning"] = warning
         row["warning_detail"] = warn
+        row["status"] = _position_status(current_price, entry_price, stop_loss_price, take_profit_price, days_held, horizon_days, warning)
         rows.append(row)
     return pd.DataFrame(rows)

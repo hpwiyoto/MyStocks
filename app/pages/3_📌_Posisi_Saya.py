@@ -7,8 +7,14 @@ import streamlit as st
 
 from app.auth import require_login
 from app.data import load_ihsg_trend
-from app.positions import close_position, load_positions_with_progress
-from app.style import inject_base_css, render_developer_footer, render_ihsg_context
+from app.positions import STATUS_LABELS, close_position, load_positions_with_progress
+from app.style import inject_base_css, position_status_badge, render_developer_footer, render_ihsg_context
+
+# Display order: most urgent first -- a stock already past target/stop
+# (should be closed NOW) outranks an early warning, which outranks a
+# merely-expired prediction window, etc. Keys are app.positions.
+# STATUS_LABELS' keys; see that module's docstring for what each means.
+STATUS_SORT_ORDER = {"target_hit": 0, "stop_hit": 0, "warning": 1, "expired": 2, "under_pressure": 3, "on_track": 4}
 
 st.set_page_config(page_title="MyStocks — Posisi Saya", page_icon="📌", layout="wide")
 inject_base_css()
@@ -22,9 +28,10 @@ st.title("📌 Posisi Saya")
 render_ihsg_context(load_ihsg_trend())
 st.caption(
     "Saham yang Anda tandai sebagai sudah dibeli -- sistem terus memantau pergerakannya setiap "
-    "hari dan memberi peringatan dini kalau harga terlihat mulai mengarah ke stop-loss, SEBELUM "
-    "benar-benar menyentuh angka itu. Tandai satu saham dari halaman **Detail Saham** saat "
-    "keputusannya BUY."
+    "hari, menandai statusnya (✅ On Track / 🟡 Dalam Tekanan / ⚠️ Peringatan Dini / ⏳ Kadaluarsa / "
+    "🎯🛑 sudah kena target atau stop), dan memberi peringatan dini kalau harga terlihat mulai "
+    "mengarah ke stop-loss, SEBELUM benar-benar menyentuh angka itu. Tandai satu saham dari "
+    "halaman **Detail Saham** saat keputusannya BUY."
 )
 st.caption(
     "⚠️ **Batasan yang jujur perlu diketahui** (`scripts/test_early_warning_rule.py`): dari histori, "
@@ -48,17 +55,25 @@ with tab_active:
             "keputusan BUY, lalu klik \"📌 Tandai Saya Beli Ini\"."
         )
     else:
-        n_warning = int(positions["warning"].sum())
-        c1, c2 = st.columns(2)
+        n_warning = int((positions["status"] == "warning").sum())
+        n_action = int(positions["status"].isin(["target_hit", "stop_hit"]).sum())
+        c1, c2, c3 = st.columns(3)
         c1.metric("Posisi aktif", len(positions))
-        c2.metric("⚠️ Perlu perhatian", n_warning, delta_color="inverse" if n_warning else "off")
+        c2.metric("⚠️ Peringatan dini", n_warning, delta_color="inverse" if n_warning else "off")
+        c3.metric("🎯 Siap ditutup", n_action, delta_color="inverse" if n_action else "off")
 
-        for _, pos in positions.sort_values("warning", ascending=False).iterrows():
+        positions["_sort_key"] = positions["status"].map(STATUS_SORT_ORDER).fillna(5)
+        for _, pos in positions.sort_values("_sort_key").iterrows():
             with st.container():
                 st.markdown('<div class="mystocks-card">', unsafe_allow_html=True)
                 h1, h2, h3, h4 = st.columns([1.5, 1, 1, 1])
                 with h1:
-                    st.markdown(f"<div class='mystocks-ticker'>{pos['stock_code']}</div>", unsafe_allow_html=True)
+                    status_badge = position_status_badge(pos["status"], STATUS_LABELS.get(pos["status"], pos["status"]))
+                    st.markdown(
+                        f"<div class='mystocks-ticker'>{pos['stock_code']}</div>"
+                        f"<div style='margin:0.3rem 0;'>{status_badge}</div>",
+                        unsafe_allow_html=True,
+                    )
                     st.caption(f"Beli {pos['entry_date']} @ {pos['entry_price']:,.0f} -- {pos['days_held']} hari lalu")
                 with h2:
                     price_txt = f"{pos['current_price']:,.0f}" if pos["current_price"] is not None else "-"
@@ -74,7 +89,7 @@ with tab_active:
                     if pos["pct_to_target"] is not None:
                         st.caption(f"jarak {pos['pct_to_target']:.1f}%")
 
-                if pos["warning"]:
+                if pos["status"] == "warning":
                     detail = pos["warning_detail"]
                     fired = [name for name, hit in {
                         "harga di bawah EMA9": detail["signals"]["trend_broken"],
@@ -86,6 +101,17 @@ with tab_active:
                         f"aktif ({', '.join(fired)}) -- pertimbangkan keluar sekarang daripada menunggu "
                         "stop-loss penuh. Bukan jaminan, lihat catatan batasan di atas.",
                         icon="⚠️",
+                    )
+                elif pos["status"] == "target_hit":
+                    st.success("🎯 Harga sudah menyentuh/melewati Take Profit -- pertimbangkan tutup posisi ini.", icon="🎯")
+                elif pos["status"] == "stop_hit":
+                    st.error("🛑 Harga sudah menyentuh/melewati Stop Loss -- pertimbangkan tutup posisi ini.", icon="🛑")
+                elif pos["status"] == "expired":
+                    st.warning(
+                        "⏳ Sudah melewati perkiraan jendela waktu prediksi model untuk saham ini -- "
+                        "prediksi awal (target/stop dalam horizon tertentu) sudah tidak berlaku lagi, "
+                        "posisi ini sekarang di luar apa yang diperkirakan model. Evaluasi ulang manual.",
+                        icon="⏳",
                     )
 
                 b1, b2, b3 = st.columns(3)

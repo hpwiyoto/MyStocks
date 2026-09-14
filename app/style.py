@@ -139,6 +139,23 @@ def wyckoff_badge(phase, event: str | None = None) -> str:
     return badge_html(label, color)
 
 
+# app.positions's per-position status -- see its STATUS_LABELS for the
+# text; colors follow the same green=good/red=bad/amber=caution/blue=
+# informational vocabulary as DECISION_COLORS and REGIME_COLORS above.
+POSITION_STATUS_COLORS = {
+    "target_hit": "#22C55E",
+    "on_track": "#22C55E",
+    "under_pressure": "#F59E0B",
+    "warning": "#EF4444",
+    "stop_hit": "#EF4444",
+    "expired": "#8B95A7",
+}
+
+
+def position_status_badge(status: str, label: str) -> str:
+    return badge_html(label, POSITION_STATUS_COLORS.get(status, TEXT_MUTED))
+
+
 # scripts/test_overextended_buy_filter.py: 97% of Swing's BUY signals fire
 # while the stock is ALREADY in "overextended" regime -- pooled Wilson LB
 # 68.0% there vs 72.2% for the rare non-overextended slice (n=22 -- see
