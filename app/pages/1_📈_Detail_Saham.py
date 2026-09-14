@@ -226,18 +226,20 @@ if row is not None:
     # Position tracking: direct user request -- once a stock is marked
     # "bought", app/pages/3_Posisi_Saya.py watches it daily and warns
     # early if it's drifting toward the stop (engine/early_warning.py).
-    # Restricted to BUY decisions -- marking a WATCH/AVOID as "bought"
-    # would track a position the app itself never recommended taking.
-    if row["decision"] == "BUY":
-        if has_active_position(st.user.email, selected):
-            st.caption("📌 Sudah ditandai sebagai posisi aktif -- lihat halaman **Posisi Saya**.")
-        elif st.button("📌 Tandai Saya Beli Ini", key="mark_bought"):
-            mark_position(
-                st.user.email, selected, _swing_model_version, row["date"],
-                float(row["entry_price"]), float(row["stop_loss_price"]), float(row["take_profit_price"]),
-            )
-            st.success("Ditandai. Pantau progresnya di halaman **Posisi Saya**.")
-            st.rerun()
+    # NOT restricted to BUY decisions (direct follow-up request:
+    # "menandainya tidak harus menunggu ada sinyal Buy") -- a user may
+    # decide to buy on their own judgment regardless of what this
+    # particular decision says; entry/SL/TP are already computed for
+    # every row here (decide() always returns them), not just BUY ones.
+    if has_active_position(st.user.email, selected):
+        st.caption("📌 Sudah ditandai sebagai posisi aktif -- lihat halaman **Posisi Saya**.")
+    elif st.button("📌 Tandai Saya Beli Ini", key="mark_bought"):
+        mark_position(
+            st.user.email, selected, _swing_model_version, row["date"],
+            float(row["entry_price"]), float(row["stop_loss_price"]), float(row["take_profit_price"]),
+        )
+        st.success("Ditandai. Pantau progresnya di halaman **Posisi Saya**.")
+        st.rerun()
 else:
     st.info(
         "Saham ini belum punya prediksi terbaru (belum di-scoring model, atau histori harganya masih terlalu pendek). "

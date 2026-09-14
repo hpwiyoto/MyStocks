@@ -9,6 +9,7 @@ import streamlit as st
 
 from app.auth import require_login
 from app.data import best_swing_config_id, load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers
+from app.positions import has_active_position, mark_position
 from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
 from engine.predict import run as predict_run
 from engine.swing_configs import CONFIG_BY_ID, DEFAULT_CONFIG_ID, SWING_CONFIGS
@@ -353,9 +354,23 @@ for row_chunk in rows:
             e3.markdown(f"<span class='mystocks-muted'>Stop Loss</span><br>{float(r['stop_loss_price']):,.0f}", unsafe_allow_html=True)
             e4.markdown(f"<span class='mystocks-muted'>Take Profit</span><br>{float(r['take_profit_price']):,.0f}", unsafe_allow_html=True)
             st.markdown(f"<span class='mystocks-muted'>Transaksi/hari (rata2 60h): {format_traded_value(r.get('avg_traded_value'))}</span>", unsafe_allow_html=True)
-            if st.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
+            bd1, bd2 = st.columns(2)
+            if bd1.button("Lihat Detail →", key=f"detail_{r['stock_code']}", width="stretch"):
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")
+            # Position tracking: direct user request to mark a position
+            # directly from Swing (not only from Detail Saham), and NOT
+            # gated on decision=="BUY" -- a user may buy on their own
+            # judgment regardless of what this row's decision says.
+            if has_active_position(st.user.email, r["stock_code"]):
+                bd2.button("📌 Sudah Ditandai", key=f"marked_{r['stock_code']}", width="stretch", disabled=True)
+            elif bd2.button("📌 Tandai Beli", key=f"mark_{r['stock_code']}", width="stretch"):
+                mark_position(
+                    st.user.email, r["stock_code"], selected_model_version, r["date"],
+                    float(r["entry_price"]), float(r["stop_loss_price"]), float(r["take_profit_price"]),
+                )
+                st.success(f"{r['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
+                st.rerun()
             st.markdown("<div style='margin-bottom:0.8rem'></div>", unsafe_allow_html=True)
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
@@ -424,3 +439,24 @@ if selected_rows:
     picked_code = table_df.iloc[selected_rows[0]]["stock_code"]
     st.session_state["selected_ticker"] = picked_code
     st.switch_page("pages/1_📈_Detail_Saham.py")
+
+# Quick-mark for any ticker in the table above, not just the top-9 cards
+# -- clicking a table ROW navigates straight to Detail Saham (existing
+# behavior, left unchanged), so this is a separate, deliberately small
+# control instead of trying to cram a button into every dataframe row.
+with st.expander("📌 Tandai saham dari daftar di atas sebagai sudah dibeli"):
+    _mark_options = {
+        f"{r['stock_code']} — {r['name'] if pd.notna(r['name']) else r['stock_code']}": r
+        for _, r in table_source.iterrows()
+    }
+    _mark_label = st.selectbox("Pilih saham", list(_mark_options.keys()), key="mark_from_table_select")
+    _mark_row = _mark_options[_mark_label]
+    if has_active_position(st.user.email, _mark_row["stock_code"]):
+        st.caption(f"📌 {_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
+    elif st.button("📌 Tandai Beli", key="mark_from_table_btn"):
+        mark_position(
+            st.user.email, _mark_row["stock_code"], selected_model_version, _mark_row["date"],
+            float(_mark_row["entry_price"]), float(_mark_row["stop_loss_price"]), float(_mark_row["take_profit_price"]),
+        )
+        st.success(f"{_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
+        st.rerun()

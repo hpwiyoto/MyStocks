@@ -72,8 +72,16 @@ def mark_position(
     user_email: str, stock_code: str, model_version: str, entry_date, entry_price: float,
     stop_loss_price: float, take_profit_price: float,
 ) -> None:
+    """`entry_date`: accepts a plain `datetime.date`, a `pandas.Timestamp`
+    (what a value read back from `predictions` via pd.read_sql actually
+    is, NOT a plain date -- found the hard way: SQLite's Date column type
+    rejects anything but a real `datetime.date`, so a Timestamp passed
+    straight through raised at insert time), or an ISO date string --
+    normalized here once so every caller (Swing's cards, Swing's quick-
+    mark expander, Detail Saham) is protected the same way."""
     engine = get_engine()
     init_schema(engine)
+    entry_date = pd.Timestamp(entry_date).date()
     with engine.begin() as conn:
         conn.execute(
             tracked_positions.insert().values(
