@@ -19,6 +19,7 @@ from app.data import (
 )
 from app.positions import count_active_positions
 from app.style import data_freshness_note, inject_base_css, render_developer_footer, render_ihsg_chart, render_ihsg_context
+from engine.swing_configs import DEFAULT_CONFIG_ID, SWING_CONFIGS
 from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Home", page_icon="🏠", layout="wide")
@@ -119,6 +120,37 @@ with c1:
         s2.metric("WATCH", int((swing_df["decision"] == "WATCH").sum()))
     else:
         st.caption("Belum ada data prediksi.")
+
+    # Direct user follow-up: a BUY in one config does NOT surface anywhere
+    # else on this page (the card above only ever reflects ONE config, the
+    # session-persisted `persist_swing_config_id`) -- switching to check
+    # each of the 5 manually took 5 round-trips through the Swing page's
+    # toggle. This computes all 5 at once, cheap (load_latest_predictions
+    # is cached per model_version, same DB query the Swing page itself
+    # already makes), so a "0 BUY" moment is either confirmed as genuinely
+    # 0 everywhere, or points straight at which config actually has one.
+    _active_config_id = st.session_state.get("persist_swing_config_id", DEFAULT_CONFIG_ID)
+    with st.expander("📊 Cek BUY di semua 5 konfigurasi"):
+        st.caption(
+            "Tiap konfigurasi punya definisi target & ambang BUY sendiri -- sinyal BUY di satu "
+            "konfigurasi TIDAK otomatis muncul di konfigurasi lain atau di kartu Swing di atas "
+            "(yang cuma menampilkan SATU konfigurasi aktif). 🟢 = konfigurasi yang aktif sekarang."
+        )
+        for _cfg in SWING_CONFIGS:
+            _cfg_df = load_latest_predictions(model_version=_cfg["model_version"])
+            if _suspended and not _cfg_df.empty:
+                _cfg_df = _cfg_df[~_cfg_df["stock_code"].isin(_suspended)]
+            _cfg_buy = int((_cfg_df["decision"] == "BUY").sum()) if not _cfg_df.empty else 0
+            _cfg_watch = int((_cfg_df["decision"] == "WATCH").sum()) if not _cfg_df.empty else 0
+            r1, r2, r3, r4 = st.columns([3, 1, 1, 1.4])
+            _marker = "🟢 " if _cfg["id"] == _active_config_id else ""
+            r1.markdown(f"{_marker}{_cfg['label']}")
+            r2.markdown(f"**BUY: {_cfg_buy}**")
+            r3.markdown(f"WATCH: {_cfg_watch}")
+            if r4.button("Lihat →", key=f"home_swing_cfg_{_cfg['id']}", width="stretch"):
+                st.session_state["persist_swing_config_id"] = _cfg["id"]
+                st.switch_page("pages/2_🎯_Swing.py")
+
     if st.button("Buka Swing Screener →", key="goto_swing", width="stretch"):
         st.switch_page("pages/2_🎯_Swing.py")
 
