@@ -28,6 +28,69 @@ def _notna(value):
     return value is not None and value == value
 
 
+def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    """Aggregate a daily date-indexed price/foreign-flow frame into
+    weekly/monthly bars for the chart's Timeframe control below. Standard
+    OHLC aggregation (open=first, high=max, low=min, close=last);
+    volume/net_foreign_flow sum over the period. Works on either frame --
+    only aggregates whichever of these columns are actually present, so
+    the same function resamples both load_price_history's and
+    load_foreign_flow_history's output.
+
+    Indicators (EMA/SMA/RSI/MACD/CMF/foreign_flow_ma20) are recomputed
+    FROM these resampled bars afterward by compute_chart_indicators, not
+    resampled from an already-daily indicator -- a weekly RSI means "RSI
+    of the last 14 WEEKLY closes", matching how real charting platforms
+    present multi-timeframe indicators, not a daily RSI just redrawn at
+    weekly spacing.
+    """
+    if df.empty:
+        return df
+    d = df.copy()
+    d["date"] = pd.to_datetime(d["date"])
+    d = d.set_index("date")
+    agg_funcs = {"open": "first", "high": "max", "low": "min", "close": "last",
+                 "volume": "sum", "net_foreign_flow": "sum"}
+    agg = {c: f for c, f in agg_funcs.items() if c in d.columns}
+    out = d.resample(rule).agg(agg)
+    anchor_col = "close" if "close" in out.columns else next(iter(agg))
+    out = out.dropna(subset=[anchor_col]).reset_index()
+    out["date"] = out["date"].dt.date
+    return out
+
+
+def compute_chart_indicators(price_df: pd.DataFrame, foreign_flow_df: pd.DataFrame) -> pd.DataFrame:
+    """All derived columns the candlestick chart plots, computed from
+    whatever bars `price_df` contains (daily, weekly, or monthly -- see
+    resample_ohlcv above). Same ta-library calls/params as features/
+    technical.py's compute_momentum/compute_money_flow for cmf_20/rsi_14
+    on the DAILY case specifically, so that view matches exactly what the
+    model sees; weekly/monthly views use the identical period-count
+    formulas applied to coarser bars, same convention as every other
+    charting platform's multi-timeframe indicators."""
+    price_df = price_df.copy()
+    price_df["ema5"] = price_df["close"].ewm(span=5, adjust=False).mean()
+    price_df["ema9"] = price_df["close"].ewm(span=9, adjust=False).mean()
+    price_df["bb_mid"] = price_df["close"].rolling(20).mean()
+    bb_std = price_df["close"].rolling(20).std()
+    price_df["bb_upper"] = price_df["bb_mid"] + 2 * bb_std
+    price_df["bb_lower"] = price_df["bb_mid"] - 2 * bb_std
+    price_df["sma50"] = price_df["close"].rolling(50).mean()
+    price_df["sma200"] = price_df["close"].rolling(200).mean()
+    price_df["volume_sma20"] = price_df["volume"].rolling(20).mean()
+    price_df["cmf_20"] = ta.volume.ChaikinMoneyFlowIndicator(
+        price_df["high"], price_df["low"], price_df["close"], price_df["volume"], window=20
+    ).chaikin_money_flow()
+    price_df["rsi_14"] = ta.momentum.RSIIndicator(price_df["close"], window=14).rsi()
+    macd_ind = ta.trend.MACD(price_df["close"])
+    price_df["macd"] = macd_ind.macd()
+    price_df["macd_signal"] = macd_ind.macd_signal()
+    price_df["macd_hist"] = macd_ind.macd_diff()
+    price_df = price_df.merge(foreign_flow_df, on="date", how="left")
+    price_df["foreign_flow_ma20"] = price_df["net_foreign_flow"].rolling(20, min_periods=5).mean()
+    return price_df
+
+
 st.set_page_config(page_title="MyStocks — Detail Saham", page_icon="📈", layout="wide")
 inject_base_css()
 require_login("Detail Saham")
@@ -251,47 +314,13 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 if price_df.empty:
     st.info("Belum ada data harga untuk saham ini.")
 else:
-    price_df = price_df.copy()
-    price_df["ema5"] = price_df["close"].ewm(span=5, adjust=False).mean()
-    price_df["ema9"] = price_df["close"].ewm(span=9, adjust=False).mean()
-    price_df["bb_mid"] = price_df["close"].rolling(20).mean()
-    bb_std = price_df["close"].rolling(20).std()
-    price_df["bb_upper"] = price_df["bb_mid"] + 2 * bb_std
-    price_df["bb_lower"] = price_df["bb_mid"] - 2 * bb_std
-    price_df["sma50"] = price_df["close"].rolling(50).mean()
-    price_df["sma200"] = price_df["close"].rolling(200).mean()
-    # Naming note: this is the exact same computation (rolling(20).mean(),
-    # a simple moving average) as sma50/sma200 above and sma_20/50/200 in
-    # features/technical.py -- named "sma" (not "ma") for consistency with
-    # every other moving average in this codebase; it was previously called
-    # volume_ma20 with no functional difference, just an inconsistent label.
-    price_df["volume_sma20"] = price_df["volume"].rolling(20).mean()
-    # Same computation (ta library, window=20) the model itself uses for
-    # cmf_20 -- see features/technical.py's compute_money_flow -- so this
-    # panel matches exactly what the model sees, not a lookalike recomputed
-    # differently.
-    price_df["cmf_20"] = ta.volume.ChaikinMoneyFlowIndicator(
-        price_df["high"], price_df["low"], price_df["close"], price_df["volume"], window=20
-    ).chaikin_money_flow()
-    # RSI(14) and MACD -- same ta library calls/params as
-    # features/technical.py's compute_momentum, for the same reason as CMF
-    # above: this panel should show exactly what the model sees.
-    price_df["rsi_14"] = ta.momentum.RSIIndicator(price_df["close"], window=14).rsi()
-    macd_ind = ta.trend.MACD(price_df["close"])
-    price_df["macd"] = macd_ind.macd()
-    price_df["macd_signal"] = macd_ind.macd_signal()
-    price_df["macd_hist"] = macd_ind.macd_diff()
-    # Foreign flow isn't derivable from OHLCV -- merge in whatever's stored
-    # in feature_daily.net_foreign_flow (kept current by load_foreign_flow's
-    # on-demand fetch earlier on this page). Left join: a date with no
-    # foreign-flow value (RAPIDAPI_KEY unset, or just not backfilled yet)
-    # stays NaN, which Plotly simply skips/gaps rather than erroring on.
-    price_df = price_df.merge(foreign_flow_df, on="date", how="left")
-    # Raw daily net_foreign_flow is noisy (one big print can dominate the
-    # bars) -- a trailing 20-day average smooths it into a readable trend
-    # line, same role CMF's smoothing plays for money flow: is the last few
-    # weeks net accumulation (line above zero) or distribution (below)?
-    price_df["foreign_flow_ma20"] = price_df["net_foreign_flow"].rolling(20, min_periods=5).mean()
+    # Always DAILY here, regardless of the chart Timeframe control below --
+    # "Ringkasan Sinyal Saat Ini" right after this is meant to show
+    # TODAY's actual technical reading (matching what the model/feature
+    # pipeline sees), not whatever timeframe the user happens to have the
+    # chart set to. The chart itself gets its OWN (possibly resampled)
+    # copy further down, right before it's actually built.
+    price_df = compute_chart_indicators(price_df, foreign_flow_df)
 
     # --- Ringkasan Sinyal Saat Ini: satu tempat untuk melihat semua bacaan
     # teknikal + kedua probabilitas model sekaligus, tanpa perlu menghitung
@@ -349,13 +378,51 @@ else:
     # underlying values and internal column/feature names (sma_20/50/200 in
     # features/technical.py) are unchanged.
     INDICATOR_OPTIONS = ["EMA5", "EMA9", "MA20", "MA50", "MA200", "Bollinger Band(20)"]
-    ctrl1, ctrl2 = st.columns([1, 2])
+    # Raw daily rows fetched BEFORE resampling, sized so each timeframe still
+    # shows a reasonable number of bars after aggregation (~5 trading days/
+    # week, ~21/month). Monthly capped at ~10 years rather than a literal
+    # "260 monthly bars" scale-up (~21 years) -- most tickers in this DB
+    # don't have that much daily history anyway, and rolling indicators
+    # (e.g. a 200-period MA) already degrade to NaN gracefully until enough
+    # bars accumulate, the same behavior young tickers already hit today on
+    # the daily view.
+    TIMEFRAME_RAW_DAYS = {"Harian": 260, "Mingguan": 1300, "Bulanan": 2600}
+    TIMEFRAME_RESAMPLE_RULE = {"Mingguan": "W", "Bulanan": "ME"}
+    ctrl0, ctrl1, ctrl2 = st.columns([1, 1, 2])
+    with ctrl0:
+        timeframe = st.radio(
+            "Timeframe", list(TIMEFRAME_RAW_DAYS.keys()), horizontal=True, key="chart_timeframe",
+        )
     with ctrl1:
         chart_type = st.radio("Tipe candle", ["Normal", "Heikin-Ashi"], horizontal=True, key="chart_type")
     with ctrl2:
         selected_indicators = st.multiselect(
             "Indikator ditampilkan", INDICATOR_OPTIONS, default=INDICATOR_OPTIONS, key="chart_indicators",
         )
+
+    if timeframe != "Harian":
+        # A fresh, bigger raw fetch -- price_df above is already the
+        # (possibly warmed-up) 260-day DAILY version that fed "Ringkasan
+        # Sinyal Saat Ini" above, deliberately left untouched by this
+        # control. Indicators are recomputed from scratch on the resampled
+        # bars (compute_chart_indicators), not resampled from the already-
+        # daily ones -- see resample_ohlcv's docstring for why.
+        _raw_days = TIMEFRAME_RAW_DAYS[timeframe]
+        _raw_price = load_price_history(selected, days=_raw_days)
+        _raw_foreign_flow = load_foreign_flow_history(selected, days=_raw_days)
+        _rule = TIMEFRAME_RESAMPLE_RULE[timeframe]
+        _resampled_df = compute_chart_indicators(
+            resample_ohlcv(_raw_price, _rule), resample_ohlcv(_raw_foreign_flow, _rule),
+        )
+        if _resampled_df.empty:
+            # Fall back to the daily price_df already computed above rather
+            # than st.stop()-ing the whole page -- that would also hide
+            # every panel BELOW the chart (fundamental, pattern similarity,
+            # news), too aggressive a response to "this one resample
+            # produced no bars" (e.g. a ticker with too little history).
+            st.caption(f"⚠️ Belum cukup data harian untuk membentuk bar {timeframe.lower()} -- menampilkan Harian.")
+        else:
+            price_df = _resampled_df
 
     if chart_type == "Heikin-Ashi":
         ha_close = (price_df["open"] + price_df["high"] + price_df["low"] + price_df["close"]) / 4
