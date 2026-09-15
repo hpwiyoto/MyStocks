@@ -971,5 +971,18 @@
       "wilson_lb_95": 0.781
     }
   },
-  "notes": "One of 4 runner-up configs (rank #4 of 20 by top5_lift =+0.1836) trained alongside the shipped winner (direction_xgboost_v5, target=10%/stop=5%/horizon=5d) from scripts/search_swing_target.py's search -- direct user request for a toggle between the top-5 configs, not just the single winner. Same feature set as the winner. Hyperparameters independently re-tuned for THIS config specifically and CONFIRMED via fine eta sweep (scripts/tune_v5_variants_hyperparams.py found the lead, scripts/verify_variants_hyperparams_finesweep.py confirmed a clean peak at eta=0.03 -- same diagnostic as the default config's own confirmed finding); threshold independently re-tuned for THIS target via scripts/train_v5_variants.py's own pooled walk-forward sweep, picked to keep an estimated >=1 BUY signal/day where the sweep allows it."
+  "notes": "One of 4 runner-up configs (rank #4 of 20 by top5_lift =+0.1836) trained alongside the shipped winner (direction_xgboost_v5, target=10%/stop=5%/horizon=5d) from scripts/search_swing_target.py's search -- direct user request for a toggle between the top-5 configs, not just the single winner. Same feature set as the winner. Hyperparameters independently re-tuned for THIS config specifically and CONFIRMED via fine eta sweep (scripts/tune_v5_variants_hyperparams.py found the lead, scripts/verify_variants_hyperparams_finesweep.py confirmed a clean peak at eta=0.03 -- same diagnostic as the default config's own confirmed finding); threshold independently re-tuned for THIS target via scripts/train_v5_variants.py's own pooled walk-forward sweep, picked to keep an estimated >=1 BUY signal/day where the sweep allows it.",
+  "profit_factor_analysis": {
+    "source": "scripts/compute_profit_factor.py (2026-09-15), full explanation in docs/RESEARCH_LOG.md",
+    "threshold": 0.7,
+    "n_trades": 617,
+    "win_rate": 0.8136,
+    "signals_per_day": 1.5235,
+    "profit_factor_clean": 8.7304,
+    "expectancy_clean_pct": 5.0429,
+    "profit_factor_realistic": 8.8419,
+    "expectancy_realistic_pct": 7.5908,
+    "expectancy_per_day_pct": 0.7591,
+    "notes": "profit_factor_clean assumes exact limit fills at the barrier price (no slippage); profit_factor_realistic additionally accounts for overnight-gap-through risk using the exit-day open price. Both versions reproduce the win-rate ranking exactly for these 5 configs (identical 2:1 target:stop ratio) -- carries no extra information on its own. expectancy_per_day_pct = expectancy_realistic_pct / horizon_days is the decision-relevant number: it combines profit factor with signal frequency and how long capital is tied up, and REVERSES the win-rate ranking -- see docs/RESEARCH_LOG.md for the full comparison across all 5 configs and why the shipped default wins on capital velocity despite the lowest win-rate/profit-factor of the 5."
+  }
 }

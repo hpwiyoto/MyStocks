@@ -145,13 +145,24 @@ with st.expander("📊 Bandingkan semua 5 konfigurasi"):
         _cm = load_model_metadata(c["model_version"])
         _cwf = _cm.get("walk_forward_validation") or {}
         _cp = _cwf.get("pooled") or {}
+        _cpf = _cm.get("profit_factor_analysis") or {}
         _cmp_rows.append({
             "Konfigurasi": _display_label(c), "Peringkat": c["rank"], "Lift top-5%": f"{c['top5_lift']:+.3f}",
             "Threshold BUY": f"{_cwf.get('buy_threshold', 0)*100:.0f}%",
             "Precision (pooled)": f"{_cp.get('precision', 0)*100:.1f}%" if _cp else "-",
             "Wilson LB 95%": f"{_cp.get('wilson_lb_95', 0)*100:.1f}%" if _cp else "-",
             "n sinyal BUY": _cp.get("n_trades", "-"),
+            "Profit Factor": f"{_cpf['profit_factor_realistic']:.2f}" if _cpf else "-",
+            "Expectancy/hari": f"{_cpf['expectancy_per_day_pct']:+.2f}%" if _cpf else "-",
         })
+    # Sorted by expectancy_per_day_pct DESC (not by rank/Wilson LB) --
+    # deliberate: this is the decision-relevant ordering per docs/
+    # RESEARCH_LOG.md's finding below, distinct from every other column's
+    # own ranking in this table.
+    _cmp_rows.sort(
+        key=lambda r: float(r["Expectancy/hari"].rstrip("%")) if r["Expectancy/hari"] != "-" else float("-inf"),
+        reverse=True,
+    )
     st.dataframe(_cmp_rows, width="stretch", hide_index=True)
     st.caption(
         "⭐ = Wilson LB pooled tertinggi (angka praktis \"kalau saya ikuti tiap sinyal BUY-nya, berapa "
@@ -160,6 +171,17 @@ with st.expander("📊 Bandingkan semua 5 konfigurasi"):
         "konfigurasi punya threshold BUY-nya sendiri hasil "
         "tuning terpisah. Lihat `scripts/search_swing_target.py` untuk metodologi pencarian 20 "
         "konfigurasinya, dan `scripts/train_v5_variants.py` untuk cara 4 konfigurasi selain #1 dilatih."
+    )
+    st.info(
+        "💡 **Profit Factor dan Wilson LB/Precision menghasilkan urutan yang SAMA** untuk ke-5 konfigurasi "
+        "ini (semuanya pakai rasio target:stop 2:1) -- profit factor sendiri tidak menambah informasi baru "
+        "di sini. Tapi **Expectancy/hari** (profit factor digabung frekuensi sinyal & horizon, tabel di atas "
+        "diurutkan berdasarkan ini) justru MEMBALIK urutannya: konfigurasi **default (10%/-5%/5 hari)** yang "
+        "sedang berjalan menang di kecepatan profit (+2,45%/hari) meski win-rate & profit factor-nya PALING "
+        "RENDAH dari kelima config -- target besar dicapai di horizon tercepat + frekuensi sinyal tertinggi. "
+        "Detail metodologi (return realistis dengan gap harga open, bukan cuma target/stop nominal) di "
+        "`scripts/compute_profit_factor.py` dan `docs/RESEARCH_LOG.md`.",
+        icon="💡",
     )
 
 swing_wf = meta.get("walk_forward_validation") or {}
@@ -179,6 +201,35 @@ sp2.metric(
 )
 sp3.metric("ROC-AUC (walk-forward)", f"{swing_ml.get('roc_auc', 0):.3f}" if swing_ml else "-")
 sp4.metric("BUY threshold saat ini (live)", f"{swing_wf_threshold*100:.0f}%" if swing_wf_threshold else "-")
+
+# Profit factor / expectancy: separate row, separate data source
+# (profit_factor_analysis, from scripts/compute_profit_factor.py) --
+# genuinely different question from precision/Wilson-LB above ("seberapa
+# sering menang" vs "seberapa banyak duit dihasilkan per hari"). See the
+# comparison-table caption above for why the two can disagree.
+swing_pf = meta.get("profit_factor_analysis") or {}
+if swing_pf:
+    pf1, pf2, pf3 = st.columns(3)
+    pf1.metric(
+        "Profit Factor (realistis, gap-adjusted)", f"{swing_pf['profit_factor_realistic']:.2f}",
+        help="Total untung / total rugi dari sinyal BUY yang diambil, memakai harga OPEN di hari exit "
+             "(bukan cuma target/stop nominal) supaya gap harga semalam ikut terhitung.",
+    )
+    pf2.metric(
+        "Expectancy per transaksi", f"{swing_pf['expectancy_realistic_pct']:+.2f}%",
+        help="Rata-rata untung/rugi per sinyal BUY yang diambil (realistis, gap-adjusted).",
+    )
+    pf3.metric(
+        "Expectancy per hari (kecepatan profit)", f"{swing_pf['expectancy_per_day_pct']:+.2f}%",
+        help="Expectancy per transaksi dibagi horizon hari -- angka yang dipakai untuk memilih config "
+             "default, bukan precision/win-rate. Lihat kotak info di 'Bandingkan semua 5 konfigurasi' di atas.",
+    )
+    st.caption(
+        f"Dihitung dari {swing_pf['n_trades']} sinyal BUY ({swing_pf['signals_per_day']:.2f} sinyal/hari, "
+        f"win rate {swing_pf['win_rate']*100:.1f}%) -- sumber: `scripts/compute_profit_factor.py`, "
+        "penjelasan lengkap di `docs/RESEARCH_LOG.md`."
+    )
+
 if swing_pooled:
     st.caption(
         f"✅ **Angka precision di atas sudah di-pooling per-transaksi** ({swing_pooled['n_trades']} sinyal BUY, "
