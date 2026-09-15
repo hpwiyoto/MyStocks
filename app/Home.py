@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 
-from app.auth import require_login
+from app.auth import is_logged_in, require_login
 from app.data import (
     load_data_freshness,
     load_ihsg_history,
@@ -187,7 +187,10 @@ with d1:
         """,
         unsafe_allow_html=True,
     )
-    st.metric("🟢 Posisi aktif", count_active_positions(st.user.email))
+    if is_logged_in():
+        st.metric("🟢 Posisi aktif", count_active_positions(st.user.email))
+    else:
+        st.caption("🔒 Login untuk melihat posisi aktif Anda.")
     if st.button("Buka Posisi Saya →", key="goto_posisi", width="stretch"):
         st.switch_page("pages/3_📌_Posisi_Saya.py")
 

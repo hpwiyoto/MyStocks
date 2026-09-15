@@ -95,6 +95,21 @@ def _upsert_approved(engine, email: str, name: str) -> None:
             conn.execute(update(app_users).where(app_users.c.email == email).values(status="approved"))
 
 
+def is_logged_in() -> bool:
+    """Guard for any `st.user.email`/`st.user.name` read on a page that
+    allows the guest preview (require_login's default) -- a guest within
+    their free-preview window never gets this far into is-logged-in
+    territory in the auth flow itself, but the PAGE's own later code can
+    still be reached and crash on `st.user.email` with an AttributeError
+    if it doesn't check this first (found live: Home's position-count
+    badge, Detail Saham's and Swing's mark-as-bought controls). Pages
+    whose ENTIRE content is inherently per-user (e.g. Posisi Saya) should
+    use `require_login(page_name, allow_guest_preview=False)` instead --
+    this helper is for a page that's otherwise fine to preview, but has
+    ONE feature that genuinely needs a real logged-in user."""
+    return getattr(st.user, "is_logged_in", False)
+
+
 def require_login(page_name: str, allow_guest_preview: bool = True) -> None:
     is_logged_in = getattr(st.user, "is_logged_in", False)
 

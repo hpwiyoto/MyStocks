@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 import ta
 from plotly.subplots import make_subplots
 
-from app.auth import require_login
+from app.auth import is_logged_in, require_login
 from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, load_wyckoff_status, selected_swing_model_version
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge, wyckoff_badge
 from app.positions import has_active_position, mark_position
@@ -224,7 +224,9 @@ if row is not None:
     # decide to buy on their own judgment regardless of what this
     # particular decision says; entry/SL/TP are already computed for
     # every row here (decide() always returns them), not just BUY ones.
-    if has_active_position(st.user.email, selected):
+    if not is_logged_in():
+        st.caption("🔒 Login untuk menandai saham ini sebagai sudah dibeli.")
+    elif has_active_position(st.user.email, selected):
         st.caption("📌 Sudah ditandai sebagai posisi aktif -- lihat halaman **Posisi Saya**.")
     elif st.button("📌 Tandai Saya Beli Ini", key="mark_bought"):
         mark_position(

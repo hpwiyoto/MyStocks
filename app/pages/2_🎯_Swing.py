@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_login
+from app.auth import is_logged_in, require_login
 from app.data import best_swing_config_id, load_data_freshness, load_ihsg_trend, load_latest_predictions, load_liquidity, load_live_prices, load_model_metadata, load_suspended_tickers, load_wyckoff_status
 from app.positions import has_active_position, mark_position
 from app.style import SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, format_traded_value, inject_base_css, liquidity_sidebar_filter, regime_badge, render_developer_footer, render_ihsg_context, swing_confidence_badge
@@ -362,7 +362,9 @@ for row_chunk in rows:
             # directly from Swing (not only from Detail Saham), and NOT
             # gated on decision=="BUY" -- a user may buy on their own
             # judgment regardless of what this row's decision says.
-            if has_active_position(st.user.email, r["stock_code"]):
+            if not is_logged_in():
+                bd2.button("🔒 Login untuk tandai", key=f"marklocked_{r['stock_code']}", width="stretch", disabled=True)
+            elif has_active_position(st.user.email, r["stock_code"]):
                 bd2.button("📌 Sudah Ditandai", key=f"marked_{r['stock_code']}", width="stretch", disabled=True)
             elif bd2.button("📌 Tandai Beli", key=f"mark_{r['stock_code']}", width="stretch"):
                 _wyckoff_at_mark = load_wyckoff_status(r["stock_code"])
@@ -455,7 +457,9 @@ with st.expander("📌 Tandai saham dari daftar di atas sebagai sudah dibeli"):
     }
     _mark_label = st.selectbox("Pilih saham", list(_mark_options.keys()), key="mark_from_table_select")
     _mark_row = _mark_options[_mark_label]
-    if has_active_position(st.user.email, _mark_row["stock_code"]):
+    if not is_logged_in():
+        st.caption("🔒 Login untuk menandai saham sebagai sudah dibeli.")
+    elif has_active_position(st.user.email, _mark_row["stock_code"]):
         st.caption(f"📌 {_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
     elif st.button("📌 Tandai Beli", key="mark_from_table_btn"):
         _wyckoff_at_mark = load_wyckoff_status(_mark_row["stock_code"])

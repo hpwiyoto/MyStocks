@@ -19,7 +19,12 @@ STATUS_SORT_ORDER = {"target_hit": 0, "stop_hit": 0, "warning": 1, "expired": 2,
 
 st.set_page_config(page_title="MyStocks — Posisi Saya", page_icon="📌", layout="wide")
 inject_base_css()
-require_login("Posisi Saya")
+# allow_guest_preview=False: this whole page's content is per-user
+# (tracked positions keyed by st.user.email below) -- there is no
+# sensible guest preview of "someone else's positions", and letting a
+# not-yet-logged-in visitor reach it via their free preview pages would
+# hit st.user.email with no such attribute set at all (found live).
+require_login("Posisi Saya", allow_guest_preview=False)
 render_developer_footer()
 
 if st.button("← Kembali ke Home"):
