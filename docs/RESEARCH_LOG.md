@@ -92,13 +92,31 @@ Urutan logis (bukan sekadar kronologis) dari akar masalah ke solusi final:
 6. **`965bd56` → `ead138b`** ✅ — Verifikasi fine-sweep: t7_h10 punya
    peak bersih di eta=0,03 (real finding, diadopsi pagi ini). t5_h5
    TIDAK punya peak bersih (noise, tetap pakai hyperparameter lama).
-7. **`06bf136` / `292efbc` / `5811374`** ❌ (trilogi "apakah parameter
-   dasar sudah optimal") — RSI/MFI/CMF/ATR/BB window (14/14/20/14/20):
-   TIDAK ada yang lebih baik (25 kandidat, semua lebih buruk -- ini
-   adalah default industri Wilder/`ta` library, bukan pilihan ad-hoc).
-   ADX/RVOL/VWAP/structure window: sama, tidak ada yang menang. Regime
-   classification threshold: 10 dari 11 kandidat lebih buruk, 1 nyaris
-   sama (bukan temuan nyata, di dalam noise fold-to-fold).
+7. **`06bf136` / `292efbc` / `5811374` / `4fe683a` / `a2cd6d5`** ❌
+   (trilogi "apakah parameter dasar sudah optimal", SEKARANG TUNTAS
+   PENUH) — RSI/MFI/CMF/ATR/BB window (14/14/20/14/20): TIDAK ada yang
+   lebih baik (25 kandidat, semua lebih buruk -- ini adalah default
+   industri Wilder/`ta` library, bukan pilihan ad-hoc). ADX/RVOL/VWAP/
+   structure window: sama, tidak ada yang menang. Regime classification
+   threshold: 10 dari 11 kandidat lebih buruk, 1 nyaris sama (bukan
+   temuan nyata, di dalam noise fold-to-fold). relative_strength_20d_pct
+   / sector_relative_strength_20d_pct window (`4fe683a`, 2026-09-16):
+   sama, tidak ada yang menang (window=40 tampak +0,07pp tapi lebih
+   kecil dari ambang noise yang sudah ditetapkan di atas) -- ditemukan
+   & diperbaiki bug nyata di tengah jalan (kolom sektor 100% NaN akibat
+   index tanggal salah). pattern_similarity window/threshold
+   (`a2cd6d5`, 2026-09-16) — kasus paling menarik: karena biayanya
+   kuadratik (~3 jam/kandidat di skala penuh, bukan 541 detik seperti
+   yang tertulis salah di docstring modulnya sendiri -- itu angka
+   algoritma cKDTree yang DITOLAK, bukan yang dipakai), dipakai skema
+   dua tahap (screening di subsample 350 ticker → konfirmasi cuma
+   pemenang di skala penuh). Screening SEMPAT menunjukkan window=15
+   unggul +2,56pp (jauh di atas noise level test lain) -- begitu
+   dikonfirmasi di skala 900 ticker penuh, ternyata JUSTRU -0,81pp DI
+   BAWAH baseline. Bank kecil membuat window pendek terlihat menang
+   secara palsu (lebih banyak match "kebetulan" saat match asli langka).
+   Skema dua tahap berhasil menangkap false positive ini sebelum jadi
+   keputusan produksi.
 8. **`bcb7c8a` / `f08385f`** ❌ — Slope window (3d/5d/10d) dan pilihan
    MA (SMA50/EMA9-20): individual kelihatan menang, tapi begitu
    dikombinasikan JUSTRU LEBIH BURUK dari baseline (klasik jebakan
@@ -280,10 +298,12 @@ pooled bukan rata-rata fold (`b8f0ae8`).
 | Window RSI/MFI/CMF/ATR/BB | ✅ ya | ❌ sudah optimal (default industri) (`06bf136`) |
 | Bahaya suspend/freeze saham | ✅ ya | Rate nyata ~2,25% ditemukan, dimitigasi via exclusion (`c5c6f48`, `574f2e9`) |
 | Turnaround v2 (3 bulan, +20%) | ✅ ya | Lebih baik dari Turnaround lama, TAPI kalah dari Swing -- Turnaround dipensiunkan (`eafceba`) |
+| Window relative_strength/sector_relative_strength (vs 20 hari) | ✅ ya | ❌ sudah optimal, tidak ada yang menang (`4fe683a`, 2026-09-16) |
+| Window/threshold pattern_similarity (vs 20/10/0,85) | ✅ ya (2 tahap: screening + konfirmasi) | ❌ sudah optimal -- screening SEMPAT menunjukkan window=15 menang, tapi TERBANTAH di konfirmasi skala penuh (artefak subsample) (`a2cd6d5`, 2026-09-16) |
 
 ---
 
-*Dokumen ini mencakup commit `e75cd48..cca093f` (2026-09-08 s/d
-2026-09-15). Untuk pekerjaan setelah tanggal ini, jalankan
-`git log --oneline cca093f..HEAD` dan pertimbangkan menambah thread baru
+*Dokumen ini mencakup commit `e75cd48..a2cd6d5` (2026-09-08 s/d
+2026-09-16). Untuk pekerjaan setelah tanggal ini, jalankan
+`git log --oneline a2cd6d5..HEAD` dan pertimbangkan menambah thread baru
 di sini alih-alih membuat dokumen terpisah lagi.*
