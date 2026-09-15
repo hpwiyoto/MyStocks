@@ -33,6 +33,12 @@ XGB_PARAMS (which itself changed independently when the default config
 got re-tuned -- decoupling here specifically prevents that change from
 silently also changing these 3 variants that were never re-verified).
 
+Updated again 2026-09-15: scripts/verify_variants_hyperparams_finesweep.py
+fine-swept the two remaining "unconfirmed" leads. t7_h10's eta=0.03 showed
+a clean peak (same diagnostic as the default config's own confirmation) --
+ADOPTED. t5_h5's min_child_weight=5 showed no clean peak, just noise --
+NOT adopted, stays on LEGACY_HYPERPARAMS.
+
 Threshold picked automatically per config (not eyeballed per curve, so
 this stays reproducible across configs): among thresholds in the pooled
 walk-forward sweep with an estimated >=1.0 BUY signals/day (the same
@@ -84,12 +90,16 @@ LEGACY_HYPERPARAMS = {"max_depth": 3, "eta": 0.05, "min_child_weight": 1, "subsa
 # +2.19pp pooled Wilson LB vs LEGACY_HYPERPARAMS, comparable magnitude to
 # the default config's own VERIFIED (fine-sweep-checked) finding.
 T10_H10_HYPERPARAMS = {"max_depth": 4, "eta": 0.05, "min_child_weight": 5, "subsample": 0.8, "colsample_bytree": 0.8}
+# t7_h10's own re-tuned winner, CONFIRMED via fine eta sweep 2026-09-15
+# (scripts/verify_variants_hyperparams_finesweep.py: clean peak at eta=0.03,
+# same signature that confirmed the default config's own finding).
+T7_H10_HYPERPARAMS = {"max_depth": 4, "eta": 0.03, "min_child_weight": 1, "subsample": 0.8, "colsample_bytree": 0.8}
 
 # (target_pct, stop_pct, horizon, model_version, rank/lift, hyperparams)
 VARIANTS = [
     (0.07, 0.035, 5, "direction_xgboost_v5_t7_h5", 2, 0.202931, LEGACY_HYPERPARAMS),
     (0.10, 0.050, 10, "direction_xgboost_v5_t10_h10", 3, 0.189419, T10_H10_HYPERPARAMS),
-    (0.07, 0.035, 10, "direction_xgboost_v5_t7_h10", 4, 0.183642, LEGACY_HYPERPARAMS),
+    (0.07, 0.035, 10, "direction_xgboost_v5_t7_h10", 4, 0.183642, T7_H10_HYPERPARAMS),
     (0.05, 0.025, 5, "direction_xgboost_v5_t5_h5", 5, 0.176246, LEGACY_HYPERPARAMS),
 ]
 
@@ -140,6 +150,24 @@ def _pick_threshold(sweep: pd.DataFrame) -> dict:
             best = candidates.loc[candidates["wilson_lb"].idxmax()]
             return best.to_dict()
     return sweep.iloc[0].to_dict()
+
+
+def _hyperparam_provenance_note(xgb_params) -> str:
+    def _matches(reference):
+        return all(xgb_params.get(k) == v for k, v in reference.items()
+                   if k in ("max_depth", "eta", "min_child_weight"))
+
+    if _matches(T10_H10_HYPERPARAMS):
+        return ("independently re-tuned for THIS config specifically (scripts/tune_v5_variants_hyperparams.py, "
+                "+2.19pp pooled Wilson LB over the original shared defaults)")
+    if _matches(T7_H10_HYPERPARAMS):
+        return ("independently re-tuned for THIS config specifically and CONFIRMED via fine eta sweep "
+                "(scripts/tune_v5_variants_hyperparams.py found the lead, scripts/verify_variants_hyperparams_"
+                "finesweep.py confirmed a clean peak at eta=0.03 -- same diagnostic as the default config's "
+                "own confirmed finding)")
+    return ("kept at the original shared defaults (scripts/tune_v5_variants_hyperparams.py found an apparent "
+            "improvement for this config too, but scripts/verify_variants_hyperparams_finesweep.py's fine "
+            "sweep showed no clean peak -- noise, not adopted)")
 
 
 def train_variant(target_pct, stop_pct, horizon, model_version, features, prices, xgb_params):
@@ -208,13 +236,7 @@ def train_variant(target_pct, stop_pct, horizon, model_version, features, prices
             "(direction_xgboost_v5, target=10%/stop=5%/horizon=5d) from scripts/search_swing_target.py's "
             "search -- direct user request for a toggle between the top-5 configs, not just the single "
             "winner. Same feature set as the winner. Hyperparameters "
-            + ("independently re-tuned for THIS config specifically (scripts/tune_v5_variants_hyperparams.py, "
-               "+2.19pp pooled Wilson LB over the original shared defaults)"
-               if xgb_params.get("max_depth") == T10_H10_HYPERPARAMS["max_depth"] and xgb_params.get("eta") == T10_H10_HYPERPARAMS["eta"]
-               and xgb_params.get("min_child_weight") == T10_H10_HYPERPARAMS["min_child_weight"]
-               else "kept at the original shared defaults (scripts/tune_v5_variants_hyperparams.py found an "
-                    "apparent improvement for this config too, but it hasn't had the same fine-sweep "
-                    "robustness check the default/t10_h10 configs got, so not yet adopted)")
+            + _hyperparam_provenance_note(xgb_params)
             + "; threshold independently re-tuned for THIS target via scripts/train_v5_variants.py's own "
               "pooled walk-forward sweep, picked to keep an estimated >=1 BUY signal/day where the sweep allows it."
         ),
