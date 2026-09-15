@@ -139,6 +139,8 @@ Halaman yang menyaring & menggabungkan hasil Swing + Turnaround + Momentum Scree
 
 ## Riset & Backtest
 
+> 📄 **[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)** mengonsolidasikan seluruh riset lintas-sesi (target/horizon Swing, feature engineering, Turnaround v2, manajemen risiko) per-TEMA supaya mudah dikorelasikan -- daftar di bawah ini tetap ada untuk skrip-skrip yang lebih lama/berdiri sendiri.
+
 Skrip di `scripts/` yang bukan bagian dari pipeline harian, tapi mendokumentasikan validasi empiris di balik keputusan desain -- semuanya dijalankan dan hasilnya nyata, bukan asumsi:
 
 - `test_feature_pruning.py`, `test_foreign_flow_feature.py`, `test_macd_zscore_feature.py` — apakah fitur tertentu benar-benar menambah akurasi model (kadang tidak, meski "terasa" seharusnya membantu).

@@ -1,5 +1,7 @@
 # MyStocks — Prompt Pembangunan Bertahap
 
+> 📄 Pekerjaan riset setelah FASE 7 (target/horizon Swing, feature engineering, Turnaround v2, dll — 40+ commit lintas-sesi) dikonsolidasikan per-tema di **[docs/RESEARCH_LOG.md](RESEARCH_LOG.md)**, bukan ditambahkan sebagai FASE 8 di sini — dokumen itu lebih mudah dikorelasikan karena disusun per topik, bukan kronologis.
+
 Dokumen ini berisi prompt siap-pakai untuk membangun MyStocks part-by-part, sesuai arsitektur dan keputusan yang sudah dibahas (Colab = research, Codespaces = build, VPS = production; yfinance sebagai satu-satunya sumber data; XGBoost vs LightGBM via walk-forward; target probabilistik; UI Streamlit profesional).
 
 **Riwayat keputusan:** Stooq (fallback OHLCV) dan data resmi IDX (foreign flow via impor CSV manual) sempat dicoba di Fase 1, tapi di-drop — keduanya menambah kompleksitas operasional (proteksi anti-bot di sisi Stooq/IDX, dan kebutuhan impor manual rutin) yang tidak sepadan untuk tahap ini. Scope disederhanakan jadi yfinance-only. Fitur money-flow (CMF/OBV/MFI) tetap ada di Fase 2, dihitung murni dari OHLCV.
