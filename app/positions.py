@@ -4,6 +4,7 @@ read-only (see its own docstring); marking/closing a position is a
 mutation, not a cached query, so it doesn't belong there.
 """
 import datetime as dt
+import zoneinfo
 
 import pandas as pd
 import streamlit as st
@@ -12,6 +13,8 @@ from sqlalchemy import select, update
 from app.db import init_schema, tracked_positions
 from engine.early_warning import check_position
 from pipeline.db import get_engine
+
+WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
 
 # Status shown per tracked position -- direct user request ("dtambah
 # statusnya... supaya ada progress prediksinya"), a single at-a-glance
@@ -111,6 +114,27 @@ def mark_position(
     st.cache_data.clear()
 
 
+def _record_first_hit(position_id: int, column: str) -> dt.datetime:
+    """Persists `column` (target_hit_at/stop_hit_at) as NOW in WIB -- the
+    first moment THIS APP noticed the crossing, not the true market-
+    crossing instant (see tracked_positions' docstring in app/db.py for
+    why: no continuous intraday poller exists, only on-demand checks on
+    page load). First write wins -- if it's already set, returns the
+    existing value untouched rather than creeping it forward on a later
+    visit that's still past target/stop.
+    """
+    engine = get_engine()
+    now = dt.datetime.now(WIB).replace(tzinfo=None, microsecond=0)
+    with engine.begin() as conn:
+        existing = conn.execute(
+            select(getattr(tracked_positions.c, column)).where(tracked_positions.c.id == position_id)
+        ).scalar()
+        if existing is not None:
+            return existing
+        conn.execute(update(tracked_positions).where(tracked_positions.c.id == position_id).values(**{column: now}))
+    return now
+
+
 def close_position(position_id: int, closed_price: float, closed_reason: str) -> None:
     engine = get_engine()
     with engine.begin() as conn:
@@ -148,7 +172,9 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
     check_position, days_held, an overall `status` (STATUS_LABELS key),
     and a `current_` snapshot (probability/regime/wyckoff_phase) to
     compare against the `entry_` snapshot taken when the position was
-    marked -- direct user request for an entry-vs-now comparison."""
+    marked -- direct user request for an entry-vs-now comparison. Also
+    persists (and returns) target_hit_at/stop_hit_at the first time
+    either is observed -- see _record_first_hit's docstring."""
     positions = _load_positions_raw(user_email, status)
     if positions.empty:
         return positions
@@ -159,6 +185,7 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
     live_prices = load_live_prices(codes)
 
     rows = []
+    newly_detected = False
     for _, pos in positions.iterrows():
         code = pos["stock_code"]
         feat_row = load_latest_feature_row(code) or {}
@@ -206,5 +233,20 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
         row["current_decision"] = current_snapshot.get("decision")
         row["current_regime"] = current_snapshot.get("regime")
         row["current_wyckoff_phase"] = current_wyckoff.get("wyckoff_phase")
+
+        # First-detection timestamp -- see _record_first_hit's docstring.
+        # Checked/written here (not a separate background job) because
+        # this IS the only place current_price ever gets computed for a
+        # position; pd.isna also catches positions marked before these
+        # columns existed (NULL in the DB, not just "not yet hit").
+        if row["status"] == "target_hit" and pd.isna(row.get("target_hit_at")):
+            row["target_hit_at"] = _record_first_hit(int(pos["id"]), "target_hit_at")
+            newly_detected = True
+        elif row["status"] == "stop_hit" and pd.isna(row.get("stop_hit_at")):
+            row["stop_hit_at"] = _record_first_hit(int(pos["id"]), "stop_hit_at")
+            newly_detected = True
+
         rows.append(row)
+    if newly_detected:
+        _load_positions_raw.clear()
     return pd.DataFrame(rows)

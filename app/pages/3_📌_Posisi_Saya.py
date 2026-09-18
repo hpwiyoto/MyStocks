@@ -147,9 +147,23 @@ with tab_active:
                         icon="⚠️",
                     )
                 elif pos["status"] == "target_hit":
-                    st.success("🎯 Harga sudah menyentuh/melewati Take Profit -- pertimbangkan tutup posisi ini.", icon="🎯")
+                    hit_at = pos.get("target_hit_at")
+                    hit_txt = f" -- pertama terdeteksi pada **{hit_at:%d %b %Y, %H:%M} WIB**" if pd.notna(hit_at) else ""
+                    st.success(
+                        f"🎯 Harga sudah menyentuh/melewati Take Profit{hit_txt} -- pertimbangkan tutup posisi ini. "
+                        "(Waktu terdeteksi, bukan momen persisnya tersentuh di market -- aplikasi ini cuma cek "
+                        "saat halaman ini dibuka, tidak memantau intraday terus-menerus.)",
+                        icon="🎯",
+                    )
                 elif pos["status"] == "stop_hit":
-                    st.error("🛑 Harga sudah menyentuh/melewati Stop Loss -- pertimbangkan tutup posisi ini.", icon="🛑")
+                    hit_at = pos.get("stop_hit_at")
+                    hit_txt = f" -- pertama terdeteksi pada **{hit_at:%d %b %Y, %H:%M} WIB**" if pd.notna(hit_at) else ""
+                    st.error(
+                        f"🛑 Harga sudah menyentuh/melewati Stop Loss{hit_txt} -- pertimbangkan tutup posisi ini. "
+                        "(Waktu terdeteksi, bukan momen persisnya tersentuh di market -- aplikasi ini cuma cek "
+                        "saat halaman ini dibuka, tidak memantau intraday terus-menerus.)",
+                        icon="🛑",
+                    )
                 elif pos["status"] == "expired":
                     st.warning(
                         "⏳ Sudah melewati perkiraan jendela waktu prediksi model untuk saham ini -- "
