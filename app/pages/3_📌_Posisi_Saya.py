@@ -147,21 +147,19 @@ with tab_active:
                         icon="⚠️",
                     )
                 elif pos["status"] == "target_hit":
-                    hit_at = pos.get("target_hit_at")
-                    hit_txt = f" -- pertama terdeteksi pada **{hit_at:%d %b %Y, %H:%M} WIB**" if pd.notna(hit_at) else ""
+                    hit_date = pos.get("target_hit_date")
+                    hit_txt = f" pada **{hit_date:%d %b %Y}**" if hit_date is not None else ""
                     st.success(
-                        f"🎯 Harga sudah menyentuh/melewati Take Profit{hit_txt} -- pertimbangkan tutup posisi ini. "
-                        "(Waktu terdeteksi, bukan momen persisnya tersentuh di market -- aplikasi ini cuma cek "
-                        "saat halaman ini dibuka, tidak memantau intraday terus-menerus.)",
+                        f"🎯 Take Profit tercapai{hit_txt} -- pertimbangkan tutup posisi ini. "
+                        "(Tanggal dari harga tertinggi harian sejak beli, bukan dari saat halaman ini dibuka.)",
                         icon="🎯",
                     )
                 elif pos["status"] == "stop_hit":
-                    hit_at = pos.get("stop_hit_at")
-                    hit_txt = f" -- pertama terdeteksi pada **{hit_at:%d %b %Y, %H:%M} WIB**" if pd.notna(hit_at) else ""
+                    hit_date = pos.get("stop_hit_date")
+                    hit_txt = f" pada **{hit_date:%d %b %Y}**" if hit_date is not None else ""
                     st.error(
-                        f"🛑 Harga sudah menyentuh/melewati Stop Loss{hit_txt} -- pertimbangkan tutup posisi ini. "
-                        "(Waktu terdeteksi, bukan momen persisnya tersentuh di market -- aplikasi ini cuma cek "
-                        "saat halaman ini dibuka, tidak memantau intraday terus-menerus.)",
+                        f"🛑 Stop Loss tercapai{hit_txt} -- pertimbangkan tutup posisi ini. "
+                        "(Tanggal dari harga terendah harian sejak beli, bukan dari saat halaman ini dibuka.)",
                         icon="🛑",
                     )
                 elif pos["status"] == "expired":

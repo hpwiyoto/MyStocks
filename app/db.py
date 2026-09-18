@@ -67,19 +67,15 @@ tracked_positions = Table(
     Column("closed_date", Date),
     Column("closed_price", Numeric(14, 2)),
     Column("closed_reason", String(20)),  # target_hit / stop_hit / early_warning / manual / expired
-    # WIB wall-clock timestamp of the first time THIS APP noticed the
-    # price had crossed take_profit_price/stop_loss_price -- direct user
-    # request for a date+time on "target tercapai" instead of just a
-    # same-every-visit banner. Deliberately "first detected", not the
-    # true market-crossing instant: this app has no continuous intraday
-    # price poller (the only scheduled job runs once/day after close, see
-    # scripts/scheduler_loop.py), only on-demand checks whenever someone
-    # happens to open Posisi Saya -- see app.positions._record_first_hit.
-    # NULL until that first detection; never overwritten after (first
-    # write wins, so a later still-above-target visit doesn't creep the
-    # timestamp forward).
-    Column("target_hit_at", DateTime),
-    Column("stop_hit_at", DateTime),
+    # NOTE: target/stop-hit DATE is deliberately NOT a stored column here.
+    # An earlier version of this feature persisted a "first detected"
+    # timestamp (whenever someone happened to open Posisi Saya after the
+    # crossing) -- direct user correction: that's the date the app was
+    # OPENED, not the date it actually happened in the market. It's
+    # computed live instead from price_history's daily high/low since
+    # entry_date -- see app.positions._find_hit_dates -- which gives the
+    # real historical date for free (already-stored daily OHLC) with no
+    # schema/caching to keep in sync.
     Column("created_at", DateTime, server_default=func.now()),
 )
 
@@ -95,8 +91,6 @@ _TRACKED_POSITIONS_ADDED_COLUMNS = {
     "entry_target_pct": "NUMERIC(6,4)",
     "entry_stop_pct": "NUMERIC(6,4)",
     "entry_horizon_days": "INTEGER",
-    "target_hit_at": "DATETIME",
-    "stop_hit_at": "DATETIME",
 }
 
 

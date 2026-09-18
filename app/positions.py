@@ -4,17 +4,14 @@ read-only (see its own docstring); marking/closing a position is a
 mutation, not a cached query, so it doesn't belong there.
 """
 import datetime as dt
-import zoneinfo
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from app.db import init_schema, tracked_positions
 from engine.early_warning import check_position
 from pipeline.db import get_engine
-
-WIB = zoneinfo.ZoneInfo("Asia/Jakarta")
 
 # Status shown per tracked position -- direct user request ("dtambah
 # statusnya... supaya ada progress prediksinya"), a single at-a-glance
@@ -39,15 +36,28 @@ STATUS_LABELS = {
 CALENDAR_TO_TRADING_DAY_BUFFER = 1.5
 
 
-def _position_status(current_price: float | None, entry_price: float, stop_loss_price: float,
-                      take_profit_price: float, days_held: int | None, horizon_days: int | None,
-                      warning: bool) -> str:
+def _position_status(current_price: float | None, entry_price: float, days_held: int | None,
+                      horizon_days: int | None, warning: bool,
+                      target_hit_date: dt.date | None, stop_hit_date: dt.date | None) -> str:
+    """target_hit_date/stop_hit_date (from _find_hit_dates -- the ACTUAL
+    historical date the daily high/low crossed that level, not just
+    whether TODAY's current_price happens to be past it) are the
+    authoritative source for these two states: a position that touched
+    target three days ago and has since pulled back below it again is
+    still correctly "target_hit", something a current-price-only check
+    would silently miss. If both fired, the earlier date is treated as
+    what actually happened first (ties -- both on the same daily bar,
+    i.e. that day's range spans both levels -- favor stop_hit: daily
+    OHLC alone can't tell which was touched first within the day, and
+    assuming the protective stop is the conservative read)."""
+    if target_hit_date and stop_hit_date:
+        return "stop_hit" if stop_hit_date <= target_hit_date else "target_hit"
+    if target_hit_date:
+        return "target_hit"
+    if stop_hit_date:
+        return "stop_hit"
     if current_price is None:
         return "on_track"
-    if current_price >= take_profit_price:
-        return "target_hit"
-    if current_price <= stop_loss_price:
-        return "stop_hit"
     if days_held is not None and horizon_days is not None and days_held > horizon_days * CALENDAR_TO_TRADING_DAY_BUFFER:
         return "expired"
     if warning:
@@ -55,6 +65,40 @@ def _position_status(current_price: float | None, entry_price: float, stop_loss_
     if current_price < entry_price:
         return "under_pressure"
     return "on_track"
+
+
+def _find_hit_dates(stock_code: str, entry_date: dt.date, stop_loss_price: float,
+                     take_profit_price: float) -> tuple[dt.date | None, dt.date | None]:
+    """Scans price_history's daily high/low from entry_date onward for
+    the REAL date target/stop was actually crossed -- computed fresh
+    from stored daily OHLC on every call (cheap: one short date-range
+    query per position). Replaces an earlier "first noticed whenever
+    this app happened to be opened" timestamp -- direct user correction:
+    that recorded when someone LOOKED, not when it actually happened in
+    the market. A daily bar has no intraday order, so within any one day
+    "high >= target" and "low <= stop" are independent checks -- see
+    _position_status for how a same-day tie between the two is resolved.
+    Returns (target_hit_date, stop_hit_date), either None if the stored
+    history never crossed that level since entry.
+    """
+    engine = get_engine()
+    df = pd.read_sql(
+        text("""
+        SELECT date, high, low FROM price_history
+        WHERE stock_code = :code AND date >= :entry_date AND source_provider = 'yfinance'
+        ORDER BY date
+        """),
+        engine,
+        params={"code": stock_code, "entry_date": entry_date.isoformat()},
+    )
+    if df.empty:
+        return None, None
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+    target_hits = df.loc[df["high"].astype(float) >= take_profit_price, "date"]
+    stop_hits = df.loc[df["low"].astype(float) <= stop_loss_price, "date"]
+    target_date = target_hits.iloc[0] if not target_hits.empty else None
+    stop_date = stop_hits.iloc[0] if not stop_hits.empty else None
+    return target_date, stop_date
 
 
 def has_active_position(user_email: str, stock_code: str) -> bool:
@@ -114,27 +158,6 @@ def mark_position(
     st.cache_data.clear()
 
 
-def _record_first_hit(position_id: int, column: str) -> dt.datetime:
-    """Persists `column` (target_hit_at/stop_hit_at) as NOW in WIB -- the
-    first moment THIS APP noticed the crossing, not the true market-
-    crossing instant (see tracked_positions' docstring in app/db.py for
-    why: no continuous intraday poller exists, only on-demand checks on
-    page load). First write wins -- if it's already set, returns the
-    existing value untouched rather than creeping it forward on a later
-    visit that's still past target/stop.
-    """
-    engine = get_engine()
-    now = dt.datetime.now(WIB).replace(tzinfo=None, microsecond=0)
-    with engine.begin() as conn:
-        existing = conn.execute(
-            select(getattr(tracked_positions.c, column)).where(tracked_positions.c.id == position_id)
-        ).scalar()
-        if existing is not None:
-            return existing
-        conn.execute(update(tracked_positions).where(tracked_positions.c.id == position_id).values(**{column: now}))
-    return now
-
-
 def close_position(position_id: int, closed_price: float, closed_reason: str) -> None:
     engine = get_engine()
     with engine.begin() as conn:
@@ -173,8 +196,8 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
     and a `current_` snapshot (probability/regime/wyckoff_phase) to
     compare against the `entry_` snapshot taken when the position was
     marked -- direct user request for an entry-vs-now comparison. Also
-    persists (and returns) target_hit_at/stop_hit_at the first time
-    either is observed -- see _record_first_hit's docstring."""
+    adds target_hit_date/stop_hit_date -- the actual historical date
+    each was crossed, from _find_hit_dates, not just today's price."""
     positions = _load_positions_raw(user_email, status)
     if positions.empty:
         return positions
@@ -185,7 +208,6 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
     live_prices = load_live_prices(codes)
 
     rows = []
-    newly_detected = False
     for _, pos in positions.iterrows():
         code = pos["stock_code"]
         feat_row = load_latest_feature_row(code) or {}
@@ -205,6 +227,11 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
         if current_price is not None and feat_row:
             warn = check_position(entry_price, feat_row, float(current_price))
         warning = bool(warn and warn["warning"])
+
+        target_hit_date, stop_hit_date = (
+            _find_hit_dates(code, entry_date, stop_loss_price, take_profit_price)
+            if isinstance(entry_date, dt.date) else (None, None)
+        )
 
         # Prefer the SNAPSHOT taken at mark-time (immune to the default
         # config being retrained in place later, see app/db.py) -- fall
@@ -228,25 +255,12 @@ def load_positions_with_progress(user_email: str, status: str | None = "active")
         row["pct_to_target"] = (take_profit_price - current_price) / current_price * 100 if current_price is not None else None
         row["warning"] = warning
         row["warning_detail"] = warn
-        row["status"] = _position_status(current_price, entry_price, stop_loss_price, take_profit_price, days_held, horizon_days, warning)
+        row["status"] = _position_status(current_price, entry_price, days_held, horizon_days, warning, target_hit_date, stop_hit_date)
+        row["target_hit_date"] = target_hit_date
+        row["stop_hit_date"] = stop_hit_date
         row["current_probability"] = current_snapshot.get("probability")
         row["current_decision"] = current_snapshot.get("decision")
         row["current_regime"] = current_snapshot.get("regime")
         row["current_wyckoff_phase"] = current_wyckoff.get("wyckoff_phase")
-
-        # First-detection timestamp -- see _record_first_hit's docstring.
-        # Checked/written here (not a separate background job) because
-        # this IS the only place current_price ever gets computed for a
-        # position; pd.isna also catches positions marked before these
-        # columns existed (NULL in the DB, not just "not yet hit").
-        if row["status"] == "target_hit" and pd.isna(row.get("target_hit_at")):
-            row["target_hit_at"] = _record_first_hit(int(pos["id"]), "target_hit_at")
-            newly_detected = True
-        elif row["status"] == "stop_hit" and pd.isna(row.get("stop_hit_at")):
-            row["stop_hit_at"] = _record_first_hit(int(pos["id"]), "stop_hit_at")
-            newly_detected = True
-
         rows.append(row)
-    if newly_detected:
-        _load_positions_raw.clear()
     return pd.DataFrame(rows)
