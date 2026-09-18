@@ -54,12 +54,29 @@ def run():
     except Exception:
         logger.exception("build_features step raised unexpectedly")
 
+    # ALL 5 Swing configs, not just the default -- confirmed real gap
+    # (2026-09-18): only direction_xgboost_v5 (the default) was ever
+    # predicted here, so the other 4 configs' predictions table rows sat
+    # 4-7 days stale except when someone happened to open the Swing page
+    # with that config selected and clicked the manual refresh button.
+    # Each config isolated in its own try/except -- one config's failure
+    # (e.g. a missing/corrupt model file) must not skip the other 4.
+    from engine.swing_configs import SWING_CONFIGS
+
     predict_result = {"failures": []}
+    for _cfg in SWING_CONFIGS:
+        try:
+            from engine.predict import run as predict_run
+            _result = predict_run(model_version=_cfg["model_version"])
+            predict_result["failures"].extend(_result.get("failures") or [])
+        except Exception:
+            logger.exception("predict step raised unexpectedly for config %s", _cfg["id"])
+
     try:
-        from engine.predict import run as predict_run
-        predict_result = predict_run()
+        from scripts.notify_buy_signals import check_and_notify
+        check_and_notify()
     except Exception:
-        logger.exception("predict step raised unexpectedly")
+        logger.exception("notify_buy_signals step raised unexpectedly")
 
     try:
         from scripts.monitor import check_and_alert
