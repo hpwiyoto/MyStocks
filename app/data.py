@@ -21,6 +21,7 @@ from pipeline.db import get_engine
 from pipeline.idx_rapidapi_source import RAPIDAPI_KEY, fetch_foreign_flow_all
 from pipeline.logging_config import get_logger
 from pipeline.tickers import to_yfinance_symbol
+from scripts.special_monitoring_board import ACTIVE_TICKERS as SPECIAL_MONITORING_TICKERS
 
 logger = get_logger("app.data")
 
@@ -400,10 +401,20 @@ def load_suspended_tickers() -> set[str]:
        for 2) -- the FIRST day of a streak like this is exactly when a
        screener would otherwise flag it as a fresh opportunity, the
        precise failure mode this guards against.
+
+    3. SPECIAL MONITORING BOARD (FCA): currently listed on IDX's own
+       "Papan Pemantauan Khusus" (see scripts/special_monitoring_board.py)
+       -- trades under Full Call Auction (periodic call-auction matching)
+       instead of continuous trading, a DIFFERENT mechanism from 1/2 above
+       and NOT detectable from OHLCV shape at all (confirmed real: TGUK
+       reported un-buyable by the user despite a completely ordinary-
+       looking continuous price chart). SAFE/TRUK/PACK below are also on
+       this board independently of already being caught by reason 2.
     """
     engine = get_engine()
+    untradeable = set(SPECIAL_MONITORING_TICKERS)
     if _missing_tables(engine, ["price_history"]):
-        return set()
+        return untradeable
     cutoff = (dt.date.today() - dt.timedelta(days=15)).isoformat()
     df = pd.read_sql(
         text("""
@@ -416,9 +427,8 @@ def load_suspended_tickers() -> set[str]:
         params={"cutoff": cutoff},
     )
     if df.empty:
-        return set()
+        return untradeable
     df = _flatness_flags(df)
-    untradeable = set()
     for code, g in df.groupby("stock_code"):
         g = g.sort_values("date")
         if len(g) >= SUSPENSION_FREEZE_DAYS and g["frozen"].tail(SUSPENSION_FREEZE_DAYS).all():
@@ -429,13 +439,16 @@ def load_suspended_tickers() -> set[str]:
 
 
 def untradeable_reason(code: str) -> str | None:
-    """Which of load_suspended_tickers's two reasons applies to this ONE
+    """Which of load_suspended_tickers's three reasons applies to this ONE
     ticker (or None if it isn't currently flagged at all) -- for Detail
     Saham's banner, which needs to say WHICH one (they read very
-    differently: frozen for days vs. hit a price limit yesterday) rather
-    than reuse that function's flat exclusion set, which is deliberately
-    just a set for its 4 other callers that only ever check membership.
+    differently: frozen for days, hit a price limit yesterday, or on
+    IDX's Special Monitoring Board) rather than reuse that function's flat
+    exclusion set, which is deliberately just a set for its other callers
+    that only ever check membership.
     """
+    if code in SPECIAL_MONITORING_TICKERS:
+        return "special_monitoring"
     engine = get_engine()
     if _missing_tables(engine, ["price_history"]):
         return None

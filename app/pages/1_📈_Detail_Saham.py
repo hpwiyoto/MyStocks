@@ -204,6 +204,15 @@ elif _untradeable == "ara_streak":
         "-- lihat `app.data.untradeable_reason`.",
         icon="🚫",
     )
+elif _untradeable == "special_monitoring":
+    st.error(
+        f"🚫 **{selected} masuk Papan Pemantauan Khusus BEI (FCA)** -- diperdagangkan lewat "
+        "mekanisme Full Call Auction (lelang berkala), BUKAN perdagangan kontinu biasa, sehingga "
+        "order beli/jual Anda kemungkinan besar tidak langsung ter-eksekusi seperti saham normal "
+        "meski grafik harganya tampak biasa saja. Probabilitas/keputusan model di bawah ini "
+        "mengasumsikan perdagangan kontinu -- lihat `scripts/special_monitoring_board.py`.",
+        icon="🚫",
+    )
 
 # Current price shown unconditionally, unlike the "Entry" metric below which
 # only appears when this ticker has a swing prediction row -- a
