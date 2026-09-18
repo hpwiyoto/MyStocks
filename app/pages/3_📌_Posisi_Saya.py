@@ -171,11 +171,18 @@ with tab_active:
                     )
 
                 b1, b2, b3 = st.columns(3)
+                # take_profit_price/stop_loss_price, NOT current_price --
+                # same bug class as the date fix above: current_price is
+                # TODAY's price, but target/stop may have been crossed
+                # days ago (target_hit_date/stop_hit_date confirms when).
+                # Using current_price here would silently record a worse
+                # (or better, equally wrong) exit than what was actually
+                # available at the moment it was actually hit.
                 if b1.button("✅ Tutup: Kena Target", key=f"target_{pos['id']}", width="stretch"):
-                    close_position(int(pos["id"]), float(pos["current_price"] or pos["take_profit_price"]), "target_hit")
+                    close_position(int(pos["id"]), float(pos["take_profit_price"]), "target_hit")
                     st.rerun()
                 if b2.button("🛑 Tutup: Kena Stop", key=f"stop_{pos['id']}", width="stretch"):
-                    close_position(int(pos["id"]), float(pos["current_price"] or pos["stop_loss_price"]), "stop_hit")
+                    close_position(int(pos["id"]), float(pos["stop_loss_price"]), "stop_hit")
                     st.rerun()
                 if b3.button("🚪 Tutup Manual", key=f"manual_{pos['id']}", width="stretch"):
                     close_position(int(pos["id"]), float(pos["current_price"] or pos["entry_price"]), "manual")
