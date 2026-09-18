@@ -1,3 +1,4 @@
+import datetime as dt
 import os
 import re
 import sys
@@ -12,6 +13,7 @@ from app.data import load_manual_exclusion_tickers
 from app.db import app_users, init_schema, manual_ticker_exclusion
 from app.style import inject_base_css, render_developer_footer
 from pipeline.db import get_engine, upsert
+from scripts.parse_special_monitoring_pdf import active_tickers, parse_pdf_bytes
 
 st.set_page_config(page_title="MyStocks — Admin", page_icon="👤", layout="wide")
 inject_base_css()
@@ -115,7 +117,71 @@ if not manual_df.empty:
 else:
     st.caption("Belum ada data.")
 
-st.markdown("##### 🔄 Timpa Daftar (overwrite berdasarkan alasan)")
+st.markdown("##### 📄 Upload PDF Otomatis (disarankan)")
+st.caption(
+    "Upload langsung PDF resmi 'Papan Pemantauan Khusus' dari BEI -- diparse otomatis (kode saham, "
+    "tanggal masuk, tanggal keluar), ditampilkan sebagai pratinjau + perbedaan dari daftar saat ini, "
+    "baru diterapkan setelah Anda klik konfirmasi. Tidak ada yang berubah di database sampai Anda "
+    "menekan tombol 'Terapkan' di bawah."
+)
+pdf_reason = st.text_input("Alasan untuk hasil upload ini", value="special_monitoring", key="pdf_upload_reason")
+uploaded_pdf = st.file_uploader("Upload PDF", type="pdf", key="pdf_uploader")
+
+if uploaded_pdf is not None:
+    try:
+        pdf_rows, pdf_skipped = parse_pdf_bytes(uploaded_pdf.getvalue())
+    except Exception as exc:
+        st.error(f"Gagal membaca PDF ini: {exc}")
+        pdf_rows, pdf_skipped = [], []
+
+    if pdf_rows:
+        new_active = active_tickers(pdf_rows)
+        current_active = set(manual_df.loc[manual_df["reason"] == pdf_reason, "stock_code"]) if not manual_df.empty else set()
+        added = sorted(new_active - current_active)
+        removed = sorted(current_active - new_active)
+        unchanged = sorted(new_active & current_active)
+
+        st.info(
+            f"📄 {len(pdf_rows)} baris berhasil diparse, **{len(new_active)} saham sedang aktif** "
+            "(belum ada tanggal keluar) menurut PDF ini."
+        )
+        if pdf_skipped:
+            with st.expander(f"⚠️ {len(pdf_skipped)} baris terlihat seperti data tapi gagal diparse -- klik untuk cek"):
+                for s in pdf_skipped:
+                    st.text(s)
+
+        pc1, pc2, pc3 = st.columns(3)
+        pc1.metric("➕ Akan ditambahkan", len(added))
+        pc2.metric("➖ Akan dihapus (sudah keluar)", len(removed))
+        pc3.metric("= Tidak berubah", len(unchanged))
+        if added:
+            st.caption("➕ " + ", ".join(added))
+        if removed:
+            st.caption("➖ " + ", ".join(removed))
+
+        if st.button("✅ Terapkan Hasil Parsing PDF", key="pdf_apply_btn", type="primary"):
+            engine = get_engine()
+            init_schema(engine)
+            with engine.begin() as conn:
+                conn.execute(delete(manual_ticker_exclusion).where(manual_ticker_exclusion.c.reason == pdf_reason))
+                if new_active:
+                    note = f"Auto-parse PDF BEI ({dt.date.today().isoformat()})"
+                    rows_to_upsert = [{"stock_code": c, "reason": pdf_reason, "note": note} for c in sorted(new_active)]
+                    upsert(conn, manual_ticker_exclusion, rows_to_upsert, update_columns=["reason", "note"], index_elements=["stock_code"])
+            load_manual_exclusion_tickers.clear()
+            st.success(f"Berhasil menerapkan {len(new_active)} saham aktif dari PDF untuk alasan '{pdf_reason}'.")
+            st.rerun()
+    elif pdf_skipped:
+        st.warning(
+            f"Tidak ada baris valid yang berhasil diparse ({len(pdf_skipped)} baris diabaikan). "
+            "Cek isi PDF-nya di atas -- mungkin bukan PDF Papan Pemantauan Khusus, atau formatnya "
+            "beda dari yang diharapkan."
+        )
+    else:
+        st.warning("Tidak ada data yang bisa diparse dari PDF ini -- pastikan ini PDF 'Papan Pemantauan Khusus' resmi BEI.")
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+st.markdown("##### ✍️ Atau: Tempel Manual (fallback kalau upload PDF gagal / format berubah)")
 st.caption(
     "Tempel daftar kode saham lengkap (mis. dari PDF BEI terbaru) -- SEMUA baris dengan alasan yang "
     "sama akan DIHAPUS lalu diganti dengan daftar baru ini. Ini SENGAJA overwrite, bukan tambah, "
