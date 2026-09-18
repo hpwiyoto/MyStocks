@@ -20,6 +20,28 @@ from email.mime.text import MIMEText
 import streamlit as st
 
 
+def _approved_user_emails() -> list[str]:
+    """Every email currently allowed to log into MyStocks (app_users
+    status='approved') -- direct user request for BUY-signal alerts to
+    go to "the address that logs into this app" rather than one fixed
+    address in secrets.toml, so it stays correct if the admin approves
+    more people later without anyone needing to touch secrets.toml.
+    Empty list if the table doesn't exist yet or has no approved rows
+    (e.g. scripts.run_daily's very first-ever run, before anyone has
+    logged in once) -- callers fall back to the sender's own address.
+    """
+    from sqlalchemy import select
+
+    from app.db import app_users, init_schema
+    from pipeline.db import get_engine
+
+    engine = get_engine()
+    init_schema(engine)
+    with engine.connect() as conn:
+        rows = conn.execute(select(app_users.c.email).where(app_users.c.status == "approved")).fetchall()
+    return [r[0] for r in rows]
+
+
 def send_signup_notification(applicant_email: str, applicant_name: str) -> None:
     cfg = st.secrets["gmail"]
     sender = cfg["address"]
@@ -57,6 +79,14 @@ def send_buy_signal_notification(new_buys: list[dict]) -> None:
     should check `if new_buys:` themselves if they want to skip the
     SMTP round-trip entirely, but this is harmless to call regardless.
 
+    Sent to every currently-approved app user (_approved_user_emails) --
+    direct user request ("kirim emailnya ke alamat yang login ke
+    aplikasi ini"), NOT the fixed notify_to/sender address
+    send_signup_notification uses (that one stays admin-only on purpose:
+    approving signups is an admin action, but a BUY signal is relevant
+    to everyone using the app). Falls back to notify_to/sender if no one
+    is approved yet.
+
     Same "caller wraps in try/except" contract as send_signup_notification
     -- see this module's docstring.
     """
@@ -65,7 +95,7 @@ def send_buy_signal_notification(new_buys: list[dict]) -> None:
     cfg = st.secrets["gmail"]
     sender = cfg["address"]
     app_password = cfg["app_password"]
-    recipient = cfg.get("notify_to", sender)
+    recipients = _approved_user_emails() or [cfg.get("notify_to", sender)]
 
     by_config: dict[str, list[dict]] = {}
     for row in new_buys:
@@ -82,13 +112,17 @@ def send_buy_signal_notification(new_buys: list[dict]) -> None:
             )
     lines.append("\nBuka halaman Swing di aplikasi untuk detail lengkap dan menandai posisi.")
     body = "\n".join(lines)
+    subject = f"[MyStocks] {len(new_buys)} sinyal BUY baru hari ini"
 
-    msg = MIMEText(body)
-    msg["Subject"] = f"[MyStocks] {len(new_buys)} sinyal BUY baru hari ini"
-    msg["From"] = sender
-    msg["To"] = recipient
-
+    # One SMTP login, one message per recipient (own To: header) rather
+    # than one message with everyone in To: -- approved users don't need
+    # to see each other's email addresses.
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
         server.starttls()
         server.login(sender, app_password)
-        server.sendmail(sender, [recipient], msg.as_string())
+        for recipient in recipients:
+            msg = MIMEText(body)
+            msg["Subject"] = subject
+            msg["From"] = sender
+            msg["To"] = recipient
+            server.sendmail(sender, [recipient], msg.as_string())
