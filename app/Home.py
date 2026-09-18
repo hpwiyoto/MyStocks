@@ -175,7 +175,7 @@ with c2:
 
 st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
 
-d1, d2, d3 = st.columns(3)
+d1, d2, d3, d4 = st.columns(4)
 
 with d1:
     st.markdown(
@@ -222,5 +222,19 @@ with d3:
         unsafe_allow_html=True,
     )
     st.caption("Belum dibangun -- definisi target masih dalam perancangan.")
+
+with d4:
+    st.markdown(
+        """
+        <div class="mystocks-card">
+            <div class="mystocks-ticker" style="font-size:1.3rem;">🧰 Screener Kustom</div>
+            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Susun sendiri kondisi filter dari parameter apa pun (teknikal/fundamental), gaya Stockbit.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("Alat eksplorasi manual -- bukan kombinasi yang sudah terbukti backtest.")
+    if st.button("Buka Screener Kustom →", key="goto_custom_screener", width="stretch"):
+        st.switch_page("pages/8_🧰_Screener_Kustom.py")
 
 render_developer_footer()

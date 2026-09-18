@@ -481,6 +481,84 @@ def load_stock_list() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_screener_universe() -> pd.DataFrame:
+    """One row per ticker: latest feature_daily row + latest close/volume
+    from price_history + latest feature_fundamental_snapshot row + name/
+    sector + liquidity + active Swing model's probability -- the full
+    parameter pool behind the Screener Kustom page
+    (features.custom_screener.PARAM_REGISTRY).
+
+    feature_fundamental_snapshot's trailing_pe/price_to_book/
+    relative_strength_20d_pct columns are DROPPED here rather than merged
+    (feature_daily already carries its own trailing_pe/price_to_book/
+    market_cap_log, and PARAM_REGISTRY only exposes feature_daily's
+    versions) -- keeping both would mean two same-named "PE" parameters
+    with silently different values (feature_daily's copy is a stale
+    per-features-run snapshot per build_features._merge_fundamental_features;
+    the fundamental table's is whatever that table's own last refresh saw),
+    which is a worse trap than only offering one.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["feature_daily", "price_history"]):
+        return pd.DataFrame()
+
+    fd = pd.read_sql(
+        text("""
+        SELECT fd.* FROM feature_daily fd
+        INNER JOIN (
+            SELECT stock_code, MAX(date) AS max_date FROM feature_daily GROUP BY stock_code
+        ) latest ON fd.stock_code = latest.stock_code AND fd.date = latest.max_date
+        """),
+        engine,
+    )
+    if fd.empty:
+        return pd.DataFrame()
+
+    price = pd.read_sql(
+        text("""
+        SELECT ph.stock_code, ph.close, ph.volume FROM price_history ph
+        INNER JOIN (
+            SELECT stock_code, MAX(date) AS max_date FROM price_history
+            WHERE source_provider = 'yfinance' GROUP BY stock_code
+        ) latest ON ph.stock_code = latest.stock_code AND ph.date = latest.max_date
+        WHERE ph.source_provider = 'yfinance'
+        """),
+        engine,
+    )
+    df = fd.merge(price, on="stock_code", how="left")
+
+    if not _missing_tables(engine, ["feature_fundamental_snapshot"]):
+        fund = pd.read_sql(
+            text("""
+            SELECT ffs.* FROM feature_fundamental_snapshot ffs
+            INNER JOIN (
+                SELECT stock_code, MAX(snapshot_date) AS max_date
+                FROM feature_fundamental_snapshot GROUP BY stock_code
+            ) latest ON ffs.stock_code = latest.stock_code AND ffs.snapshot_date = latest.max_date
+            """),
+            engine,
+        )
+        if not fund.empty:
+            fund = fund.drop(
+                columns=["id", "snapshot_date", "created_at", "trailing_pe", "price_to_book",
+                         "relative_strength_20d_pct"],
+                errors="ignore",
+            )
+            df = df.merge(fund, on="stock_code", how="left")
+
+    df = df.merge(load_stock_list(), left_on="stock_code", right_on="code", how="left")
+    df = df.merge(load_liquidity(), on="stock_code", how="left")
+
+    preds = load_latest_predictions(model_version=selected_swing_model_version())
+    if not preds.empty:
+        df = df.merge(preds[["stock_code", "probability"]], on="stock_code", how="left")
+    else:
+        df["probability"] = pd.NA
+
+    return df
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def feature_daily_row_count() -> int:
     engine = get_engine()
     if _missing_tables(engine, ["feature_daily"]):
