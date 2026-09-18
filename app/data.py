@@ -21,7 +21,6 @@ from pipeline.db import get_engine
 from pipeline.idx_rapidapi_source import RAPIDAPI_KEY, fetch_foreign_flow_all
 from pipeline.logging_config import get_logger
 from pipeline.tickers import to_yfinance_symbol
-from scripts.special_monitoring_board import ACTIVE_TICKERS as SPECIAL_MONITORING_TICKERS
 
 logger = get_logger("app.data")
 
@@ -369,6 +368,33 @@ def _flatness_flags(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL)
+def load_manual_exclusion_tickers() -> pd.DataFrame:
+    """The admin-maintained `manual_ticker_exclusion` table (see app/db.py)
+    -- currently just the IDX Special Monitoring Board/FCA list, editable
+    live from the Admin page instead of a hardcoded Python file that
+    needed a code change + app restart to refresh (see
+    scripts/special_monitoring_board.py's docstring for the history/
+    sourcing of the data itself -- that file is now reference-only, the DB
+    table is the live source load_suspended_tickers/untradeable_reason
+    actually read). Empty DataFrame (not an error) if the table doesn't
+    exist yet or has no rows.
+    """
+    from app.db import init_schema as init_app_schema
+
+    engine = get_engine()
+    init_app_schema(engine)
+    if _missing_tables(engine, ["manual_ticker_exclusion"]):
+        return pd.DataFrame(columns=["stock_code", "reason", "note", "updated_at"])
+    df = pd.read_sql("SELECT stock_code, reason, note, updated_at FROM manual_ticker_exclusion ORDER BY stock_code", engine)
+    # SQLite has no native datetime type -- this column round-trips as a
+    # plain string ("2026-09-18 04:05:29") through pd.read_sql, which
+    # st.column_config.DatetimeColumn (Admin page) can't sort/format
+    # correctly as-is.
+    df["updated_at"] = pd.to_datetime(df["updated_at"])
+    return df
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_suspended_tickers() -> set[str]:
     """Stocks that are effectively UNTRADEABLE right now, for either of
     two distinct reasons -- both "actively misleading" for a screener to
@@ -402,17 +428,21 @@ def load_suspended_tickers() -> set[str]:
        screener would otherwise flag it as a fresh opportunity, the
        precise failure mode this guards against.
 
-    3. SPECIAL MONITORING BOARD (FCA): currently listed on IDX's own
-       "Papan Pemantauan Khusus" (see scripts/special_monitoring_board.py)
-       -- trades under Full Call Auction (periodic call-auction matching)
-       instead of continuous trading, a DIFFERENT mechanism from 1/2 above
-       and NOT detectable from OHLCV shape at all (confirmed real: TGUK
-       reported un-buyable by the user despite a completely ordinary-
-       looking continuous price chart). SAFE/TRUK/PACK below are also on
-       this board independently of already being caught by reason 2.
+    3. MANUALLY EXCLUDED (see load_manual_exclusion_tickers): currently
+       just IDX's own "Papan Pemantauan Khusus" (Special Monitoring
+       Board/FCA) -- trades under Full Call Auction (periodic call-
+       auction matching) instead of continuous trading, a DIFFERENT
+       mechanism from 1/2 above and NOT detectable from OHLCV shape at
+       all (confirmed real: TGUK reported un-buyable by the user despite
+       a completely ordinary-looking continuous price chart). SAFE/TRUK/
+       PACK are also on this board independently of already being caught
+       by reason 2. Admin-editable on the Admin page -- see
+       app/db.py's manual_ticker_exclusion docstring for why this lives in
+       the DB rather than a hardcoded file.
     """
     engine = get_engine()
-    untradeable = set(SPECIAL_MONITORING_TICKERS)
+    manual = load_manual_exclusion_tickers()
+    untradeable = set(manual["stock_code"]) if not manual.empty else set()
     if _missing_tables(engine, ["price_history"]):
         return untradeable
     cutoff = (dt.date.today() - dt.timedelta(days=15)).isoformat()
@@ -447,8 +477,11 @@ def untradeable_reason(code: str) -> str | None:
     exclusion set, which is deliberately just a set for its other callers
     that only ever check membership.
     """
-    if code in SPECIAL_MONITORING_TICKERS:
-        return "special_monitoring"
+    manual = load_manual_exclusion_tickers()
+    if not manual.empty:
+        hit = manual.loc[manual["stock_code"] == code, "reason"]
+        if not hit.empty:
+            return str(hit.iloc[0])
     engine = get_engine()
     if _missing_tables(engine, ["price_history"]):
         return None

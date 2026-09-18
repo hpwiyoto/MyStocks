@@ -98,6 +98,26 @@ def _migrate_tracked_positions(engine) -> None:
             conn.execute(text(f"ALTER TABLE tracked_positions ADD COLUMN {col} {ddl_type}"))
 
 
+# Manually-maintained ticker exclusions that can't be detected from price
+# data alone -- currently just the IDX Special Monitoring Board/FCA list
+# (see scripts/special_monitoring_board.py's docstring for why: BEI's own
+# site blocks automated scraping, so this started as a hardcoded Python
+# file the user had to ask for a code change + app restart to refresh
+# every time). Moved into the DB and editable from the Admin page instead
+# so an update takes effect immediately, with no redeploy -- and
+# "overwrite" (Admin's bulk-update button deletes then re-inserts) rather
+# than an ever-growing history table, per direct user request to keep
+# this lean.
+manual_ticker_exclusion = Table(
+    "manual_ticker_exclusion",
+    metadata,
+    Column("stock_code", String(10), primary_key=True),
+    Column("reason", String(30), nullable=False, default="special_monitoring"),
+    Column("note", String(255)),
+    Column("updated_at", DateTime, server_default=func.now(), onupdate=func.now()),
+)
+
+
 def init_schema(engine):
     metadata.create_all(engine)
     _migrate_tracked_positions(engine)
