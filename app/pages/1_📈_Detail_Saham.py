@@ -12,7 +12,7 @@ import ta
 from plotly.subplots import make_subplots
 
 from app.auth import is_logged_in, require_login
-from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_suspended_tickers, load_wyckoff_status, selected_swing_model_version
+from app.data import load_data_freshness, load_foreign_flow, load_foreign_flow_history, load_latest_feature_row, load_latest_fundamental, load_latest_predictions, load_live_prices, load_model_metadata, load_news, load_price_history, load_stock_list, load_wyckoff_status, selected_swing_model_version, untradeable_reason
 from app.style import ACCENT, COLOR_AVOID, COLOR_BUY, SUSPENSION_RISK_NOTE, data_freshness_note, decision_badge, inject_base_css, regime_badge, render_developer_footer, safe_ratio, swing_confidence_badge, wyckoff_badge
 from app.positions import has_active_position, mark_position
 from features.momentum_screener import classify_macd_status
@@ -177,18 +177,31 @@ foreign_flow_df = load_foreign_flow_history(selected, days=260)
 
 stock_name = stocks_df.loc[stocks_df["code"] == selected, "name"].iloc[0] if selected in stocks_df["code"].values else ""
 
-# Frozen quote + zero volume for SUSPENSION_FREEZE_DAYS -- see
-# app.data.load_suspended_tickers's docstring (confirmed real: SAFE,
-# frozen since the day after its own Swing BUY signal). Shown as a loud
-# banner here regardless of what any screener's decision/probability
-# says, since none of those numbers mean anything for a stock that
-# cannot currently be bought or sold at any price.
-if selected in load_suspended_tickers():
+# Two distinct reasons a stock can be effectively untradeable right now
+# -- see app.data.untradeable_reason's docstring. Shown as a loud banner
+# regardless of what any screener's decision/probability says, since
+# none of those numbers mean anything for a stock you can't currently
+# transact at any real price. Confirmed real, not hypothetical, for
+# BOTH: SAFE went frozen the day after its own Swing BUY signal
+# (2026-09-01), then upon reopening hit the second case (ARA) for 3
+# straight days -- the model scored a fresh BUY on all three, quoting an
+# entry_price with no real seller behind it.
+_untradeable = untradeable_reason(selected)
+if _untradeable == "suspended":
     st.error(
         f"🚫 **{selected} tampak sedang DISUSPEND** -- harga beku (tidak bergerak) dan volume nol "
         "selama beberapa hari perdagangan terakhir, ciri khas saham yang dihentikan sementara oleh "
         "bursa. Probabilitas/keputusan model di bawah ini TIDAK berarti apa-apa untuk saham yang "
-        "sedang tidak bisa diperdagangkan -- lihat `app.data.load_suspended_tickers`.",
+        "sedang tidak bisa diperdagangkan -- lihat `app.data.untradeable_reason`.",
+        icon="🚫",
+    )
+elif _untradeable == "ara_streak":
+    st.error(
+        f"🚫 **{selected} baru saja menyentuh batas ARA/ARB (Auto Reject)** -- transaksi hari "
+        "perdagangan terakhir terjadi persis di satu harga, tanda buku antrian jual/beli sangat "
+        "satu arah (mis. semua antrian beli di harga batas atas, nyaris tidak ada penjual). "
+        "Anda kemungkinan besar TIDAK bisa mendapat eksekusi di harga yang ditampilkan model ini "
+        "-- lihat `app.data.untradeable_reason`.",
         icon="🚫",
     )
 

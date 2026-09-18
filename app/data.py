@@ -353,28 +353,53 @@ def load_liquidity(window_days: int = 60) -> pd.DataFrame:
 
 
 SUSPENSION_FREEZE_DAYS = 2  # consecutive most-recent trading days of flat OHLC + zero volume
+ARA_STREAK_DAYS = 1  # most-recent trading day(s) of flat OHLC + NONZERO volume (price-limit hit)
+
+
+def _flatness_flags(df: pd.DataFrame) -> pd.DataFrame:
+    """Shared by load_suspended_tickers and untradeable_reason below --
+    one flat-OHLC check, split into the two DISTINCT reasons a flat quote
+    can mean "you cannot transact at the displayed price right now"."""
+    df = df.copy()
+    is_flat = (df["open"] == df["close"]) & (df["high"] == df["close"]) & (df["low"] == df["close"])
+    df["frozen"] = is_flat & (df["volume"] == 0)
+    df["ara_streak"] = is_flat & (df["volume"] > 0)
+    return df
 
 
 @st.cache_data(ttl=CACHE_TTL)
 def load_suspended_tickers() -> set[str]:
-    """Stocks that look SUSPENDED right now: their most recent
-    SUSPENSION_FREEZE_DAYS trading days all show identical open/high/low/
-    close AND zero volume -- the signature yfinance/IDX actually produce
-    for a halted symbol (confirmed real, not a guess: SAFE, Swing BUY
-    2026-09-01, then every session since has been open=high=low=close=875
-    volume=0 -- see scripts/check_suspension_risk_v2.py). A screener
-    ranking a suspended stock as a live "opportunity" is actively
-    misleading -- you cannot buy OR sell it at any price -- so every
-    screener page excludes these from its ranked results, confirmed via a
-    real user report (SAFE still showing in Swing's Top 25 while
-    suspended).
+    """Stocks that are effectively UNTRADEABLE right now, for either of
+    two distinct reasons -- both "actively misleading" for a screener to
+    rank as a live opportunity, so both get excluded from every screener
+    page's results the same way this function's name already implied for
+    the first reason alone (confirmed via a real user report each time
+    this gap was found):
 
-    2 consecutive days (not the 5+ used for the historical research in
-    check_suspension_risk_v2.py) -- this needs to catch a fresh suspension
-    fast for a LIVE screener, not just confirm one in hindsight; a single
-    zero-volume day alone is too common on a thin-but-not-suspended name
-    to use alone, but two in a row with a perfectly flat quote is a much
-    more specific signal.
+    1. SUSPENDED: the most recent SUSPENSION_FREEZE_DAYS trading days all
+       show identical open/high/low/close AND zero volume -- the
+       signature yfinance/IDX actually produce for a halted symbol
+       (confirmed real, not a guess: SAFE, Swing BUY 2026-09-01, then
+       every session since was open=high=low=close=875 volume=0 -- see
+       scripts/check_suspension_risk_v2.py). You cannot buy OR sell it at
+       any price.
+
+    2. ARA/ARB STREAK: flat open=high=low=close but NONZERO volume on the
+       most recent ARA_STREAK_DAYS trading day(s) -- IDX's daily
+       price-limit mechanism (Auto Reject Atas/Bawah): every matched
+       trade that day cleared at exactly the limit price because the
+       order book is almost entirely one-sided (a queue of buyers at the
+       ceiling, or sellers at the floor, with essentially no one on the
+       other side to fill a NEW order against). Confirmed real, not
+       hypothetical: this SAME ticker (SAFE) reopened from the
+       suspension above on 2026-09-15 and then hit this exact pattern 3
+       trading days running (875->960->1055->1160, each ~+10%) -- the
+       Swing model scored it BUY at 68-69% probability on all three,
+       quoting an entry_price you very likely can't actually get filled
+       at. 1 day is enough here (unlike the suspension case, which waits
+       for 2) -- the FIRST day of a streak like this is exactly when a
+       screener would otherwise flag it as a fresh opportunity, the
+       precise failure mode this guards against.
     """
     engine = get_engine()
     if _missing_tables(engine, ["price_history"]):
@@ -392,15 +417,46 @@ def load_suspended_tickers() -> set[str]:
     )
     if df.empty:
         return set()
-    df["frozen"] = (
-        (df["open"] == df["close"]) & (df["high"] == df["close"]) & (df["low"] == df["close"]) & (df["volume"] == 0)
-    )
-    suspended = set()
+    df = _flatness_flags(df)
+    untradeable = set()
     for code, g in df.groupby("stock_code"):
-        tail = g.sort_values("date")["frozen"].tail(SUSPENSION_FREEZE_DAYS)
-        if len(tail) == SUSPENSION_FREEZE_DAYS and tail.all():
-            suspended.add(code)
-    return suspended
+        g = g.sort_values("date")
+        if len(g) >= SUSPENSION_FREEZE_DAYS and g["frozen"].tail(SUSPENSION_FREEZE_DAYS).all():
+            untradeable.add(code)
+        elif len(g) >= ARA_STREAK_DAYS and g["ara_streak"].tail(ARA_STREAK_DAYS).all():
+            untradeable.add(code)
+    return untradeable
+
+
+def untradeable_reason(code: str) -> str | None:
+    """Which of load_suspended_tickers's two reasons applies to this ONE
+    ticker (or None if it isn't currently flagged at all) -- for Detail
+    Saham's banner, which needs to say WHICH one (they read very
+    differently: frozen for days vs. hit a price limit yesterday) rather
+    than reuse that function's flat exclusion set, which is deliberately
+    just a set for its 4 other callers that only ever check membership.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["price_history"]):
+        return None
+    cutoff = (dt.date.today() - dt.timedelta(days=15)).isoformat()
+    df = pd.read_sql(
+        text("""
+        SELECT date, open, high, low, close, volume FROM price_history
+        WHERE stock_code = :code AND date >= :cutoff AND source_provider = 'yfinance'
+        ORDER BY date
+        """),
+        engine,
+        params={"code": code, "cutoff": cutoff},
+    )
+    if df.empty:
+        return None
+    df = _flatness_flags(df.sort_values("date"))
+    if len(df) >= SUSPENSION_FREEZE_DAYS and df["frozen"].tail(SUSPENSION_FREEZE_DAYS).all():
+        return "suspended"
+    if len(df) >= ARA_STREAK_DAYS and df["ara_streak"].tail(ARA_STREAK_DAYS).all():
+        return "ara_streak"
+    return None
 
 
 @st.cache_data(ttl=CACHE_TTL)
