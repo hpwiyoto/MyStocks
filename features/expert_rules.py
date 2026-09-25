@@ -30,9 +30,21 @@ Rules, as specified by the user, restated precisely:
      foreign accumulation in the trailing few days.
   7. SUPPORT PROXIMITY BONUS (optional, adds confidence, not a gate):
      price sitting close to a recent support level.
+  8. AVWAP BONUS (optional, adds confidence, not a gate): close >= the
+     Anchored VWAP from the rolling 50-day low (same indicator as
+     features.momentum_screener.compute_avwap_from_low) -- direct user
+     follow-up ("apakah AVWAP bisa dimasukkan ke expert system") after
+     AVWAP was REMOVED as a gate from features.momentum_screener.
+     is_validated_signal for hurting that (contrarian-style) combo;
+     hypothesis was it might fit better with THIS trend-continuation-
+     style combo instead. TESTED (see BACKTEST RESULT below): it does
+     NOT help here either (n=271, below both the null baseline and the
+     combo's own numbers without it) -- kept anyway since it's a
+     non-gating, purely additive score/display item with no downside to
+     keeping, but treat it as informational, not predictive.
 
 Rules 1-5 are GATES (all five must pass for a ticker to appear at all);
-6-7 are BONUSES that raise the confidence score but never gate a ticker
+6-8 are BONUSES that raise the confidence score but never gate a ticker
 out on their own -- exactly the "bisa dijadikan menambah bobot" (CAN be
 used to add weight) framing the user used, as opposed to "pastikan"
 (make sure) for 1-5.
@@ -50,12 +62,27 @@ not a real signal.
 
     Null baseline:                        n=74,769  WR=32.02%
     FULL COMBO (all 5 gates, what ships): n=387     WR=33.07%  Wilson LB=28.57%  <- below null
+    FULL COMBO, 'Kuat' tier (score>=85):  n=339     WR=33.04%  Wilson LB=28.25%
     FULL COMBO + near-support bonus:      n=57      WR=38.60%  Wilson LB=27.06%  <- ALSO below null now (was 35.0% under buggy v2 sampling)
+    FULL COMBO + AVWAP bonus:             n=271     WR=31.73%  Wilson LB=26.48%  <- below null AND below the full combo without it
+    FULL COMBO + foreign flow bonus:      n=54      WR=37.04%  Wilson LB=25.42%
     Golden Cross MA50xMA200 alone:        n=1,090   WR=29.63%  Wilson LB=27.00%
     Golden Cross (any type) alone:        n=14,285  WR=31.03%  Wilson LB=30.27%
     MACD early-stage alone:               n=17,138  WR=31.01%  Wilson LB=30.32%
     Volume confirmation alone:            n=24,651  WR=32.05%  Wilson LB=31.47%
     RSI normal alone:                     n=52,709  WR=31.06%  Wilson LB=30.67%
+
+AVWAP BONUS, direct user follow-up ("apakah AVWAP bisa dimasukkan ke
+expert system") after AVWAP was found to HURT features.momentum_
+screener.is_validated_signal's (contrarian-style) combo -- hypothesis
+was that AVWAP might fit better with THIS (trend-continuation-style)
+combo instead. Tested (n=271, a reasonably large sample, not a small-n
+fluke): it does NOT help here either -- WR=31.73%/LB=26.48%, both below
+the null baseline AND below the full combo's own numbers without the
+bonus (33.07%/28.57%). Kept in the code anyway (WEIGHT_AVWAP_BONUS,
+computed and shown same as the other two bonuses) since it's a
+non-gating, purely additive score/display item and removing it buys
+nothing safety-wise -- but do not expect it to mean anything predictive.
 
 Every candidate here sits at or below the null baseline's own Wilson
 band -- the FULL COMBO's raw win rate (33.07%) is close to but under
@@ -102,6 +129,8 @@ not presented as validated.
 import numpy as np
 import pandas as pd
 
+from features.momentum_screener import compute_avwap_from_low
+
 GOLDEN_CROSS_LOOKBACK_DAYS = 5   # a crossover counts as "fresh" if it happened within this many trading days
 RSI_NORMAL_MIN = 40              # comfortably above oversold (conventional oversold line is 30)
 RSI_NORMAL_MAX = 70              # not yet overbought
@@ -147,6 +176,7 @@ WEIGHT_RSI_NORMAL = 10
 WEIGHT_LIQUIDITY = 10
 WEIGHT_FOREIGN_FLOW_BONUS = 10
 WEIGHT_SUPPORT_PROXIMITY_BONUS = 10
+WEIGHT_AVWAP_BONUS = 10
 MAX_SCORE = 100
 
 
@@ -228,14 +258,17 @@ def classify_macd_phase(macd_hist: np.ndarray, macd_hist_slope_3d: float) -> str
 
 
 def evaluate_expert_signal(g: pd.DataFrame) -> dict:
-    """g: one ticker's rows, ascending by date, with close, volume,
-    rsi_14, macd_hist, macd_hist_slope_3d, rvol_20, sma_20, sma_50,
-    sma_200, distance_to_support_pct, net_foreign_flow columns (from
-    app.data.load_screener_raw_panel). Returns a dict with `passed` (all
-    5 gates met), `score` (0-100, only meaningful when passed), `tier`
-    ("kuat"/"cukup" when passed), `cross_type`, `macd_phase`, per-rule
-    booleans, and `explanation` (list of human-readable strings for the
-    UI to show why/why not).
+    """g: one ticker's rows, ascending by date, with close, high, low,
+    volume, rsi_14, macd_hist, macd_hist_slope_3d, rvol_20, sma_20,
+    sma_50, sma_200, distance_to_support_pct, net_foreign_flow columns
+    (from app.data.load_screener_raw_panel -- high/low needed for the
+    AVWAP bonus's compute_avwap_from_low call). Returns a dict with
+    `passed` (all 5 gates met), `score` (0-100, only meaningful when
+    passed), `tier` ("kuat"/"cukup" when passed), `cross_type`,
+    `macd_phase`, per-rule booleans (including the 3 bonuses:
+    foreign_flow_bonus, near_support_bonus, avwap_bonus), and
+    `explanation` (list of human-readable strings for the UI to show
+    why/why not).
     """
     latest = g.iloc[-1]
     explanation = []
@@ -333,6 +366,18 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
         score += WEIGHT_SUPPORT_PROXIMITY_BONUS
         explanation.append(f"Bonus: harga dekat support ({dist_support:.1f}% dari level terendah)")
 
+    avwap = compute_avwap_from_low(
+        g["close"].to_numpy(dtype=float), g["high"].to_numpy(dtype=float),
+        g["low"].to_numpy(dtype=float), g["volume"].to_numpy(dtype=float),
+    )
+    close_above_avwap = bool(latest["close"] >= avwap) if avwap is not None and pd.notna(latest["close"]) else None
+    avwap_bonus = passed and close_above_avwap is True
+    if avwap_bonus:
+        score += WEIGHT_AVWAP_BONUS
+        explanation.append("Bonus: harga di atas Anchored VWAP dari titik terendah 50 hari")
+    elif close_above_avwap is None:
+        explanation.append("Data AVWAP tidak cukup (tidak mempengaruhi skor)")
+
     score = min(score, MAX_SCORE)
     tier = None
     if passed:
@@ -354,6 +399,8 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
         "foreign_flow_bonus": foreign_flow_bonus,
         "near_support_bonus": near_support_bonus,
         "distance_to_support_pct": dist_support,
+        "avwap_bonus": avwap_bonus,
+        "close_above_avwap": close_above_avwap,
         "explanation": explanation,
     }
 

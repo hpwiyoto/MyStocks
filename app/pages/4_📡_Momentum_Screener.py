@@ -79,7 +79,8 @@ st.warning(
     "MA9 sedang menjelang cross MA20) + volume di atas rata-rata + RSI normal (tidak oversold) + "
     "MACD histogram baru/menjelang crossover (BUKAN sudah di puncak atau sedang menurun) + "
     "likuiditas cukup (≥ Rp 1 miliar/hari rata-rata 20 hari) -- kelimanya wajib. Foreign flow "
-    "akumulasi & harga dekat support menambah skor keyakinan tapi tidak wajib.\n\n"
+    "akumulasi, harga dekat support, & harga ≥ Anchored VWAP dari titik terendah 50 hari menambah "
+    "skor keyakinan tapi tidak wajib.\n\n"
     "**SUDAH di-backtest ulang dengan metode sampling yang diperbaiki** (25 Sep 2026, lihat "
     "`scripts/backtest_expert_golden_cross.py` -- metode sama seperti kotak hijau di atas, 5 tahun "
     "data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap (5 syarat) TIDAK terbukti "
@@ -87,9 +88,11 @@ st.warning(
     "keyakinan 95%-nya cuma 28,6% -- di BAWAH baseline. Bonus 'dekat support' yang sebelumnya "
     "sempat terlihat menjanjikan (35,0%, di atas baseline) ternyata itu ARTEFAK bug sampling di "
     "metode backtest lama -- setelah diperbaiki, angka yang SAMA PERSIS (n=57) sekarang menunjukkan "
-    "27,1%, di BAWAH baseline. Tidak ada satu pun kriteria (Golden Cross, MACD awal, volume, RSI) "
-    "yang punya edge sendiri baik sebelum maupun sesudah perbaikan. Kesimpulan: pakai sebagai alat "
-    "bantu observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
+    "27,1%, di BAWAH baseline. Bonus AVWAP (ditambahkan atas usulan Anda setelah dicabut dari Sinyal "
+    "Tervalidasi karena menyakiti kombinasi itu) juga sudah diuji di sini -- TIDAK membantu (n=271, "
+    "26,5%, di bawah baseline DAN di bawah kombinasi tanpa bonus ini). Tidak ada satu pun kriteria "
+    "(Golden Cross, MACD awal, volume, RSI, ketiga bonus) yang punya edge sendiri. Kesimpulan: pakai "
+    "sebagai alat bantu observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
     icon="🧠",
 )
 
@@ -492,7 +495,11 @@ else:
     })
     expert_table["bonus_display"] = expert_table.apply(
         lambda r: " + ".join(
-            [b for b, flag in [("Foreign flow", r["foreign_flow_bonus"]), ("Dekat support", r["near_support_bonus"])] if flag]
+            [b for b, flag in [
+                ("Foreign flow", r["foreign_flow_bonus"]),
+                ("Dekat support", r["near_support_bonus"]),
+                ("≥AVWAP", r["avwap_bonus"]),
+            ] if flag]
         ) or "-",
         axis=1,
     )

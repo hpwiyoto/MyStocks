@@ -126,7 +126,8 @@ def build_dataset() -> pd.DataFrame:
                 "cross_type": result["cross_type"], "macd_ok": result["macd_ok"],
                 "volume_ok": result["volume_ok"], "rsi_ok": result["rsi_ok"],
                 "foreign_flow_bonus": result["foreign_flow_bonus"],
-                "near_support_bonus": result["near_support_bonus"], "score": result["score"],
+                "near_support_bonus": result["near_support_bonus"],
+                "avwap_bonus": result["avwap_bonus"], "score": result["score"],
             })
         if (n_done + 1) % 20 == 0:
             logger.info("... %d/%d as-of dates done (%d rows so far)", n_done + 1, len(as_of_dates), len(rows))
@@ -171,6 +172,7 @@ def run():
         ("FULL COMBO, MA20xMA50 only", df["passed"] & (df["cross_type"] == "MA20xMA50")),
         ("FULL COMBO + foreign flow bonus", df["passed"] & df["foreign_flow_bonus"]),
         ("FULL COMBO + near-support bonus", df["passed"] & df["near_support_bonus"]),
+        ("FULL COMBO + AVWAP bonus", df["passed"] & df["avwap_bonus"]),
         ("FULL COMBO, score>=85 ('Kuat' tier only)", df["passed"] & (df["score"] >= 85)),
     ]
 
