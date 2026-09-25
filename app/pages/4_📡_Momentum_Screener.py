@@ -71,19 +71,21 @@ st.info(
 )
 st.warning(
     "**🧠 Expert System: Golden Cross Awal** (di bagian bawah halaman) -- dari aturan trading "
-    "Anda sendiri: Golden Cross baru (MA50xMA200 atau MA20xMA50, dalam 5 hari terakhir) + volume "
-    "di atas rata-rata + RSI normal (tidak oversold) + MACD histogram baru/menjelang crossover "
-    "(BUKAN sudah di puncak atau sedang menurun) -- keempatnya wajib. Foreign flow akumulasi & "
-    "harga dekat support menambah skor keyakinan tapi tidak wajib.\n\n"
-    "**SUDAH di-backtest** (`scripts/backtest_expert_golden_cross.py`, metode sama seperti kotak "
-    "hijau di atas -- 5 tahun data IDX, target +5%/-2,5%/10 hari) -- **hasilnya belum terbukti "
-    "mengalahkan acak.** Kombinasi 4 syarat menang 34,2% dari 243 kejadian (baseline acak 30,8%), "
-    "tapi batas bawah keyakinan 95%-nya cuma 28,5% -- di BAWAH baseline, artinya secara statistik "
-    "belum bisa dibedakan dari kebetulan (n masih terlalu kecil). Tiap syarat satu-satu juga "
-    "tidak ada yang punya edge sendiri -- semuanya nyaris pas di baseline. Bonus 'dekat support' "
-    "terlihat 80% menang tapi dari cuma 20 kejadian -- klasik jebakan n-kecil yang sudah pernah "
-    "ditemukan di riset lain proyek ini, jangan dipercaya begitu saja. Kesimpulan: pakai sebagai "
-    "alat bantu observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
+    "Anda sendiri: (Golden Cross baru -- MA50xMA200 atau MA20xMA50 dalam 5 hari terakhir -- ATAU "
+    "MA9 sedang menjelang cross MA20) + volume di atas rata-rata + RSI normal (tidak oversold) + "
+    "MACD histogram baru/menjelang crossover (BUKAN sudah di puncak atau sedang menurun) + "
+    "likuiditas cukup (≥ Rp 1 miliar/hari rata-rata 20 hari) -- kelimanya wajib. Foreign flow "
+    "akumulasi & harga dekat support menambah skor keyakinan tapi tidak wajib.\n\n"
+    "**SUDAH di-backtest ulang** (`scripts/backtest_expert_golden_cross.py`, metode sama seperti "
+    "kotak hijau di atas -- 5 tahun data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap "
+    "(5 syarat) masih belum terbukti mengalahkan acak**: menang 34,3% dari 356 kejadian (baseline "
+    "acak 30,8%), tapi batas bawah keyakinan 95%-nya 29,5% -- masih di BAWAH baseline. Satu temuan "
+    "yang lebih menjanjikan dari sebelumnya: kombinasi lengkap + bonus 'dekat support' naik dari "
+    "n=20 (kemungkinan besar kebetulan) menjadi **n=57, menang 47,4%, batas bawah 35,0% -- kali "
+    "ini DI ATAS baseline** -- tapi n=57 masih tergolong kecil menurut standar proyek ini sendiri "
+    "(temuan n=192 di riset lain pernah dinilai kemungkinan overfit), jadi ini sinyal yang patut "
+    "dipantau, BUKAN sudah terbukti. Kesimpulan: pakai sebagai alat bantu observasi manual, "
+    "JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
     icon="🧠",
 )
 
@@ -450,7 +452,7 @@ st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 st.subheader("🧠 Expert System: Golden Cross Awal")
 st.caption(
     "Lihat kotak keterangan di atas untuk aturan lengkap & status belum-terbukti. Hanya "
-    "menampilkan saham yang lolos SEMUA 4 syarat wajib -- bukan ranking seluruh saham seperti "
+    "menampilkan saham yang lolos SEMUA 5 syarat wajib -- bukan ranking seluruh saham seperti "
     "tabel di atas."
 )
 
@@ -459,7 +461,11 @@ if not expert_df.empty:
     expert_df = expert_df.merge(stocks_df, left_on="stock_code", right_on="code", how="left")
     if suspended_tickers:
         expert_df = expert_df[~expert_df["stock_code"].isin(suspended_tickers)]
-    expert_df = expert_df.merge(load_liquidity(), on="stock_code", how="left")
+    # avg_traded_value here is features.expert_rules' OWN 20-day-window
+    # liquidity gate figure (already part of "lolos syarat" above) --
+    # deliberately NOT re-merged from app.data.load_liquidity's 60-day
+    # window, which would just be a second, slightly different number for
+    # the same idea and collide on the same column name.
     if min_liq is not None:
         expert_df = expert_df[expert_df["avg_traded_value"].fillna(0) >= min_liq]
     if search:
@@ -472,11 +478,13 @@ if not expert_df.empty:
 st.metric("Lolos semua syarat", len(expert_df) if not expert_df.empty else 0)
 
 if expert_df.empty:
-    st.info("Tidak ada saham yang lolos semua 4 syarat wajib hari ini -- setup ini memang selektif (2/908 saham lolos saat terakhir diuji langsung).")
+    st.info("Tidak ada saham yang lolos semua 5 syarat wajib hari ini -- setup ini memang selektif.")
 else:
     expert_table = expert_df.copy()
     expert_table["tier_display"] = expert_table["tier"].map({"kuat": "💪 Kuat", "cukup": "👍 Cukup"})
-    expert_table["cross_display"] = expert_table["cross_type"].map({"MA50xMA200": "MA50 x MA200", "MA20xMA50": "MA20 x MA50"})
+    expert_table["cross_display"] = expert_table["cross_type"].map({
+        "MA50xMA200": "MA50 x MA200", "MA20xMA50": "MA20 x MA50", "MA9xMA20_menjelang": "MA9 → MA20 (menjelang)",
+    })
     expert_table["bonus_display"] = expert_table.apply(
         lambda r: " + ".join(
             [b for b, flag in [("Foreign flow", r["foreign_flow_bonus"]), ("Dekat support", r["near_support_bonus"])] if flag]

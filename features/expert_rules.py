@@ -8,7 +8,11 @@ trusting this tier the way validated_signal is trusted.
 Rules, as specified by the user, restated precisely:
   1. GOLDEN CROSS, FRESH: SMA50 just crossed above SMA200 (the classic
      "Golden Cross"), OR SMA20 just crossed above SMA50 (a shorter-term
-     version) -- "baru" (fresh), not one that happened long ago.
+     version) -- "baru" (fresh), not one that happened long ago. OR,
+     added on user follow-up: SMA9 is "menjelang" (about to) cross above
+     SMA20 -- hasn't crossed yet, but the gap is narrowing and small (an
+     earlier, more speculative alternative entry) -- see
+     _detect_approaching_cross.
   2. VOLUME CONFIRMATION: above-average volume alongside it.
   3. RSI NORMAL, NOT OVERSOLD: RSI in a healthy middle range, not down in
      oversold territory (a MA cross during an oversold RSI dip reads as
@@ -17,54 +21,63 @@ Rules, as specified by the user, restated precisely:
      extended -- late), NOT fading from green toward red (already
      rolling over) -- instead freshly crossing (or about to cross) the
      zero line from below, still early.
-  5. FOREIGN FLOW BONUS (optional, adds confidence, not a gate): net
+  5. LIQUIDITY: average daily traded value at/above a "cukup likuid"
+     threshold -- added on user follow-up ("jangan cuma ikut aturan
+     tadi, cari juga yang likuiditasnya baik"), a HARD requirement like
+     1-4, not a bonus (illiquid names are a tradability problem, same
+     reasoning as excluding suspended/ARA names elsewhere in this app).
+  6. FOREIGN FLOW BONUS (optional, adds confidence, not a gate): net
      foreign accumulation in the trailing few days.
-  6. SUPPORT PROXIMITY BONUS (optional, adds confidence, not a gate):
+  7. SUPPORT PROXIMITY BONUS (optional, adds confidence, not a gate):
      price sitting close to a recent support level.
 
-Rules 1-4 are GATES (all four must pass for a ticker to appear at all);
-5-6 are BONUSES that raise the confidence score but never gate a ticker
+Rules 1-5 are GATES (all five must pass for a ticker to appear at all);
+6-7 are BONUSES that raise the confidence score but never gate a ticker
 out on their own -- exactly the "bisa dijadikan menambah bobot" (CAN be
 used to add weight) framing the user used, as opposed to "pastikan"
-(make sure) for 1-4.
+(make sure) for 1-5.
 
-BACKTEST RESULT (scripts/backtest_expert_golden_cross.py, same +5%/
--2.5%/10-trading-day target and as-of-replay methodology as
-scripts/search_momentum_rules.py, 5 years of IDX history, 99 as-of
-dates): NOT statistically distinguishable from the null baseline.
+BACKTEST RESULT, v2 -- CURRENT 5-gate version incl. liquidity gate and
+MA9-approaching alternative (scripts/backtest_expert_golden_cross.py,
+2026-09-25, same +5%/-2.5%/10-trading-day target and as-of-replay
+methodology as scripts/search_momentum_rules.py, 5 years of IDX
+history, 99 as-of dates). STILL not statistically distinguishable from
+the null baseline overall -- one bonus-conditioned subset is more
+promising than the v1 result but still on the small side to trust.
 
     Null baseline:                        n=67,298  WR=30.79%
-    FULL COMBO (all 4 gates, what ships): n=243     WR=34.16%  Wilson LB=28.48%  <- below null
-    Golden Cross (any) alone:             n=4,582   WR=31.80%  Wilson LB=30.47%
-    Golden Cross MA50xMA200 alone:        n=951     WR=29.76%  Wilson LB=26.94%
+    FULL COMBO (all 5 gates, what ships): n=356     WR=34.27%  Wilson LB=29.53%  <- still below null
+    Golden Cross (any type) alone:        n=12,792  WR=29.88%  Wilson LB=29.09%  <- now below null (MA9-approaching diluted it)
     Golden Cross MA20xMA50 alone:         n=3,631   WR=32.33%  Wilson LB=30.83%
+    Golden Cross MA50xMA200 alone:        n=951     WR=29.76%  Wilson LB=26.94%
     MACD early-stage alone:               n=15,294  WR=31.18%  Wilson LB=30.45%
     Volume confirmation alone:            n=22,314  WR=31.03%  Wilson LB=30.43%
     RSI normal alone:                     n=48,073  WR=30.20%  Wilson LB=29.79%
-    FULL COMBO + near-support bonus:      n=20      WR=80.00%  Wilson LB=58.40%  <- n WAY too small to trust
+    FULL COMBO, 'Kuat' tier (score>=85):  n=185     WR=33.51%  Wilson LB=27.11%
+    FULL COMBO + foreign flow bonus:      n=55      WR=29.09%  Wilson LB=18.77%
+    FULL COMBO + near-support bonus:      n=57      WR=47.37%  Wilson LB=34.99%  <- ABOVE null, but n still modest
 
-The full combo's raw win rate (34.16%) looks better than null (30.79%),
-but its Wilson lower bound (28.48%) sits BELOW null -- exactly the
-project's own established bar for "not yet distinguishable from chance"
-(same standard applied throughout scripts/search_momentum_rules.py and
-scripts/grid_search_momentum_rules.py). None of the four gates carries
-an edge in isolation either -- all four sit right at the null baseline's
-own confidence band. The near-support bonus's 80% win rate is real
-output, not a bug, but n=20 is the exact small-n-spike trap this
-project's own grid search already flagged once (a n=192 top result
-there was judged likely overfit; n=20 here is worse) -- do not read it
-as "the support bonus works."
+The full combo (all 5 gates) is STILL below null on its own -- adding
+the liquidity gate and MA9 alternative moved n up (243->356) and the
+point estimate barely (34.16%->34.27%), not enough to change the
+conclusion. The near-support bonus subset improved meaningfully from v1
+(n=20, WR=80%, almost certainly a small-n fluke) to v2 (n=57, WR=47%,
+Wilson LB now clears null) -- genuinely more interesting than before,
+but n=57 is still on the low side by this project's own standard for
+trusting a result (the grid search's own n=192 top result was judged
+likely overfit) -- worth watching/re-testing as more data accumulates,
+NOT yet something to trust or ship as a separate validated tier.
 
 For context, an EARLIER "Golden Cross" tested in this project
 (scripts/test_strategy_6_criteria.py, 26.2% win rate, also below null)
 was a DIFFERENT pattern -- MACD-line-crosses-signal-line-below-zero, not
-this module's price-moving-average crossover -- so that result isn't
-directly about this one; this backtest is the first real test of the
-price-MA version. It also lands below null, independently. Consistent
-with this project's repeated finding elsewhere (see features/
-momentum_screener.py's REGIME_PRIORITY/VALIDATED_RVOL_THRESHOLD
-comments) that an already-confirmed-bullish read tends to underperform
-a still-weak-looking one on this project's own 5-year IDX data.
+this module's price-moving-average crossover. This backtest is the
+real test of the price-MA version, and (both v1 and v2) it also lands
+at/below null. Consistent with this project's repeated finding
+elsewhere (see features/momentum_screener.py's REGIME_PRIORITY/
+VALIDATED_RVOL_THRESHOLD comments) that an already-confirmed-bullish
+read tends to underperform a still-weak-looking one on this project's
+own 5-year IDX data.
 
 Conclusion: ship this as a clearly-unproven manual-observation aid (same
 posture as the page's other non-validated tiers -- divergence, regime
@@ -97,13 +110,39 @@ MACD_NEAR_ZERO_FRACTION = 0.35   # while still negative, within this fraction of
 FOREIGN_FLOW_LOOKBACK_DAYS = 5   # trailing days summed for the accumulation bonus
 SUPPORT_PROXIMITY_MAX_PCT = 3.0  # within this % of the rolling low (support) counts as "at support"
 
+# MA9xMA20 "menjelang" (about to cross, NOT crossed yet) -- direct user
+# follow-up request, an earlier/more speculative alternative entry to the
+# two already-crossed Golden Cross types above. SMA9 isn't a column
+# feature_daily stores (only ema_9), so it's computed on the fly from the
+# same window's close prices -- see evaluate_expert_signal -- rather than
+# widening the daily feature pipeline for one extra rolling average.
+MA9_APPROACH_LOOKBACK_DAYS = 5   # the gap must have been narrowing over this many trading days
+MA9_APPROACH_GAP_MAX_PCT = 2.0   # SMA9 within this % of SMA20 (from below) counts as "menjelang"
+
+# Liquidity gate -- direct user follow-up request ("jangan cuma ikut
+# aturan tadi, cari juga yang likuiditasnya baik"): a HARD requirement
+# (like gates 1-4), not a soft bonus, since illiquid names are a
+# tradability problem the same way a suspended/ARA-excluded ticker is
+# (see app.data.load_suspended_tickers), not just a nice-to-have.
+# Computed from THIS window's own close*volume (not a separate call to
+# app.data.load_liquidity, which averages over a different window and
+# isn't available inside a historical backtest replay) so this function
+# stays self-contained and gives IDENTICAL behavior live and backtested.
+# Threshold matches this project's own existing "cukup likuid" tier (see
+# app.style.LIQUIDITY_FILTER_OPTIONS' "≥ Rp 1 miliar/hari" option) rather
+# than inventing a new number.
+LIQUIDITY_WINDOW_DAYS = 20
+MIN_AVG_TRADED_VALUE = 1_000_000_000  # Rp 1 miliar/hari
+
 # Points awarded per rule when it fires -- see module docstring's caveat
 # about these being a reasonable starting split, not backtest-derived.
 WEIGHT_GOLDEN_CROSS_50_200 = 40
 WEIGHT_GOLDEN_CROSS_20_50 = 25
+WEIGHT_MA9_APPROACHING = 15      # lower than either confirmed cross -- this one hasn't happened yet
 WEIGHT_MACD_EARLY_STAGE = 25
 WEIGHT_VOLUME_CONFIRMATION = 15
 WEIGHT_RSI_NORMAL = 10
+WEIGHT_LIQUIDITY = 10
 WEIGHT_FOREIGN_FLOW_BONUS = 10
 WEIGHT_SUPPORT_PROXIMITY_BONUS = 10
 MAX_SCORE = 100
@@ -129,6 +168,30 @@ def _detect_cross(fast: np.ndarray, slow: np.ndarray, lookback_days: int) -> tup
         if fast[i - 1] <= slow[i - 1]:
             return True, n - 1 - i
     return False, None
+
+
+def _detect_approaching_cross(fast: np.ndarray, slow: np.ndarray, lookback_days: int, gap_max_pct: float) -> tuple[bool, float | None]:
+    """The NOT-yet-crossed counterpart to _detect_cross: True + the
+    current gap (%) if `fast` is still below `slow` today, but the gap
+    has been narrowing over the last `lookback_days` trading days AND is
+    now within `gap_max_pct` -- an earlier, more speculative "about to
+    cross" read (menjelang) rather than _detect_cross's already-happened
+    one. False, None if fast is already >= slow (that's a completed
+    cross, not "menjelang" anymore -- _detect_cross's job), or there
+    isn't enough history, or the gap isn't actually narrowing (could be
+    close by chance while still diverging)."""
+    n = len(fast)
+    if n < lookback_days + 1:
+        return False, None
+    if np.isnan(fast[-1]) or np.isnan(slow[-1]) or slow[-1] <= 0 or fast[-1] >= slow[-1]:
+        return False, None
+    gap_now = (slow[-1] - fast[-1]) / slow[-1] * 100
+    prev = n - 1 - lookback_days
+    if np.isnan(fast[prev]) or np.isnan(slow[prev]) or slow[prev] <= 0:
+        return False, None
+    gap_before = (slow[prev] - fast[prev]) / slow[prev] * 100
+    approaching = gap_now < gap_before and 0 <= gap_now <= gap_max_pct
+    return approaching, gap_now
 
 
 def classify_macd_phase(macd_hist: np.ndarray, macd_hist_slope_3d: float) -> str:
@@ -167,7 +230,7 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     rsi_14, macd_hist, macd_hist_slope_3d, rvol_20, sma_20, sma_50,
     sma_200, distance_to_support_pct, net_foreign_flow columns (from
     app.data.load_screener_raw_panel). Returns a dict with `passed` (all
-    4 gates met), `score` (0-100, only meaningful when passed), `tier`
+    5 gates met), `score` (0-100, only meaningful when passed), `tier`
     ("kuat"/"cukup" when passed), `cross_type`, `macd_phase`, per-rule
     booleans, and `explanation` (list of human-readable strings for the
     UI to show why/why not).
@@ -181,16 +244,26 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     cross_20_50, days_20_50 = _detect_cross(
         g["sma_20"].to_numpy(dtype=float), g["sma_50"].to_numpy(dtype=float), GOLDEN_CROSS_LOOKBACK_DAYS,
     )
-    golden_cross = cross_50_200 or cross_20_50
+    # SMA9 isn't a stored feature_daily column -- computed here from this
+    # window's own close prices (see MA9_APPROACH_* constants' comment).
+    sma_9 = g["close"].astype(float).rolling(9).mean().to_numpy()
+    approaching_9_20, gap_9_20 = _detect_approaching_cross(
+        sma_9, g["sma_20"].to_numpy(dtype=float), MA9_APPROACH_LOOKBACK_DAYS, MA9_APPROACH_GAP_MAX_PCT,
+    )
+
+    golden_cross = cross_50_200 or cross_20_50 or approaching_9_20
     if cross_50_200:
         cross_type = "MA50xMA200"
         explanation.append(f"Golden Cross MA50xMA200 -- {days_50_200} hari lalu")
     elif cross_20_50:
         cross_type = "MA20xMA50"
         explanation.append(f"Golden Cross MA20xMA50 -- {days_20_50} hari lalu")
+    elif approaching_9_20:
+        cross_type = "MA9xMA20_menjelang"
+        explanation.append(f"MA9 menjelang cross MA20 -- selisih {gap_9_20:.1f}%, sedang menyempit")
     else:
         cross_type = None
-        explanation.append("Belum ada Golden Cross baru (MA50xMA200 atau MA20xMA50)")
+        explanation.append("Belum ada Golden Cross baru atau MA9 menjelang cross MA20")
 
     macd_phase = classify_macd_phase(g["macd_hist"].to_numpy(dtype=float), latest.get("macd_hist_slope_3d"))
     macd_ok = macd_phase == "early_bullish"
@@ -219,12 +292,29 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     else:
         explanation.append("Data RSI tidak ada")
 
-    passed = golden_cross and macd_ok and volume_ok and rsi_ok
+    liq_window = g.tail(LIQUIDITY_WINDOW_DAYS)
+    traded_value = liq_window["close"].astype(float) * liq_window["volume"].astype(float)
+    avg_traded_value = float(traded_value.mean()) if not traded_value.empty else None
+    liquidity_ok = avg_traded_value is not None and avg_traded_value >= MIN_AVG_TRADED_VALUE
+    if avg_traded_value is not None:
+        explanation.append(
+            f"Likuiditas {'cukup' if liquidity_ok else 'BELUM cukup'} "
+            f"(rata-rata Rp {avg_traded_value / 1e9:.1f} M/hari, ambang Rp {MIN_AVG_TRADED_VALUE / 1e9:.0f} M/hari)"
+        )
+    else:
+        explanation.append("Data volume transaksi tidak ada")
+
+    passed = golden_cross and macd_ok and volume_ok and rsi_ok and liquidity_ok
 
     score = 0
     if passed:
-        score += WEIGHT_GOLDEN_CROSS_50_200 if cross_50_200 else WEIGHT_GOLDEN_CROSS_20_50
-        score += WEIGHT_MACD_EARLY_STAGE + WEIGHT_VOLUME_CONFIRMATION + WEIGHT_RSI_NORMAL
+        if cross_50_200:
+            score += WEIGHT_GOLDEN_CROSS_50_200
+        elif cross_20_50:
+            score += WEIGHT_GOLDEN_CROSS_20_50
+        else:
+            score += WEIGHT_MA9_APPROACHING
+        score += WEIGHT_MACD_EARLY_STAGE + WEIGHT_VOLUME_CONFIRMATION + WEIGHT_RSI_NORMAL + WEIGHT_LIQUIDITY
 
     flow_window = g["net_foreign_flow"].tail(FOREIGN_FLOW_LOOKBACK_DAYS)
     flow_sum = flow_window.sum(skipna=True) if flow_window.notna().any() else None
@@ -252,10 +342,13 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
         "tier": tier,
         "cross_type": cross_type,
         "golden_cross": golden_cross,
+        "ma9_approaching_gap_pct": gap_9_20,
         "macd_phase": macd_phase,
         "macd_ok": macd_ok,
         "volume_ok": volume_ok,
         "rsi_ok": rsi_ok,
+        "liquidity_ok": liquidity_ok,
+        "avg_traded_value": avg_traded_value,
         "foreign_flow_bonus": foreign_flow_bonus,
         "near_support_bonus": near_support_bonus,
         "distance_to_support_pct": dist_support,
