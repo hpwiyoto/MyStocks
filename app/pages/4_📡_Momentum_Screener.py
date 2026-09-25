@@ -549,4 +549,4 @@ st.info(
     icon="💰",
 )
 if st.button("Buka Dividen Momentum →", key="goto_dividen_momentum"):
-    st.switch_page("pages/9_💰_Dividen_Momentum.py")
+    st.switch_page("pages/7_💰_Dividen_Momentum.py")

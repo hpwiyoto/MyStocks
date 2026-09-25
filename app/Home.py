@@ -235,7 +235,7 @@ with d4:
     )
     st.caption("Alat eksplorasi manual -- bukan kombinasi yang sudah terbukti backtest.")
     if st.button("Buka Screener Kustom →", key="goto_custom_screener", width="stretch"):
-        st.switch_page("pages/8_🧰_Screener_Kustom.py")
+        st.switch_page("pages/6_🧰_Screener_Kustom.py")
 
 st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
 
@@ -253,6 +253,6 @@ with e1:
     )
     st.caption("Perkiraan dari pola tahun lalu -- bukan jadwal cum-date resmi.")
     if st.button("Buka Dividen Momentum →", key="goto_dividen_momentum", width="stretch"):
-        st.switch_page("pages/9_💰_Dividen_Momentum.py")
+        st.switch_page("pages/7_💰_Dividen_Momentum.py")
 
 render_developer_footer()
