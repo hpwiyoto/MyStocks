@@ -379,17 +379,22 @@ def load_dividend_screener_data() -> pd.DataFrame:
 
     A ticker with a current yield but NO realized dividend row (never
     paid, or paid before this DB's price_history coverage began) still
-    appears here with dividends/date as NaN for every row -- the
+    appears here with dividends/date/close as NaN for every row -- the
     downstream summarizer drops those rather than this function, since
     "yield known but no history" is a valid state other callers might
     still want to see.
+
+    `close` (that day's closing price) is included alongside each
+    payment so callers can compute a PER-PAYMENT yield (dividend/close*100)
+    -- direct user request for "saat bayar dividen berapa persen" per
+    payment, not just the single current trailing yield figure.
     """
     engine = get_engine()
     if _missing_tables(engine, ["price_history", "feature_fundamental_snapshot"]):
         return pd.DataFrame()
     div_history = pd.read_sql(
         text("""
-        SELECT stock_code, date, dividends FROM price_history
+        SELECT stock_code, date, dividends, close FROM price_history
         WHERE dividends > 0 AND source_provider = 'yfinance'
         ORDER BY stock_code, date
         """),

@@ -590,8 +590,9 @@ else:
     div_table["liq_display"] = div_table["avg_traded_value"].apply(format_traded_value)
 
     div_display_cols = [
-        "stock_code", "name", "yield_display", "historical_months_display", "last_div_display",
-        "payout_display", "years_of_history", "liq_display",
+        "stock_code", "name", "yield_display", "payments_this_year_count", "payments_this_year_display",
+        "payments_last_year_count", "payments_last_year_display", "last_div_display",
+        "payout_display", "liq_display",
     ]
     div_event = st.dataframe(
         div_table[div_display_cols].reset_index(drop=True),
@@ -602,10 +603,12 @@ else:
             "stock_code": st.column_config.TextColumn("Kode"),
             "name": st.column_config.TextColumn("Nama"),
             "yield_display": st.column_config.NumberColumn("Dividend Yield", format="%.1f%%"),
-            "historical_months_display": st.column_config.TextColumn("Historis Bayar Bulan"),
+            "payments_this_year_count": st.column_config.NumberColumn("Bayar Tahun Ini", format="%d"),
+            "payments_this_year_display": st.column_config.TextColumn("Bulan & Persen Tahun Ini"),
+            "payments_last_year_count": st.column_config.NumberColumn("Bayar Tahun Lalu", format="%d"),
+            "payments_last_year_display": st.column_config.TextColumn("Bulan & Persen Tahun Lalu"),
             "last_div_display": st.column_config.TextColumn("Dividen Terakhir"),
             "payout_display": st.column_config.TextColumn("Payout Ratio"),
-            "years_of_history": st.column_config.NumberColumn("Tahun Histori", format="%d"),
             "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
         },
         on_select="rerun",

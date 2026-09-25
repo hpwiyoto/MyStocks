@@ -66,13 +66,40 @@ MONTH_NAMES_ID = {
 }
 
 
+def _year_payment_detail(hist: pd.DataFrame, year: int) -> tuple[int, str]:
+    """hist: one ticker's realized-dividend rows (date, dividends, close),
+    already filtered to dividends > 0. Returns (count, display) for just
+    `year` -- display is e.g. "Mei (2.1%), Sep (1.8%)", or "-" if the
+    ticker paid nothing that year (a normal, common case -- not every
+    ticker pays every single year). Per-payment percent is dividend/close
+    on that exact payment date -- close can be missing/zero for a stale
+    row, in which case that one entry falls back to just the month name
+    with no percent rather than dropping it entirely."""
+    year_rows = hist[pd.to_datetime(hist["date"]).dt.year == year]
+    if year_rows.empty:
+        return 0, "-"
+    parts = []
+    for _, prow in year_rows.iterrows():
+        month = pd.Timestamp(prow["date"]).date().month
+        pclose = prow.get("close")
+        pct = (float(prow["dividends"]) / float(pclose) * 100) if pd.notna(pclose) and pclose else None
+        parts.append(f"{MONTH_NAMES_ID[month]} ({pct:.1f}%)" if pct is not None else MONTH_NAMES_ID[month])
+    return len(year_rows), ", ".join(parts)
+
+
 def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None) -> pd.DataFrame:
-    """panel: long-format rows (stock_code, date, dividends, dividend_yield,
-    payout_ratio) from app.data.load_dividend_screener_data -- `date`/
-    `dividends` are the REALIZED historical payments (one row per actual
-    past payment), `dividend_yield`/`payout_ratio` repeat per ticker
-    (same value on every row for that stock_code, taken from its latest
-    fundamental snapshot).
+    """panel: long-format rows (stock_code, date, dividends, close,
+    dividend_yield, payout_ratio) from app.data.load_dividend_screener_data
+    -- `date`/`dividends`/`close` are the REALIZED historical payments
+    (one row per actual past payment, with that day's closing price),
+    `dividend_yield`/`payout_ratio` repeat per ticker (same value on
+    every row for that stock_code, taken from its latest fundamental
+    snapshot).
+
+    Per ticker, returns payment count + per-payment (month, yield%) detail
+    for THIS YEAR SO FAR and LAST YEAR specifically (direct user request
+    -- not the full multi-year history, which is only used internally to
+    decide eligibility via is_seasonally_upcoming below).
 
     Returns one row per ticker that clears DIVIDEND_YIELD_MIN_PCT AND
     is_seasonally_upcoming, sorted by yield descending -- tickers with no
@@ -84,6 +111,8 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
     as_of = as_of or dt.date.today()
     if panel.empty:
         return pd.DataFrame()
+    this_year = as_of.year
+    last_year = as_of.year - 1
 
     rows = []
     for code, g in panel.groupby("stock_code"):
@@ -104,15 +133,27 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
             continue
         last_date = dates[-1]
         last_amount = float(hist["dividends"].iloc[-1])
+
+        # Direct user follow-up: show actual payment count/months/per-
+        # payment yield for THIS YEAR (so far) and LAST YEAR specifically
+        # -- not the full multi-year history used above just to decide
+        # eligibility (is_seasonally_upcoming still looks across ALL years
+        # for a more robust seasonal match; only the DISPLAYED detail is
+        # narrowed).
+        count_this_year, display_this_year = _year_payment_detail(hist, this_year)
+        count_last_year, display_last_year = _year_payment_detail(hist, last_year)
+
         rows.append({
             "stock_code": code,
             "dividend_yield_pct": float(yield_pct),
             "payout_ratio": g["payout_ratio"].iloc[-1],
-            "historical_months": months,
-            "historical_months_display": ", ".join(MONTH_NAMES_ID[m] for m in months),
             "last_dividend_date": last_date,
             "last_dividend_amount": last_amount,
             "years_of_history": years,
+            "payments_this_year_count": count_this_year,
+            "payments_this_year_display": display_this_year,
+            "payments_last_year_count": count_last_year,
+            "payments_last_year_display": display_last_year,
         })
     out = pd.DataFrame(rows)
     if not out.empty:
