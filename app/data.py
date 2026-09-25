@@ -279,11 +279,13 @@ def load_data_freshness() -> dt.date | None:
 def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
     """Bulk per-(ticker, date) panel across the WHOLE universe for the last
     ~`lookback_days` TRADING days, feeding features.momentum_screener's
-    MACD-status classification, RSI/MACD divergence detection, and (via
+    MACD-status classification, RSI/MACD divergence detection, (via
     high/low, added for the Anchored VWAP validated-signal criterion --
     see scripts/test_strategy_6_criteria.py) the AVWAP-from-50-day-low
-    check on the Momentum Screener page. Unlike load_price_history (one
-    ticker), this scores the whole universe at once -- same shape as
+    check, and features.expert_rules' golden-cross/MACD-phase/foreign-flow/
+    support-proximity rules (added for that module -- see its docstring)
+    on the Momentum Screener page. Unlike load_price_history (one ticker),
+    this scores the whole universe at once -- same shape as
     load_latest_predictions.
 
     Cutoff is a plain calendar-date WHERE clause (lookback_days*2 days back,
@@ -291,6 +293,12 @@ def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
     DATE_SUB/julianday SQL -- this project runs on SQLite locally and MySQL
     in production (see pipeline.db.get_engine), and a literal date string
     compares correctly on both without dialect-specific date arithmetic.
+
+    sma_20/50/200 are precomputed per-day in feature_daily (each needing up
+    to 200 days of price history to compute), so this only needs to SELECT
+    them, not extend the lookback window -- a "fresh crossover within the
+    last few days" check only needs a handful of recent SMA VALUES, not the
+    200 days of price that went into computing the 200-day one.
     """
     engine = get_engine()
     if _missing_tables(engine, ["feature_daily", "price_history"]):
@@ -300,7 +308,9 @@ def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
         text("""
         SELECT fd.stock_code, fd.date, ph.close, ph.high, ph.low, ph.volume,
                fd.rsi_14, fd.macd, fd.macd_signal, fd.macd_hist, fd.macd_hist_slope_3d,
-               fd.cmf_20, fd.rvol_20, fd.regime
+               fd.macd_hist_accel_3d, fd.cmf_20, fd.rvol_20, fd.regime,
+               fd.sma_20, fd.sma_50, fd.sma_200, fd.adx_14,
+               fd.distance_to_support_pct, fd.net_foreign_flow
         FROM feature_daily fd
         JOIN price_history ph ON ph.stock_code = fd.stock_code AND ph.date = fd.date AND ph.source_provider = 'yfinance'
         WHERE fd.date >= :cutoff

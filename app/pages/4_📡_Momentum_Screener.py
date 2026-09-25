@@ -22,6 +22,7 @@ from app.style import (
     regime_badge,
     render_developer_footer,
 )
+from features.expert_rules import compute_expert_panel
 from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Momentum Screener", page_icon="📡", layout="wide")
@@ -67,6 +68,22 @@ st.info(
     "kecuali kategori Tervalidasi di atas. Kolom probabilitas tetap ditampilkan supaya Anda "
     "bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
     icon="ℹ️",
+)
+st.warning(
+    "**🧠 Expert System: Golden Cross Awal** (baru, di bagian bawah halaman) -- dari aturan "
+    "trading Anda sendiri: Golden Cross baru (MA50xMA200 atau MA20xMA50, dalam 5 hari terakhir) "
+    "+ volume di atas rata-rata + RSI normal (tidak oversold) + MACD histogram baru/menjelang "
+    "crossover (BUKAN sudah di puncak atau sedang menurun) -- keempatnya wajib terpenuhi. "
+    "Foreign flow akumulasi & harga dekat support menambah skor keyakinan tapi tidak wajib. "
+    "**Belum terbukti lewat backtest seperti kotak hijau di atas** -- ini murni penjabaran "
+    "aturan Anda, bukan temuan tervalidasi. Perlu jujur disebutkan: proyek ini SUDAH pernah "
+    "menguji \"Golden Cross saja\" secara terpisah (`scripts/test_strategy_6_criteria.py`) dan "
+    "hasilnya 26,2% -- DI BAWAH baseline acak 30,6%; riset lain di halaman ini juga berulang kali "
+    "menemukan pola \"sudah terkonfirmasi bullish\" (MACD Bullish, CMF>0) tes lebih buruk dari "
+    "yang \"masih terlihat lemah\". Kombinasi INI (dengan konfirmasi volume/RSI/MACD tambahan) "
+    "belum pernah diuji spesifik -- silakan pakai sebagai alat bantu, tapi anggap heuristik "
+    "sampai benar-benar di-backtest.",
+    icon="🧠",
 )
 
 # Harga & semua indikator (RSI/MACD/CMF) di halaman ini datang dari
@@ -426,3 +443,78 @@ for row_chunk in rows:
                 st.session_state["selected_ticker"] = r["stock_code"]
                 st.switch_page("pages/1_📈_Detail_Saham.py")
             st.markdown("<div style='margin-bottom:0.8rem'></div>", unsafe_allow_html=True)
+
+st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
+
+st.subheader("🧠 Expert System: Golden Cross Awal")
+st.caption(
+    "Lihat kotak keterangan di atas untuk aturan lengkap & status belum-terbukti. Hanya "
+    "menampilkan saham yang lolos SEMUA 4 syarat wajib -- bukan ranking seluruh saham seperti "
+    "tabel di atas."
+)
+
+expert_df = compute_expert_panel(raw_panel)
+if not expert_df.empty:
+    expert_df = expert_df.merge(stocks_df, left_on="stock_code", right_on="code", how="left")
+    if suspended_tickers:
+        expert_df = expert_df[~expert_df["stock_code"].isin(suspended_tickers)]
+    expert_df = expert_df.merge(load_liquidity(), on="stock_code", how="left")
+    if min_liq is not None:
+        expert_df = expert_df[expert_df["avg_traded_value"].fillna(0) >= min_liq]
+    if search:
+        q = search.strip().lower()
+        expert_df = expert_df[
+            expert_df["stock_code"].str.lower().str.contains(q)
+            | expert_df["name"].fillna("").str.lower().str.contains(q)
+        ]
+
+st.metric("Lolos semua syarat", len(expert_df) if not expert_df.empty else 0)
+
+if expert_df.empty:
+    st.info("Tidak ada saham yang lolos semua 4 syarat wajib hari ini -- setup ini memang selektif (2/908 saham lolos saat terakhir diuji langsung).")
+else:
+    expert_table = expert_df.copy()
+    expert_table["tier_display"] = expert_table["tier"].map({"kuat": "💪 Kuat", "cukup": "👍 Cukup"})
+    expert_table["cross_display"] = expert_table["cross_type"].map({"MA50xMA200": "MA50 x MA200", "MA20xMA50": "MA20 x MA50"})
+    expert_table["bonus_display"] = expert_table.apply(
+        lambda r: " + ".join(
+            [b for b, flag in [("Foreign flow", r["foreign_flow_bonus"]), ("Dekat support", r["near_support_bonus"])] if flag]
+        ) or "-",
+        axis=1,
+    )
+    expert_table["alasan"] = expert_table["explanation"].apply(lambda lines: " | ".join(lines))
+    expert_table["liq_display"] = expert_table["avg_traded_value"].apply(format_traded_value)
+
+    expert_display_cols = [
+        "stock_code", "name", "score", "tier_display", "cross_display", "close", "rsi_14",
+        "rvol_20", "bonus_display", "liq_display",
+    ]
+    expert_event = st.dataframe(
+        expert_table[expert_display_cols].reset_index(drop=True),
+        width="stretch",
+        hide_index=True,
+        height=min(36 * (len(expert_table) + 1) + 3, 400),
+        column_config={
+            "stock_code": st.column_config.TextColumn("Kode"),
+            "name": st.column_config.TextColumn("Nama"),
+            "score": st.column_config.ProgressColumn("Skor Keyakinan", format="%d", min_value=0, max_value=100),
+            "tier_display": st.column_config.TextColumn("Tingkat"),
+            "cross_display": st.column_config.TextColumn("Golden Cross"),
+            "close": st.column_config.NumberColumn("Harga", format="%.0f"),
+            "rsi_14": st.column_config.NumberColumn("RSI", format="%.1f"),
+            "rvol_20": st.column_config.NumberColumn("Volume Relatif", format="%.2fx"),
+            "bonus_display": st.column_config.TextColumn("Bonus"),
+            "liq_display": st.column_config.TextColumn("Transaksi/hari (rata2 60h)"),
+        },
+        on_select="rerun",
+        selection_mode="single-row",
+        key="expert_table_select",
+    )
+    expert_selected_rows = expert_event.selection.rows if expert_event and expert_event.selection else []
+    if expert_selected_rows:
+        st.session_state["selected_ticker"] = expert_table.iloc[expert_selected_rows[0]]["stock_code"]
+        st.switch_page("pages/1_📈_Detail_Saham.py")
+
+    with st.expander("Lihat alasan detail per saham"):
+        for _, r in expert_table.iterrows():
+            st.markdown(f"**{r['stock_code']}** ({r['score']}/100): " + "; ".join(r["explanation"]))
