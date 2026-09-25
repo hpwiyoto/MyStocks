@@ -22,7 +22,7 @@ from app.style import (
     regime_badge,
     render_developer_footer,
 )
-from features.dividend_screener import DIVIDEND_YIELD_MIN_PCT, LOOKAHEAD_MONTHS, summarize_dividend_screen
+from features.dividend_screener import DIVIDEND_YIELD_MIN_PCT, LOOKAHEAD_MONTHS, MONTH_NAMES_ID, summarize_dividend_screen
 from features.expert_rules import compute_expert_panel
 from features.momentum_screener import compute_screener_panel
 
@@ -585,7 +585,11 @@ else:
     div_table["yield_display"] = div_table["dividend_yield_pct"]
     div_table["payout_display"] = div_table["payout_ratio"].apply(lambda v: f"{v:.0f}%" if pd.notna(v) else "-")
     div_table["last_div_display"] = div_table.apply(
-        lambda r: f"{r['last_dividend_date']} (Rp{r['last_dividend_amount']:,.0f})".replace(",", "."), axis=1,
+        lambda r: (
+            f"{r['last_dividend_date'].day} {MONTH_NAMES_ID[r['last_dividend_date'].month]} "
+            f"{r['last_dividend_date'].year} (Rp{r['last_dividend_amount']:,.0f})"
+        ).replace(",", "."),
+        axis=1,
     )
     div_table["liq_display"] = div_table["avg_traded_value"].apply(format_traded_value)
 
