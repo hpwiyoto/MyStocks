@@ -42,9 +42,22 @@ Rules, as specified by the user, restated precisely:
      combo's own numbers without it) -- kept anyway since it's a
      non-gating, purely additive score/display item with no downside to
      keeping, but treat it as informational, not predictive.
+  9. DEEP PULLBACK BONUS (optional, adds confidence, not a gate): direct
+     user follow-up, restated precisely after a first pass ("2 bulan
+     terakhir") was refined to this exact definition -- "penurunan lebih
+     dari 13% dari harga tertinggi setelah rebound terakhir atau setelah
+     RSI oversold terakhir". Anchor point = the MORE RECENT of (a) the
+     last confirmed swing low in price (a "rebound" --
+     features.support_resistance.find_swing_lows, operating on the daily
+     low, already used for the Detail Saham chart's S/R lines) or (b)
+     the last day RSI was oversold (<RSI_OVERSOLD_THRESHOLD). From that
+     anchor onward, take the highest close reached since, and check
+     whether the CURRENT close has fallen DEEP_PULLBACK_MIN_PCT (13%) or
+     more from that peak. None if neither anchor exists in the available
+     window (bonus simply doesn't apply, not an error).
 
 Rules 1-5 are GATES (all five must pass for a ticker to appear at all);
-6-8 are BONUSES that raise the confidence score but never gate a ticker
+6-9 are BONUSES that raise the confidence score but never gate a ticker
 out on their own -- exactly the "bisa dijadikan menambah bobot" (CAN be
 used to add weight) framing the user used, as opposed to "pastikan"
 (make sure) for 1-5.
@@ -62,10 +75,11 @@ not a real signal.
 
     Null baseline:                        n=74,769  WR=32.02%
     FULL COMBO (all 5 gates, what ships): n=387     WR=33.07%  Wilson LB=28.57%  <- below null
-    FULL COMBO, 'Kuat' tier (score>=85):  n=339     WR=33.04%  Wilson LB=28.25%
+    FULL COMBO, 'Kuat' tier (score>=85):  n=340     WR=32.94%  Wilson LB=28.16%
     FULL COMBO + near-support bonus:      n=57      WR=38.60%  Wilson LB=27.06%  <- ALSO below null now (was 35.0% under buggy v2 sampling)
     FULL COMBO + AVWAP bonus:             n=271     WR=31.73%  Wilson LB=26.48%  <- below null AND below the full combo without it
     FULL COMBO + foreign flow bonus:      n=54      WR=37.04%  Wilson LB=25.42%
+    FULL COMBO + deep-pullback bonus:     n=7       WR=14.29%  Wilson LB=2.57%   <- n WAY too small, no conclusion possible
     Golden Cross MA50xMA200 alone:        n=1,090   WR=29.63%  Wilson LB=27.00%
     Golden Cross (any type) alone:        n=14,285  WR=31.03%  Wilson LB=30.27%
     MACD early-stage alone:               n=17,138  WR=31.01%  Wilson LB=30.32%
@@ -83,6 +97,22 @@ bonus (33.07%/28.57%). Kept in the code anyway (WEIGHT_AVWAP_BONUS,
 computed and shown same as the other two bonuses) since it's a
 non-gating, purely additive score/display item and removing it buys
 nothing safety-wise -- but do not expect it to mean anything predictive.
+
+DEEP PULLBACK BONUS, direct user follow-up ("saham yang sudah
+mengalami penurunan diatas 15% selama 2 bulan terakhir", refined to
+"lebih dari 13% dari harga tertinggi setelah rebound terakhir atau
+setelah RSI oversold terakhir"). Tested: n=7 -- WAY too small to draw
+any conclusion, positive or negative (the raw 14.29% win rate LOOKS
+bad, but at n=7 that's not statistically distinguishable from noise
+either way; Wilson LB=2.57% just reflects how little a 7-observation
+sample can rule out). The gate combination this bonus stacks on top of
+is already selective (n=387 total), and requiring a confirmed swing-low
+or RSI-oversold anchor point on top of that narrows it further --
+expect n to grow only slowly over time as more historical instances
+accumulate. Kept in the code (non-gating, same reasoning as the other
+bonuses) but treat this one as literally untested rather than
+"tested and found unhelpful" like AVWAP/near-support/foreign-flow above
+-- there just isn't enough data yet to say either way.
 
 Every candidate here sits at or below the null baseline's own Wilson
 band -- the FULL COMBO's raw win rate (33.07%) is close to but under
@@ -130,6 +160,7 @@ import numpy as np
 import pandas as pd
 
 from features.momentum_screener import compute_avwap_from_low
+from features.support_resistance import find_swing_lows
 
 GOLDEN_CROSS_LOOKBACK_DAYS = 5   # a crossover counts as "fresh" if it happened within this many trading days
 RSI_NORMAL_MIN = 40              # comfortably above oversold (conventional oversold line is 30)
@@ -165,6 +196,13 @@ MA9_APPROACH_GAP_MAX_PCT = 2.0   # SMA9 within this % of SMA20 (from below) coun
 LIQUIDITY_WINDOW_DAYS = 20
 MIN_AVG_TRADED_VALUE = 1_000_000_000  # Rp 1 miliar/hari
 
+# Deep pullback bonus -- direct user follow-up, exact definition: decline
+# from the highest close since the more recent of (a) the last confirmed
+# swing low ("rebound") or (b) the last RSI-oversold day. See rule 9's
+# docstring note above and _deep_pullback_pct below.
+DEEP_PULLBACK_MIN_PCT = 13.0
+RSI_OVERSOLD_THRESHOLD = 30.0  # conventional oversold line, matches RSI_NORMAL_MIN's own comment
+
 # Points awarded per rule when it fires -- see module docstring's caveat
 # about these being a reasonable starting split, not backtest-derived.
 WEIGHT_GOLDEN_CROSS_50_200 = 40
@@ -177,6 +215,7 @@ WEIGHT_LIQUIDITY = 10
 WEIGHT_FOREIGN_FLOW_BONUS = 10
 WEIGHT_SUPPORT_PROXIMITY_BONUS = 10
 WEIGHT_AVWAP_BONUS = 10
+WEIGHT_DEEP_PULLBACK_BONUS = 10
 MAX_SCORE = 100
 
 
@@ -257,16 +296,47 @@ def classify_macd_phase(macd_hist: np.ndarray, macd_hist_slope_3d: float) -> str
     return "bearish"
 
 
+def _last_rebound_anchor_idx(low: np.ndarray, rsi: np.ndarray) -> int | None:
+    """Index of the MORE RECENT of: the last confirmed swing low in price
+    (a "rebound" -- features.support_resistance.find_swing_lows, which
+    requires a full trailing window AFTER a point before it counts as
+    confirmed, so a dip that hasn't turned around yet won't show up) or
+    the last day RSI was oversold (<RSI_OVERSOLD_THRESHOLD). This is the
+    anchor point for the deep-pullback bonus, per the user's own
+    definition ("dari harga tertinggi setelah rebound terakhir atau
+    setelah RSI oversold terakhir"). None if neither exists in the
+    available window."""
+    swing_lows = find_swing_lows(low)
+    last_swing_low = swing_lows[-1] if swing_lows else None
+    oversold_idx = np.where(rsi < RSI_OVERSOLD_THRESHOLD)[0]
+    last_oversold = int(oversold_idx[-1]) if len(oversold_idx) else None
+    candidates = [i for i in (last_swing_low, last_oversold) if i is not None]
+    return max(candidates) if candidates else None
+
+
+def _deep_pullback_pct(close: np.ndarray, low: np.ndarray, rsi: np.ndarray) -> float | None:
+    """% decline from the highest close since _last_rebound_anchor_idx to
+    the current (last) close. None if no anchor point exists yet."""
+    anchor = _last_rebound_anchor_idx(low, rsi)
+    if anchor is None:
+        return None
+    peak = float(close[anchor:].max())
+    if peak <= 0 or np.isnan(peak) or np.isnan(close[-1]):
+        return None
+    return (peak - float(close[-1])) / peak * 100
+
+
 def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     """g: one ticker's rows, ascending by date, with close, high, low,
     volume, rsi_14, macd_hist, macd_hist_slope_3d, rvol_20, sma_20,
     sma_50, sma_200, distance_to_support_pct, net_foreign_flow columns
     (from app.data.load_screener_raw_panel -- high/low needed for the
-    AVWAP bonus's compute_avwap_from_low call). Returns a dict with
-    `passed` (all 5 gates met), `score` (0-100, only meaningful when
-    passed), `tier` ("kuat"/"cukup" when passed), `cross_type`,
-    `macd_phase`, per-rule booleans (including the 3 bonuses:
-    foreign_flow_bonus, near_support_bonus, avwap_bonus), and
+    AVWAP bonus's compute_avwap_from_low call and the deep-pullback
+    bonus's swing-low detection). Returns a dict with `passed` (all 5
+    gates met), `score` (0-100, only meaningful when passed), `tier`
+    ("kuat"/"cukup" when passed), `cross_type`, `macd_phase`, per-rule
+    booleans (including the 4 bonuses: foreign_flow_bonus,
+    near_support_bonus, avwap_bonus, deep_pullback_bonus), and
     `explanation` (list of human-readable strings for the UI to show
     why/why not).
     """
@@ -378,6 +448,16 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     elif close_above_avwap is None:
         explanation.append("Data AVWAP tidak cukup (tidak mempengaruhi skor)")
 
+    pullback_pct = _deep_pullback_pct(
+        g["close"].to_numpy(dtype=float), g["low"].to_numpy(dtype=float), g["rsi_14"].to_numpy(dtype=float),
+    )
+    deep_pullback_bonus = passed and pullback_pct is not None and pullback_pct >= DEEP_PULLBACK_MIN_PCT
+    if deep_pullback_bonus:
+        score += WEIGHT_DEEP_PULLBACK_BONUS
+        explanation.append(f"Bonus: turun {pullback_pct:.1f}% dari puncak sejak rebound/RSI oversold terakhir")
+    elif pullback_pct is None:
+        explanation.append("Belum ada rebound/RSI oversold terkonfirmasi dalam jendela data (tidak mempengaruhi skor)")
+
     score = min(score, MAX_SCORE)
     tier = None
     if passed:
@@ -401,6 +481,8 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
         "distance_to_support_pct": dist_support,
         "avwap_bonus": avwap_bonus,
         "close_above_avwap": close_above_avwap,
+        "deep_pullback_bonus": deep_pullback_bonus,
+        "deep_pullback_pct": pullback_pct,
         "explanation": explanation,
     }
 

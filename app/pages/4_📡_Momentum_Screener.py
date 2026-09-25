@@ -79,20 +79,22 @@ st.warning(
     "MA9 sedang menjelang cross MA20) + volume di atas rata-rata + RSI normal (tidak oversold) + "
     "MACD histogram baru/menjelang crossover (BUKAN sudah di puncak atau sedang menurun) + "
     "likuiditas cukup (≥ Rp 1 miliar/hari rata-rata 20 hari) -- kelimanya wajib. Foreign flow "
-    "akumulasi, harga dekat support, & harga ≥ Anchored VWAP dari titik terendah 50 hari menambah "
-    "skor keyakinan tapi tidak wajib.\n\n"
-    "**SUDAH di-backtest ulang dengan metode sampling yang diperbaiki** (25 Sep 2026, lihat "
+    "akumulasi, harga dekat support, harga ≥ Anchored VWAP dari titik terendah 50 hari, & turun "
+    "≥13% dari puncak sejak rebound/RSI oversold terakhir menambah skor keyakinan tapi tidak wajib.\n\n"
+    "**SUDAH di-backtest ulang dengan metode sampling yang diperbaiki** (25-26 Sep 2026, lihat "
     "`scripts/backtest_expert_golden_cross.py` -- metode sama seperti kotak hijau di atas, 5 tahun "
     "data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap (5 syarat) TIDAK terbukti "
     "mengalahkan acak**: menang 33,1% dari 387 kejadian (baseline acak 32,0%), batas bawah "
     "keyakinan 95%-nya cuma 28,6% -- di BAWAH baseline. Bonus 'dekat support' yang sebelumnya "
     "sempat terlihat menjanjikan (35,0%, di atas baseline) ternyata itu ARTEFAK bug sampling di "
     "metode backtest lama -- setelah diperbaiki, angka yang SAMA PERSIS (n=57) sekarang menunjukkan "
-    "27,1%, di BAWAH baseline. Bonus AVWAP (ditambahkan atas usulan Anda setelah dicabut dari Sinyal "
-    "Tervalidasi karena menyakiti kombinasi itu) juga sudah diuji di sini -- TIDAK membantu (n=271, "
-    "26,5%, di bawah baseline DAN di bawah kombinasi tanpa bonus ini). Tidak ada satu pun kriteria "
-    "(Golden Cross, MACD awal, volume, RSI, ketiga bonus) yang punya edge sendiri. Kesimpulan: pakai "
-    "sebagai alat bantu observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
+    "27,1%, di BAWAH baseline. Bonus AVWAP juga sudah diuji -- TIDAK membantu (n=271, 26,5%, di "
+    "bawah baseline DAN di bawah kombinasi tanpa bonus ini). Bonus deep-pullback (turun ≥13%) baru "
+    "diuji dan sampelnya TERLALU KECIL untuk disimpulkan (n=7, menang 14,3%, batas bawah 2,6%) -- "
+    "setup ini memang jarang terjadi bersamaan dengan syarat lain, jadi belum bisa dinilai proven "
+    "atau tidak, cuma dicatat apa adanya. Tidak ada satu pun kriteria (Golden Cross, MACD awal, "
+    "volume, RSI, tiga bonus lain) yang punya edge sendiri. Kesimpulan: pakai sebagai alat bantu "
+    "observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
     icon="🧠",
 )
 
@@ -499,6 +501,7 @@ else:
                 ("Foreign flow", r["foreign_flow_bonus"]),
                 ("Dekat support", r["near_support_bonus"]),
                 ("≥AVWAP", r["avwap_bonus"]),
+                ("Deep pullback", r["deep_pullback_bonus"]),
             ] if flag]
         ) or "-",
         axis=1,
