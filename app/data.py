@@ -363,6 +363,54 @@ def load_liquidity(window_days: int = 60) -> pd.DataFrame:
     return out
 
 
+@st.cache_data(ttl=CACHE_TTL)
+def load_dividend_screener_data() -> pd.DataFrame:
+    """One row per (stock_code, historical ex-date) for every REALIZED
+    dividend payment on record (price_history.dividends > 0 -- already
+    ingested as a side effect of routine OHLCV fetches, no new pipeline
+    needed), joined with each ticker's LATEST dividend_yield/payout_ratio
+    from feature_fundamental_snapshot. Feeds features.dividend_screener's
+    seasonal-pattern screen on the Momentum Screener page -- see that
+    module's docstring for why this is a seasonal HINT built from past
+    payment months, not a confirmed forward calendar (no such data
+    source is available to this project -- checked and ruled out both
+    yfinance's own fields and the RapidAPI IDX source already
+    integrated here).
+
+    A ticker with a current yield but NO realized dividend row (never
+    paid, or paid before this DB's price_history coverage began) still
+    appears here with dividends/date as NaN for every row -- the
+    downstream summarizer drops those rather than this function, since
+    "yield known but no history" is a valid state other callers might
+    still want to see.
+    """
+    engine = get_engine()
+    if _missing_tables(engine, ["price_history", "feature_fundamental_snapshot"]):
+        return pd.DataFrame()
+    div_history = pd.read_sql(
+        text("""
+        SELECT stock_code, date, dividends FROM price_history
+        WHERE dividends > 0 AND source_provider = 'yfinance'
+        ORDER BY stock_code, date
+        """),
+        engine,
+    )
+    latest_fundamental = pd.read_sql(
+        text("""
+        SELECT ffs.stock_code, ffs.dividend_yield, ffs.payout_ratio
+        FROM feature_fundamental_snapshot ffs
+        INNER JOIN (
+            SELECT stock_code, MAX(snapshot_date) AS max_date
+            FROM feature_fundamental_snapshot GROUP BY stock_code
+        ) latest ON ffs.stock_code = latest.stock_code AND ffs.snapshot_date = latest.max_date
+        """),
+        engine,
+    )
+    if latest_fundamental.empty:
+        return pd.DataFrame()
+    return latest_fundamental.merge(div_history, on="stock_code", how="left")
+
+
 SUSPENSION_FREEZE_DAYS = 2  # consecutive most-recent trading days of flat OHLC + zero volume
 ARA_STREAK_DAYS = 1  # most-recent trading day(s) of flat OHLC + NONZERO volume (price-limit hit)
 
