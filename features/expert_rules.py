@@ -1,8 +1,9 @@
 """Expert-system-style rule engine for the Momentum Screener page --
-direct user request, built from their own trading rules (not backtested
-yet, unlike features.momentum_screener's validated_signal combo -- see
-this module's HONEST-LABELING note at the bottom before wiring into the
-UI).
+direct user request, built from their own trading rules. BACKTESTED
+(scripts/backtest_expert_golden_cross.py, 2026-09-25) -- result: NOT
+proven to beat doing nothing, unlike features.momentum_screener's
+validated_signal combo. See the BACKTEST RESULT note below before
+trusting this tier the way validated_signal is trusted.
 
 Rules, as specified by the user, restated precisely:
   1. GOLDEN CROSS, FRESH: SMA50 just crossed above SMA200 (the classic
@@ -27,27 +28,53 @@ out on their own -- exactly the "bisa dijadikan menambah bobot" (CAN be
 used to add weight) framing the user used, as opposed to "pastikan"
 (make sure) for 1-4.
 
-IMPORTANT CAVEAT, stated up front rather than buried: this project has
-directly tested a few of the individual ingredients here before, and
-found the OPPOSITE of what a trend-following read like this assumes --
-"Golden Cross alone" tested at 26.2% win rate (BELOW the 30.55% null
-baseline, scripts/test_strategy_6_criteria.py), and repeatedly across
-this project's other momentum research, an already-confirmed-bullish
-reading (Bullish MACD status, CMF>0/accumulation) tests WORSE than a
-still-weak-looking one, while a still-bearish-looking reading (CMF<0,
-bottoming regime) tests better -- see features/momentum_screener.py's
-own REGIME_PRIORITY and VALIDATED_RVOL_THRESHOLD comments for the full
-history. That doesn't mean THIS specific combination (cross + volume +
-RSI + fresh-MACD-not-extended, which is meaningfully more filtered than
-a bare golden cross alone) fails the same way -- it hasn't been tested
-as combined here -- but it's real, relevant, documented evidence from
-this exact codebase that a trend-CONFIRMATION style has tended to
-underperform a trend-EXHAUSTION style on this project's own 5-year
-historical data. Treat this tier as the user's own trading judgment,
-not as proven -- same posture the Momentum Screener page already takes
-with its non-validated tiers (divergence, regime priority). Backtest it
-the same way (scripts/search_momentum_rules.py's method) before trusting
-it the way the validated_signal combo is trusted.
+BACKTEST RESULT (scripts/backtest_expert_golden_cross.py, same +5%/
+-2.5%/10-trading-day target and as-of-replay methodology as
+scripts/search_momentum_rules.py, 5 years of IDX history, 99 as-of
+dates): NOT statistically distinguishable from the null baseline.
+
+    Null baseline:                        n=67,298  WR=30.79%
+    FULL COMBO (all 4 gates, what ships): n=243     WR=34.16%  Wilson LB=28.48%  <- below null
+    Golden Cross (any) alone:             n=4,582   WR=31.80%  Wilson LB=30.47%
+    Golden Cross MA50xMA200 alone:        n=951     WR=29.76%  Wilson LB=26.94%
+    Golden Cross MA20xMA50 alone:         n=3,631   WR=32.33%  Wilson LB=30.83%
+    MACD early-stage alone:               n=15,294  WR=31.18%  Wilson LB=30.45%
+    Volume confirmation alone:            n=22,314  WR=31.03%  Wilson LB=30.43%
+    RSI normal alone:                     n=48,073  WR=30.20%  Wilson LB=29.79%
+    FULL COMBO + near-support bonus:      n=20      WR=80.00%  Wilson LB=58.40%  <- n WAY too small to trust
+
+The full combo's raw win rate (34.16%) looks better than null (30.79%),
+but its Wilson lower bound (28.48%) sits BELOW null -- exactly the
+project's own established bar for "not yet distinguishable from chance"
+(same standard applied throughout scripts/search_momentum_rules.py and
+scripts/grid_search_momentum_rules.py). None of the four gates carries
+an edge in isolation either -- all four sit right at the null baseline's
+own confidence band. The near-support bonus's 80% win rate is real
+output, not a bug, but n=20 is the exact small-n-spike trap this
+project's own grid search already flagged once (a n=192 top result
+there was judged likely overfit; n=20 here is worse) -- do not read it
+as "the support bonus works."
+
+For context, an EARLIER "Golden Cross" tested in this project
+(scripts/test_strategy_6_criteria.py, 26.2% win rate, also below null)
+was a DIFFERENT pattern -- MACD-line-crosses-signal-line-below-zero, not
+this module's price-moving-average crossover -- so that result isn't
+directly about this one; this backtest is the first real test of the
+price-MA version. It also lands below null, independently. Consistent
+with this project's repeated finding elsewhere (see features/
+momentum_screener.py's REGIME_PRIORITY/VALIDATED_RVOL_THRESHOLD
+comments) that an already-confirmed-bullish read tends to underperform
+a still-weak-looking one on this project's own 5-year IDX data.
+
+Conclusion: ship this as a clearly-unproven manual-observation aid (same
+posture as the page's other non-validated tiers -- divergence, regime
+priority), NOT as validated. Do not present its score/tier as a
+confidence level backed by data; it's a heuristic point count. If
+tuned further, re-run scripts/backtest_expert_golden_cross.py rather
+than assuming a change helps -- and be wary of testing many small
+variations, exactly the multiple-comparisons trap that produced the
+misleading n=192 spike scripts/grid_search_momentum_rules.py's docstring
+warns about.
 
 Weights below are a REASONABLE heuristic split of 100 points across how
 much each gate/bonus signals confidence (golden cross type matters most,

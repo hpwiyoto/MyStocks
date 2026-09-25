@@ -70,19 +70,20 @@ st.info(
     icon="ℹ️",
 )
 st.warning(
-    "**🧠 Expert System: Golden Cross Awal** (baru, di bagian bawah halaman) -- dari aturan "
-    "trading Anda sendiri: Golden Cross baru (MA50xMA200 atau MA20xMA50, dalam 5 hari terakhir) "
-    "+ volume di atas rata-rata + RSI normal (tidak oversold) + MACD histogram baru/menjelang "
-    "crossover (BUKAN sudah di puncak atau sedang menurun) -- keempatnya wajib terpenuhi. "
-    "Foreign flow akumulasi & harga dekat support menambah skor keyakinan tapi tidak wajib. "
-    "**Belum terbukti lewat backtest seperti kotak hijau di atas** -- ini murni penjabaran "
-    "aturan Anda, bukan temuan tervalidasi. Perlu jujur disebutkan: proyek ini SUDAH pernah "
-    "menguji \"Golden Cross saja\" secara terpisah (`scripts/test_strategy_6_criteria.py`) dan "
-    "hasilnya 26,2% -- DI BAWAH baseline acak 30,6%; riset lain di halaman ini juga berulang kali "
-    "menemukan pola \"sudah terkonfirmasi bullish\" (MACD Bullish, CMF>0) tes lebih buruk dari "
-    "yang \"masih terlihat lemah\". Kombinasi INI (dengan konfirmasi volume/RSI/MACD tambahan) "
-    "belum pernah diuji spesifik -- silakan pakai sebagai alat bantu, tapi anggap heuristik "
-    "sampai benar-benar di-backtest.",
+    "**🧠 Expert System: Golden Cross Awal** (di bagian bawah halaman) -- dari aturan trading "
+    "Anda sendiri: Golden Cross baru (MA50xMA200 atau MA20xMA50, dalam 5 hari terakhir) + volume "
+    "di atas rata-rata + RSI normal (tidak oversold) + MACD histogram baru/menjelang crossover "
+    "(BUKAN sudah di puncak atau sedang menurun) -- keempatnya wajib. Foreign flow akumulasi & "
+    "harga dekat support menambah skor keyakinan tapi tidak wajib.\n\n"
+    "**SUDAH di-backtest** (`scripts/backtest_expert_golden_cross.py`, metode sama seperti kotak "
+    "hijau di atas -- 5 tahun data IDX, target +5%/-2,5%/10 hari) -- **hasilnya belum terbukti "
+    "mengalahkan acak.** Kombinasi 4 syarat menang 34,2% dari 243 kejadian (baseline acak 30,8%), "
+    "tapi batas bawah keyakinan 95%-nya cuma 28,5% -- di BAWAH baseline, artinya secara statistik "
+    "belum bisa dibedakan dari kebetulan (n masih terlalu kecil). Tiap syarat satu-satu juga "
+    "tidak ada yang punya edge sendiri -- semuanya nyaris pas di baseline. Bonus 'dekat support' "
+    "terlihat 80% menang tapi dari cuma 20 kejadian -- klasik jebakan n-kecil yang sudah pernah "
+    "ditemukan di riset lain proyek ini, jangan dipercaya begitu saja. Kesimpulan: pakai sebagai "
+    "alat bantu observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
     icon="🧠",
 )
 
