@@ -4,9 +4,21 @@ find out whether it actually beats doing nothing, same "test before
 trusting" posture as everything else in this project.
 
 Same target/methodology as scripts/search_momentum_rules.py (+5%/-2.5%/
-10 trading days triple barrier, no-lookahead as-of replay strided every
-AS_OF_STRIDE trading days) for direct comparability against the numbers
-already established there and in scripts/grid_search_momentum_rules.py.
+10 trading days triple barrier, no-lookahead as-of replay) for direct
+comparability against the numbers already established there and in
+scripts/grid_search_momentum_rules.py. As-of dates selected via
+scripts.search_momentum_rules.select_as_of_dates (calendar-anchored,
+not the old array-position stride -- see that function's docstring for
+why the switch: the old method turned out to silently reshuffle which
+dates get tested whenever unrelated historical data gets corrected,
+which is exactly what happened partway through this feature's own
+development, 2026-09-25).
+
+NOTE: the v1/v2 backtest numbers referenced in features/expert_rules.py's
+docstring were computed BEFORE this fix, using the old array-position
+stride -- they are a real historical record of what those runs showed at
+the time, but are not exactly reproducible with this version of the
+script. Re-run this script for the current, methodology-fixed numbers.
 
 Calls features.expert_rules.evaluate_expert_signal DIRECTLY on each
 historical as-of-date's trailing window, rather than re-implementing the
@@ -25,12 +37,14 @@ of the price-MA version.
 Usage:
     python -m scripts.backtest_expert_golden_cross
 """
+import datetime as dt
+
 import pandas as pd
 
 from features.expert_rules import evaluate_expert_signal
 from pipeline.db import get_engine
 from pipeline.logging_config import get_logger
-from scripts.search_momentum_rules import wilson_lower_bound
+from scripts.search_momentum_rules import select_as_of_dates, wilson_lower_bound
 
 logger = get_logger("scripts.backtest_expert_golden_cross")
 
@@ -38,8 +52,10 @@ TARGET_PCT = 0.05
 STOP_PCT = 0.025
 HORIZON = 10
 LOOKBACK_DAYS = 60   # matches app.data.load_screener_raw_panel's default window fed to the live rules
-AS_OF_STRIDE = 10
-WARMUP_DATES = 220   # sma_200 itself needs ~200 trading days of history before it's non-NaN
+# WARMUP/stride selection delegated to scripts.search_momentum_rules.
+# select_as_of_dates -- sma_200 not being ready yet is already handled by
+# the per-row NaN check below (build_dataset), same as before; no need
+# for a separate larger warmup just for that.
 
 
 def triple_barrier_outcome(fwd: pd.DataFrame, entry_price: float) -> int | None:
@@ -82,9 +98,8 @@ def build_dataset() -> pd.DataFrame:
     ticker_frames = {code: g.reset_index(drop=True) for code, g in panel.groupby("stock_code")}
     idx_by_date = {code: {d: i for i, d in enumerate(g["date"])} for code, g in ticker_frames.items()}
 
-    all_dates = sorted(panel["date"].unique())
-    usable_dates = all_dates[WARMUP_DATES:-HORIZON - 1]
-    as_of_dates = usable_dates[::AS_OF_STRIDE]
+    all_dates_dt = sorted(dt.date.fromisoformat(d) for d in panel["date"].unique())
+    as_of_dates = [d.isoformat() for d in select_as_of_dates(all_dates_dt)]
     logger.info("%d as-of dates", len(as_of_dates))
 
     rows = []

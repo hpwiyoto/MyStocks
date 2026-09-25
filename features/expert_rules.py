@@ -37,44 +37,46 @@ out on their own -- exactly the "bisa dijadikan menambah bobot" (CAN be
 used to add weight) framing the user used, as opposed to "pastikan"
 (make sure) for 1-5.
 
-BACKTEST RESULT, v2 -- CURRENT 5-gate version incl. liquidity gate and
-MA9-approaching alternative (scripts/backtest_expert_golden_cross.py,
-2026-09-25, same +5%/-2.5%/10-trading-day target and as-of-replay
-methodology as scripts/search_momentum_rules.py, 5 years of IDX
-history, 99 as-of dates). STILL not statistically distinguishable from
-the null baseline overall -- one bonus-conditioned subset is more
-promising than the v1 result but still on the small side to trust.
+BACKTEST RESULT, v3 -- CURRENT 5-gate version, CORRECTED as-of-date
+sampling (scripts/backtest_expert_golden_cross.py, 2026-09-25, same
++5%/-2.5%/10-trading-day target as scripts/search_momentum_rules.py, 5
+years of IDX history, 120 as-of dates via
+scripts.search_momentum_rules.select_as_of_dates -- calendar-anchored,
+NOT the old array-position stride v1/v2 below used). Still not
+statistically distinguishable from the null baseline -- and the one
+subset that looked promising under the old (buggy) sampling now looks
+WORSE than null with the fix, confirming it was a sampling artifact,
+not a real signal.
 
-    Null baseline:                        n=67,298  WR=30.79%
-    FULL COMBO (all 5 gates, what ships): n=356     WR=34.27%  Wilson LB=29.53%  <- still below null
-    Golden Cross (any type) alone:        n=12,792  WR=29.88%  Wilson LB=29.09%  <- now below null (MA9-approaching diluted it)
-    Golden Cross MA20xMA50 alone:         n=3,631   WR=32.33%  Wilson LB=30.83%
-    Golden Cross MA50xMA200 alone:        n=951     WR=29.76%  Wilson LB=26.94%
-    MACD early-stage alone:               n=15,294  WR=31.18%  Wilson LB=30.45%
-    Volume confirmation alone:            n=22,314  WR=31.03%  Wilson LB=30.43%
-    RSI normal alone:                     n=48,073  WR=30.20%  Wilson LB=29.79%
-    FULL COMBO, 'Kuat' tier (score>=85):  n=185     WR=33.51%  Wilson LB=27.11%
-    FULL COMBO + foreign flow bonus:      n=55      WR=29.09%  Wilson LB=18.77%
-    FULL COMBO + near-support bonus:      n=57      WR=47.37%  Wilson LB=34.99%  <- ABOVE null, but n still modest
+    Null baseline:                        n=74,769  WR=32.02%
+    FULL COMBO (all 5 gates, what ships): n=387     WR=33.07%  Wilson LB=28.57%  <- below null
+    FULL COMBO + near-support bonus:      n=57      WR=38.60%  Wilson LB=27.06%  <- ALSO below null now (was 35.0% under buggy v2 sampling)
+    Golden Cross MA50xMA200 alone:        n=1,090   WR=29.63%  Wilson LB=27.00%
+    Golden Cross (any type) alone:        n=14,285  WR=31.03%  Wilson LB=30.27%
+    MACD early-stage alone:               n=17,138  WR=31.01%  Wilson LB=30.32%
+    Volume confirmation alone:            n=24,651  WR=32.05%  Wilson LB=31.47%
+    RSI normal alone:                     n=52,709  WR=31.06%  Wilson LB=30.67%
 
-The full combo (all 5 gates) is STILL below null on its own -- adding
-the liquidity gate and MA9 alternative moved n up (243->356) and the
-point estimate barely (34.16%->34.27%), not enough to change the
-conclusion. The near-support bonus subset improved meaningfully from v1
-(n=20, WR=80%, almost certainly a small-n fluke) to v2 (n=57, WR=47%,
-Wilson LB now clears null) -- genuinely more interesting than before,
-but n=57 is still on the low side by this project's own standard for
-trusting a result (the grid search's own n=192 top result was judged
-likely overfit) -- worth watching/re-testing as more data accumulates,
-NOT yet something to trust or ship as a separate validated tier.
+Every candidate here sits at or below the null baseline's own Wilson
+band -- the FULL COMBO's raw win rate (33.07%) is close to but under
+null (32.02%), and its LB (28.57%) is clearly under. The near-support
+bonus subset -- which under the OLD, buggy array-position stride (see
+scripts.search_momentum_rules.select_as_of_dates's docstring for the
+full story) looked like the one genuinely interesting lead (v2: n=57,
+WR=47%, LB=35.0%, above null) -- now shows n=57, WR=39%, LB=27.1% with
+the corrected sampling, BELOW null. This is a clean, direct
+demonstration of exactly why the sampling fix mattered: the same exact
+n=57 rows-of-interest under the old method looked like a real edge and
+under the fixed method don't -- the underlying market reality didn't
+change, only which historical dates got tested.
 
 For context, an EARLIER "Golden Cross" tested in this project
-(scripts/test_strategy_6_criteria.py, 26.2% win rate, also below null)
-was a DIFFERENT pattern -- MACD-line-crosses-signal-line-below-zero, not
-this module's price-moving-average crossover. This backtest is the
-real test of the price-MA version, and (both v1 and v2) it also lands
-at/below null. Consistent with this project's repeated finding
-elsewhere (see features/momentum_screener.py's REGIME_PRIORITY/
+(scripts/test_strategy_6_criteria.py, also below null) was a DIFFERENT
+pattern -- MACD-line-crosses-signal-line-below-zero, not this module's
+price-moving-average crossover. This backtest is the real test of the
+price-MA version, and it also lands at/below null, now confirmed with
+corrected methodology too. Consistent with this project's repeated
+finding elsewhere (see features/momentum_screener.py's REGIME_PRIORITY/
 VALIDATED_RVOL_THRESHOLD comments) that an already-confirmed-bullish
 read tends to underperform a still-weak-looking one on this project's
 own 5-year IDX data.

@@ -280,13 +280,14 @@ def load_screener_raw_panel(lookback_days: int = 60) -> pd.DataFrame:
     """Bulk per-(ticker, date) panel across the WHOLE universe for the last
     ~`lookback_days` TRADING days, feeding features.momentum_screener's
     MACD-status classification, RSI/MACD divergence detection, (via
-    high/low, added for the Anchored VWAP validated-signal criterion --
-    see scripts/test_strategy_6_criteria.py) the AVWAP-from-50-day-low
-    check, and features.expert_rules' golden-cross/MACD-phase/foreign-flow/
-    support-proximity rules (added for that module -- see its docstring)
-    on the Momentum Screener page. Unlike load_price_history (one ticker),
-    this scores the whole universe at once -- same shape as
-    load_latest_predictions.
+    high/low) the AVWAP-from-50-day-low check -- informational display
+    only now, NOT part of is_validated_signal's gate as of the
+    2026-09-25 re-verification, see features/momentum_screener.py's
+    AVWAP_WINDOW comment -- and features.expert_rules' golden-cross/
+    MACD-phase/foreign-flow/support-proximity rules (added for that
+    module -- see its docstring) on the Momentum Screener page. Unlike
+    load_price_history (one ticker), this scores the whole universe at
+    once -- same shape as load_latest_predictions.
 
     Cutoff is a plain calendar-date WHERE clause (lookback_days*2 days back,
     a generous buffer for weekends/holidays) computed in Python rather than

@@ -71,19 +71,47 @@ DEFAULT_REGIME_PRIORITY = len(REGIME_PRIORITY)  # unknown/missing regime sorts l
 # keep correlating with MORE forward room than already-confirmed-positive
 # ones -- a stock the market is still selling has more room to surprise
 # than one it has already bid up.
+#
+# RE-VERIFIED 2026-09-25 (scripts/test_strategy_6_criteria.py, after
+# fixing an unrelated as-of-date sampling bug -- see
+# scripts.search_momentum_rules.select_as_of_dates's docstring): this
+# 4-criteria combo (WITHOUT AVWAP -- see AVWAP_WINDOW below for why
+# AVWAP is no longer required) still clears the null baseline, but by a
+# much thinner margin than originally reported: n=1099, win_rate=34.9%,
+# Wilson LB=32.2%, vs a null baseline of 31.8% (both numbers shifted
+# because the fixed, calendar-anchored sampling selects a different,
+# larger as-of-date set than the old array-position stride -- not
+# directly comparable in absolute terms to the 958/39.8%/36.7% figures
+# above, which used the old, buggy method). A 0.4-point LB-over-null
+# margin is real but genuinely thin -- treat this as a live, still-
+# monitored edge, not a settled one; re-verify again if this stops
+# clearing null on a future re-check.
 VALIDATED_RVOL_THRESHOLD = 0.8
 
-# Added after scripts/test_strategy_6_criteria.py backtested a user-
-# proposed 6-criteria strategy (Anchored VWAP among them) against the same
-# 76,442-instance historical dataset. The 6-criteria combo AS SPECIFIED
-# was unusable stacked together (n=12, win_rate 25% -- WORSE than the
-# 30.55% null baseline), and 5 of its 6 pieces were weak-to-harmful in
-# isolation (Anchored VWAP alone: 29.1%, Golden Cross alone: 26.2%, both
-# below null). But requiring close >= this Anchored VWAP ON TOP OF the
-# already-validated rule below genuinely helped: n=958->523,
-# win_rate 39.8%->42.4%, Wilson LB 36.7%->38.3% -- a real gain on the
-# metric that matters (LB, which penalizes the smaller n), not just a
-# smaller sample cherry-picked for a better point estimate.
+# Anchored VWAP was added after scripts/test_strategy_6_criteria.py
+# backtested a user-proposed 6-criteria strategy (Anchored VWAP among
+# them): the 6-criteria combo AS SPECIFIED was unusable stacked together
+# (n=12, win_rate 25% -- WORSE than null), and 5 of its 6 pieces were
+# weak-to-harmful in isolation, but requiring close >= this Anchored
+# VWAP ON TOP OF the already-validated rule above ORIGINALLY looked like
+# a genuine improvement: n=958->523, win_rate 39.8%->42.4%,
+# Wilson LB 36.7%->38.3%.
+#
+# REVERSED on re-verification, 2026-09-25 (same sampling-bug fix as
+# above): with the corrected as-of-date selection, adding this AVWAP
+# requirement now HURTS -- n=1099->573, win_rate 34.9%->33.3%,
+# Wilson LB 32.2%->29.6% (BELOW the 31.8% null baseline). The original
+# "AVWAP helps" finding turns out to have been an artifact of the old
+# array-position stride sampling a slightly different, more favorable
+# set of as-of dates for this specific narrow filter -- not a real
+# property of Anchored VWAP itself (see
+# scripts.search_momentum_rules.select_as_of_dates's docstring for the
+# full mechanism). is_validated_signal below NO LONGER requires
+# close_above_avwap as of this fix -- the function still accepts the
+# parameter (existing callers compute it regardless, and it's still
+# shown as informational context on the Momentum Screener table), it's
+# just not part of the gate anymore. AVWAP_WINDOW/compute_avwap_from_low
+# are kept for that informational display.
 AVWAP_WINDOW = 50
 
 
@@ -107,13 +135,17 @@ def compute_avwap_from_low(close: np.ndarray, high: np.ndarray, low: np.ndarray,
     return float((seg_typical * seg_vol).sum() / vol_sum)
 
 
-def is_validated_signal(regime, macd_hist_slope_3d, cmf_20, rvol_20, close_above_avwap) -> bool:
+def is_validated_signal(regime, macd_hist_slope_3d, cmf_20, rvol_20, close_above_avwap=None) -> bool:
+    """close_above_avwap is accepted but NO LONGER part of the gate as of
+    the 2026-09-25 re-verification -- see AVWAP_WINDOW's comment above
+    for why (requiring it now measurably HURTS the Wilson LB with
+    corrected sampling). Kept as a parameter so existing callers that
+    still compute and pass it don't need updating."""
     return (
         regime == "bottoming"
         and pd.notna(macd_hist_slope_3d) and macd_hist_slope_3d > 0
         and pd.notna(cmf_20) and cmf_20 < 0
         and pd.notna(rvol_20) and rvol_20 >= VALIDATED_RVOL_THRESHOLD
-        and close_above_avwap is True
     )
 
 

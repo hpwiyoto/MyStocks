@@ -49,6 +49,8 @@ of this finding.
 Usage:
     python -m scripts.test_strategy_6_criteria
 """
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 
@@ -60,11 +62,10 @@ from features.momentum_screener import (
 )
 from pipeline.logging_config import get_logger
 from scripts.search_momentum_rules import (
-    AS_OF_STRIDE,
     HORIZON,
     LOOKBACK_DAYS,
-    WARMUP_DATES,
     load_full_panel,
+    select_as_of_dates,
     triple_barrier_outcome,
     wilson_lower_bound,
 )
@@ -122,9 +123,8 @@ def build_dataset() -> pd.DataFrame:
         ticker_frames[code] = _add_new_indicators(g)
     as_of_idx_by_ticker = {code: {d: i for i, d in enumerate(g["date"])} for code, g in ticker_frames.items()}
 
-    all_dates = sorted(panel["date"].unique())
-    usable_dates = all_dates[WARMUP_DATES:-HORIZON - 1]
-    as_of_dates = usable_dates[::AS_OF_STRIDE]
+    all_dates_dt = sorted(dt.date.fromisoformat(d) for d in panel["date"].unique())
+    as_of_dates = [d.isoformat() for d in select_as_of_dates(all_dates_dt)]
     logger.info("%d as-of dates", len(as_of_dates))
 
     rows = []

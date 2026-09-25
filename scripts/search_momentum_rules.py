@@ -19,6 +19,8 @@ re-running the full screen+outcome pass per candidate.
 Usage:
     python -m scripts.search_momentum_rules
 """
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 
@@ -39,6 +41,57 @@ HORIZON = 10
 LOOKBACK_DAYS = 60
 AS_OF_STRIDE = 10
 WARMUP_DATES = 120
+
+# Calendar-day equivalents of the trading-day constants above, used ONLY
+# by select_as_of_dates below (kept alongside WARMUP_DATES/HORIZON/
+# AS_OF_STRIDE, still used elsewhere -- e.g. LOOKBACK_DAYS-sized windows
+# -- rather than replacing them everywhere). ~7/5 trading-to-calendar-day
+# ratio, padded for safety margin.
+WARMUP_CALENDAR_DAYS = 170   # ~120 trading days
+HORIZON_CALENDAR_DAYS = 15   # ~10 trading days
+STRIDE_CALENDAR_DAYS = 14    # ~10 trading days
+
+
+def select_as_of_dates(all_dates: list[dt.date]) -> list[dt.date]:
+    """Calendar-anchored, deterministic as-of-date selection -- REPLACES
+    the old `all_dates[WARMUP_DATES:-HORIZON-1][::AS_OF_STRIDE]`
+    array-position stride, which turned out not to be robust to
+    insertions/deletions elsewhere in `all_dates`.
+
+    Confirmed real problem, not hypothetical (2026-09-25): deleting 9
+    phantom calendar dates (pipeline.ingest_price's holiday guard fix +
+    scripts/cleanup_holiday_phantom_rows.py, both from earlier the same
+    session) shifted the OLD stride's array positions for the ~8% of
+    as-of dates nearest the tail of the window -- with NO actual change
+    to market reality for the other ~92% -- and that alone was enough to
+    swing a real, previously-reported result (features.momentum_screener.
+    is_validated_signal, originally n=523 win_rate=42.45% Wilson
+    LB=38.28%) down to n=441 win_rate=34.24% Wilson LB=29.96% on a
+    literal re-run of the unmodified original script against today's
+    (correctly cleaned) data. The overall unfiltered null-baseline
+    dataset barely moved (76,442->76,387, -0.07%) confirming this was a
+    reshuffle of WHICH dates get tested, not a wholesale data loss.
+
+    This selects one as-of date per `STRIDE_CALENDAR_DAYS`-wide calendar
+    bucket (bucketed from the array's own earliest date as a fixed
+    epoch, so which bucket a date falls into never depends on which
+    OTHER dates happen to exist in `all_dates`) -- keeping the first
+    actually-available trading date in each bucket. Removing or adding a
+    date anywhere else in the array can now only ever affect that ONE
+    bucket, never cascade into reshuffling every later one the way a
+    position-based slice/stride does.
+    """
+    if not all_dates:
+        return []
+    epoch = all_dates[0]
+    warmup_cutoff = epoch + dt.timedelta(days=WARMUP_CALENDAR_DAYS)
+    horizon_cutoff = all_dates[-1] - dt.timedelta(days=HORIZON_CALENDAR_DAYS)
+    candidates = [d for d in all_dates if warmup_cutoff <= d <= horizon_cutoff]
+    buckets: dict[int, dt.date] = {}
+    for d in candidates:
+        bucket = (d - epoch).days // STRIDE_CALENDAR_DAYS
+        buckets.setdefault(bucket, d)  # candidates is ascending -> first-seen wins
+    return sorted(buckets.values())
 
 
 def triple_barrier_outcome(fwd: pd.DataFrame, entry_price: float) -> int | None:
@@ -79,9 +132,12 @@ def build_dataset() -> pd.DataFrame:
     ticker_frames = {code: g.reset_index(drop=True) for code, g in panel.groupby("stock_code")}
     as_of_idx_by_ticker = {code: {d: i for i, d in enumerate(g["date"])} for code, g in ticker_frames.items()}
 
-    all_dates = sorted(panel["date"].unique())
-    usable_dates = all_dates[WARMUP_DATES:-HORIZON - 1]
-    as_of_dates = usable_dates[::AS_OF_STRIDE]
+    # panel["date"] is a plain string here (raw-SQL result, bypasses
+    # SQLAlchemy's column-type processing -- see pipeline.db.coerce_date's
+    # docstring) -- select_as_of_dates needs real dt.date objects to do
+    # calendar arithmetic.
+    all_dates = sorted(dt.date.fromisoformat(d) for d in panel["date"].unique())
+    as_of_dates = [d.isoformat() for d in select_as_of_dates(all_dates)]
     logger.info("%d as-of dates", len(as_of_dates))
 
     rows = []

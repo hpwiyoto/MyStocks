@@ -44,21 +44,25 @@ st.caption(
     "tiebreaker terakhir -- bukan penentu urutan."
 )
 st.success(
-    "**✅ Sinyal Tervalidasi** (diperbarui): `scripts/search_momentum_rules.py` + lanjutan grid "
-    "search 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`) menguji terhadap 76.442 "
-    "kejadian historis nyata (5 tahun, target sama seperti Swing: naik ≥5% sebelum turun -2,5% "
-    "dalam 10 hari). Baseline acak menang **30,6%**. Kombinasi **regime bottoming + momentum "
-    "histogram menguat + money flow negatif (distribusi, BUKAN akumulasi) + volume relatif "
-    "≥0,8x** terbukti menang **39,8%** (batas bawah keyakinan 95%: 36,7%, dari 958 kejadian). "
-    "Ditambah satu lapisan konfirmasi lagi setelah menguji 6 kriteria yang diusulkan pengguna "
-    "(`scripts/test_strategy_6_criteria.py`) -- 5 dari 6 kriteria itu lemah/lebih buruk dari acak "
-    "sendirian, tapi **harga ≥ Anchored VWAP dari titik terendah 50 hari** ('modal rata-rata "
-    "smart money' sejak harga menyentuh dasar) terbukti menaikkan win rate lagi ke **42,4%** "
-    "(batas bawah keyakinan 95%: 38,3%, dari 523 kejadian). Money flow negatif terdengar aneh "
-    "untuk sinyal 'naik' tapi konsisten dengan pola lain di sini: saham yang secara permukaan "
-    "masih terlihat lemah justru punya ruang lebih besar untuk mengejutkan naik. Ini satu-satunya "
-    "kombinasi di halaman ini yang terbukti lebih baik dari acak secara statistik -- kriteria "
-    "lain (termasuk divergence & regime priority) murni heuristik yang masuk akal tapi belum terbukti.",
+    "**✅ Sinyal Tervalidasi** (diverifikasi ulang 25 Sep 2026): `scripts/search_momentum_rules.py` "
+    "+ lanjutan grid search 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`) menguji "
+    "terhadap data historis nyata (5 tahun, target sama seperti Swing: naik ≥5% sebelum turun "
+    "-2,5% dalam 10 hari). Kombinasi **regime bottoming + momentum histogram menguat + money flow "
+    "negatif (distribusi, BUKAN akumulasi) + volume relatif ≥0,8x** masih menang dari baseline "
+    "acak (baseline 31,8%, kombinasi ini 34,9%, batas bawah keyakinan 95%: **32,2%**, dari 1.099 "
+    "kejadian) -- tapi marginnya tipis (cuma 0,4 poin di atas baseline), bukan margin besar yang "
+    "pernah dilaporkan sebelumnya. Money flow negatif terdengar aneh untuk sinyal 'naik' tapi "
+    "konsisten dengan pola lain di sini: saham yang secara permukaan masih terlihat lemah justru "
+    "punya ruang lebih besar untuk mengejutkan naik.\n\n"
+    "**Koreksi penting**: syarat tambahan *harga ≥ Anchored VWAP* yang sebelumnya diklaim "
+    "menaikkan win rate ke 42,4% (LB 38,3%) sudah DICABUT dari syarat wajib -- verifikasi ulang "
+    "menemukan bug sampling di metode backtest lama (lihat `scripts/search_momentum_rules.py` "
+    "fungsi `select_as_of_dates`) yang membuat temuan AVWAP itu artefak, bukan pola nyata. Dengan "
+    "sampling yang sudah diperbaiki, menambahkan syarat AVWAP justru MENURUNKAN batas bawah ke "
+    "29,6% -- di bawah baseline. Kesimpulan: kombinasi 4 kriteria di atas (tanpa AVWAP) tetap "
+    "satu-satunya yang terbukti lebih baik dari acak di halaman ini, tapi dengan margin yang jauh "
+    "lebih tipis dari yang pernah dilaporkan -- kriteria lain (termasuk divergence & regime "
+    "priority) tetap murni heuristik yang belum terbukti.",
     icon="✅",
 )
 st.info(
@@ -76,16 +80,16 @@ st.warning(
     "MACD histogram baru/menjelang crossover (BUKAN sudah di puncak atau sedang menurun) + "
     "likuiditas cukup (≥ Rp 1 miliar/hari rata-rata 20 hari) -- kelimanya wajib. Foreign flow "
     "akumulasi & harga dekat support menambah skor keyakinan tapi tidak wajib.\n\n"
-    "**SUDAH di-backtest ulang** (`scripts/backtest_expert_golden_cross.py`, metode sama seperti "
-    "kotak hijau di atas -- 5 tahun data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap "
-    "(5 syarat) masih belum terbukti mengalahkan acak**: menang 34,3% dari 356 kejadian (baseline "
-    "acak 30,8%), tapi batas bawah keyakinan 95%-nya 29,5% -- masih di BAWAH baseline. Satu temuan "
-    "yang lebih menjanjikan dari sebelumnya: kombinasi lengkap + bonus 'dekat support' naik dari "
-    "n=20 (kemungkinan besar kebetulan) menjadi **n=57, menang 47,4%, batas bawah 35,0% -- kali "
-    "ini DI ATAS baseline** -- tapi n=57 masih tergolong kecil menurut standar proyek ini sendiri "
-    "(temuan n=192 di riset lain pernah dinilai kemungkinan overfit), jadi ini sinyal yang patut "
-    "dipantau, BUKAN sudah terbukti. Kesimpulan: pakai sebagai alat bantu observasi manual, "
-    "JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
+    "**SUDAH di-backtest ulang dengan metode sampling yang diperbaiki** (25 Sep 2026, lihat "
+    "`scripts/backtest_expert_golden_cross.py` -- metode sama seperti kotak hijau di atas, 5 tahun "
+    "data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap (5 syarat) TIDAK terbukti "
+    "mengalahkan acak**: menang 33,1% dari 387 kejadian (baseline acak 32,0%), batas bawah "
+    "keyakinan 95%-nya cuma 28,6% -- di BAWAH baseline. Bonus 'dekat support' yang sebelumnya "
+    "sempat terlihat menjanjikan (35,0%, di atas baseline) ternyata itu ARTEFAK bug sampling di "
+    "metode backtest lama -- setelah diperbaiki, angka yang SAMA PERSIS (n=57) sekarang menunjukkan "
+    "27,1%, di BAWAH baseline. Tidak ada satu pun kriteria (Golden Cross, MACD awal, volume, RSI) "
+    "yang punya edge sendiri baik sebelum maupun sesudah perbaikan. Kesimpulan: pakai sebagai alat "
+    "bantu observasi manual, JANGAN diperlakukan setara 'Sinyal Tervalidasi' di atas.",
     icon="🧠",
 )
 
@@ -211,9 +215,10 @@ with st.sidebar:
     validated_only = st.checkbox(
         "✅ Hanya Sinyal Tervalidasi", value=False,
         help="regime bottoming + momentum histogram menguat + money flow negatif + volume relatif "
-             "≥0,8x + harga ≥ Anchored VWAP dari titik terendah 50 hari -- satu-satunya kombinasi di "
-             "halaman ini yang terbukti menang lebih sering dari baseline acak lewat backtest 5 tahun "
-             "(42,4% vs 30,6%, lihat kotak hijau di atas).",
+             "≥0,8x (TIDAK termasuk syarat AVWAP lagi, dicabut setelah verifikasi ulang -- lihat "
+             "kotak hijau di atas) -- satu-satunya kombinasi di halaman ini yang terbukti menang "
+             "lebih sering dari baseline acak lewat backtest 5 tahun, tapi dengan margin tipis "
+             "(34,9% vs baseline 31,8%, lihat kotak hijau di atas).",
     )
 
 # True count regardless of any sidebar filter below -- shown in its own
@@ -391,7 +396,7 @@ for row_chunk in rows:
             div_badge = badge_html(DIVERGENCE_LABELS[r["divergence_tier"]], DIVERGENCE_COLORS[r["divergence_tier"]])
             macd_badge = badge_html(r["macd_status"], MACD_STATUS_COLORS.get(r["macd_status"], TEXT_MUTED))
             prob_txt = f"{float(r['probability']) * 100:.1f}%" if pd.notna(r["probability"]) else "belum ada prediksi"
-            validated_badge = badge_html("✅ Tervalidasi (42,4% win rate)", "#22C55E") if r["validated_signal"] else ""
+            validated_badge = badge_html("✅ Tervalidasi (34,9% win rate)", "#22C55E") if r["validated_signal"] else ""
             # dedent() strips the ~16 spaces of Python source indentation
             # every line in this f-string carries (nested inside a for-loop
             # inside "with col:") -- Markdown treats a line indented 4+

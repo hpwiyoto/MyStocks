@@ -50,13 +50,16 @@ st.caption(
     "KEDUANYA pada saat yang sama, bukan cuma dari satu sudut pandang."
 )
 st.success(
-    "**Bukti historis (backtest 5 tahun, `scripts/search_momentum_rules.py` + lanjutannya)**: saham "
-    "yang lolos Sinyal Tervalidasi Momentum Screener SENDIRIAN (termasuk kriteria Anchored VWAP, "
-    "lihat halaman Momentum Screener) menang **42,4%** dari kejadian (n=523, batas bawah keyakinan "
-    "95%: 38,3%) -- satu-satunya angka gabungan yang sudah diuji ketat lewat walk-forward validation "
-    "di halaman ini. Menambahkan syarat Swing ≥WATCH di atasnya BELUM diuji ulang secara terpisah "
-    "untuk kombinasi dua-alat ini -- anggap sebagai penyaring tambahan yang masuk akal, bukan angka "
-    "yang sudah terbukti sendiri.",
+    "**Bukti historis (backtest 5 tahun, `scripts/search_momentum_rules.py` + lanjutannya, "
+    "diverifikasi ulang 25 Sep 2026)**: saham yang lolos Sinyal Tervalidasi Momentum Screener "
+    "SENDIRIAN menang **34,9%** dari kejadian (n=1.099, batas bawah keyakinan 95%: 32,2%, vs "
+    "baseline acak 31,8%) -- marginnya tipis, tapi ini tetap satu-satunya angka gabungan yang "
+    "sudah diuji ketat lewat walk-forward validation di halaman ini. (Klaim sebelumnya, 42,4%/"
+    "LB 38,3% dengan syarat tambahan Anchored VWAP, DICABUT -- verifikasi ulang menemukan bug "
+    "sampling di metode backtest lama yang membuat temuan AVWAP itu artefak, bukan pola nyata; "
+    "lihat halaman Momentum Screener untuk detail.) Menambahkan syarat Swing ≥WATCH di atasnya "
+    "BELUM diuji ulang secara terpisah untuk kombinasi dua-alat ini -- anggap sebagai penyaring "
+    "tambahan yang masuk akal, bukan angka yang sudah terbukti sendiri.",
     icon="🏆",
 )
 st.info(
