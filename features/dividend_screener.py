@@ -1,6 +1,7 @@
-"""Seasonal dividend screener for the Momentum Screener page -- direct
-user request: find high-yield dividend payers that HISTORICALLY tend to
-go ex-dividend in the next ~1-2 months, as a rough seasonal hint.
+"""Dividend screening for the Dividen Momentum page -- direct user
+request: (1) rank issuers by dividend size, (2) find high-yield payers
+that HISTORICALLY tend to go ex-dividend in the next ~1-2 months, as a
+rough seasonal hint.
 
 IMPORTANT LIMITATION, stated up front rather than buried: there is no
 reliable FORWARD-LOOKING dividend calendar available to this project.
@@ -19,9 +20,8 @@ probe for one.
 
 So: this module can only show WHEN a ticker HAS paid dividends in past
 years (from price_history.dividends, already ingested as a side effect
-of routine OHLCV fetches -- see pipeline/ingest_price.py) and flag
-whether that historical MONTH pattern overlaps the next ~1-2 months --
-a seasonal hint based on past behavior, not a confirmed schedule. Actual
+of routine OHLCV fetches -- see pipeline/ingest_price.py) and rank/flag
+based on that historical record -- not a confirmed schedule. Actual
 cum-dates shift year to year (RUPS timing, corporate decisions) --
 always verify against an official announcement/keterbukaan informasi
 before acting on this for a real trade.
@@ -30,16 +30,23 @@ import datetime as dt
 
 import pandas as pd
 
-# User's own bar: "lumayan besar, minimal diatas 5% atau diatas suku
-# bunga bank" -- 5.0% used directly as a fixed floor (no live central-
-# bank-rate feed exists in this project; BI's policy rate has hovered
-# in a similar range recently, so this is a reasonable proxy -- revisit
-# if it moves meaningfully).
+# User's own bar for the "akan bayar dalam waktu dekat" tab: "lumayan
+# besar, minimal diatas 5% atau diatas suku bunga bank" -- 5.0% used
+# directly as a fixed floor (no live central-bank-rate feed exists in
+# this project; BI's policy rate has hovered in a similar range
+# recently, so this is a reasonable proxy -- revisit if it moves
+# meaningfully). The "dividen terbesar" ranking tab has NO floor by
+# default -- it's a ranking, the user picks their own cutoff live.
 DIVIDEND_YIELD_MIN_PCT = 5.0
 # User follow-up ("gak harus 2 bulan, minimal 1-2 bulan lah") -- current
 # month + this many months ahead counts as "upcoming".
 LOOKAHEAD_MONTHS = 2
 MIN_YEARS_OF_HISTORY = 1  # at least one full realized payment on record
+
+MONTH_NAMES_ID = {
+    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "Mei", 6: "Jun",
+    7: "Jul", 8: "Agt", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Des",
+}
 
 
 def historical_dividend_months(dividend_dates: list) -> list[int]:
@@ -58,12 +65,6 @@ def is_seasonally_upcoming(dividend_months: list[int], as_of: dt.date, lookahead
     forward date isn't available at all."""
     target_months = {((as_of.month - 1 + i) % 12) + 1 for i in range(lookahead_months + 1)}
     return bool(target_months & set(dividend_months))
-
-
-MONTH_NAMES_ID = {
-    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "Mei", 6: "Jun",
-    7: "Jul", 8: "Agt", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Des",
-}
 
 
 def _year_payment_detail(hist: pd.DataFrame, year: int) -> tuple[int, str]:
@@ -87,7 +88,7 @@ def _year_payment_detail(hist: pd.DataFrame, year: int) -> tuple[int, str]:
     return len(year_rows), ", ".join(parts)
 
 
-def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None) -> pd.DataFrame:
+def build_dividend_table(panel: pd.DataFrame, min_yield_pct: float = 0.0, as_of: dt.date | None = None) -> pd.DataFrame:
     """panel: long-format rows (stock_code, date, dividends, close,
     dividend_yield, payout_ratio) from app.data.load_dividend_screener_data
     -- `date`/`dividends`/`close` are the REALIZED historical payments
@@ -96,17 +97,19 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
     every row for that stock_code, taken from its latest fundamental
     snapshot).
 
-    Per ticker, returns payment count + per-payment (month, yield%) detail
-    for THIS YEAR SO FAR and LAST YEAR specifically (direct user request
-    -- not the full multi-year history, which is only used internally to
-    decide eligibility via is_seasonally_upcoming below).
+    Base table for BOTH tabs of the Dividen Momentum page: every ticker
+    with a known yield >= `min_yield_pct` and at least
+    MIN_YEARS_OF_HISTORY of realized dividend history, sorted by yield
+    descending. Includes `historical_months` (list[int], ALL years) so
+    a caller can derive "seasonally upcoming" for ANY lookahead window
+    via is_seasonally_upcoming/filter_seasonally_upcoming without
+    re-querying the database -- lets a UI slider for that window respond
+    instantly. Also includes this-year/last-year payment count + a
+    human-readable (month, yield%) detail string for each.
 
-    Returns one row per ticker that clears DIVIDEND_YIELD_MIN_PCT AND
-    is_seasonally_upcoming, sorted by yield descending -- tickers with no
-    realized dividend history at all, or whose yield is missing/below
-    the bar, or whose historical payment months don't overlap the
-    lookahead window, are dropped entirely (this is a screener, not a
-    ranking of everything).
+    Tickers with no realized dividend history at all, or whose yield is
+    missing/below `min_yield_pct`, are dropped entirely -- this is a
+    screener/ranking, not a listing of everything.
     """
     as_of = as_of or dt.date.today()
     if panel.empty:
@@ -118,7 +121,7 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
     for code, g in panel.groupby("stock_code"):
         g = g.sort_values("date")
         yield_pct = g["dividend_yield"].iloc[-1]
-        if pd.isna(yield_pct) or yield_pct < DIVIDEND_YIELD_MIN_PCT:
+        if pd.isna(yield_pct) or yield_pct < min_yield_pct:
             continue
         hist = g.dropna(subset=["date", "dividends"])
         hist = hist[hist["dividends"] > 0]
@@ -128,18 +131,8 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
         years = len({d.year for d in dates})
         if years < MIN_YEARS_OF_HISTORY:
             continue
-        months = historical_dividend_months(dates)
-        if not is_seasonally_upcoming(months, as_of):
-            continue
         last_date = dates[-1]
         last_amount = float(hist["dividends"].iloc[-1])
-
-        # Direct user follow-up: show actual payment count/months/per-
-        # payment yield for THIS YEAR (so far) and LAST YEAR specifically
-        # -- not the full multi-year history used above just to decide
-        # eligibility (is_seasonally_upcoming still looks across ALL years
-        # for a more robust seasonal match; only the DISPLAYED detail is
-        # narrowed).
         count_this_year, display_this_year = _year_payment_detail(hist, this_year)
         count_last_year, display_last_year = _year_payment_detail(hist, last_year)
 
@@ -147,6 +140,7 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
             "stock_code": code,
             "dividend_yield_pct": float(yield_pct),
             "payout_ratio": g["payout_ratio"].iloc[-1],
+            "historical_months": historical_dividend_months(dates),
             "last_dividend_date": last_date,
             "last_dividend_amount": last_amount,
             "years_of_history": years,
@@ -159,3 +153,16 @@ def summarize_dividend_screen(panel: pd.DataFrame, as_of: dt.date | None = None)
     if not out.empty:
         out = out.sort_values("dividend_yield_pct", ascending=False).reset_index(drop=True)
     return out
+
+
+def filter_seasonally_upcoming(table: pd.DataFrame, as_of: dt.date | None = None, lookahead_months: int = LOOKAHEAD_MONTHS) -> pd.DataFrame:
+    """table: build_dividend_table's output (needs its `historical_months`
+    column). Returns just the rows whose historical payment months
+    overlap the [this month .. +lookahead_months] window -- see
+    is_seasonally_upcoming. Pure filter over already-loaded data, so a
+    UI can call this on every slider move without hitting the database."""
+    as_of = as_of or dt.date.today()
+    if table.empty:
+        return table
+    mask = table["historical_months"].apply(lambda months: is_seasonally_upcoming(months, as_of, lookahead_months))
+    return table[mask].reset_index(drop=True)

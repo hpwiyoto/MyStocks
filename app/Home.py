@@ -237,4 +237,22 @@ with d4:
     if st.button("Buka Screener Kustom →", key="goto_custom_screener", width="stretch"):
         st.switch_page("pages/8_🧰_Screener_Kustom.py")
 
+st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
+
+e1, e2, e3, e4 = st.columns(4)
+
+with e1:
+    st.markdown(
+        """
+        <div class="mystocks-card">
+            <div class="mystocks-ticker" style="font-size:1.3rem;">💰 Dividen Momentum</div>
+            <div class="mystocks-muted" style="min-height:3.9em; line-height:1.3em;">Saham dividen terbesar, dan yang historisnya bayar sekitar sekarang -- kemungkinan bayar lagi dalam waktu dekat.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("Perkiraan dari pola tahun lalu -- bukan jadwal cum-date resmi.")
+    if st.button("Buka Dividen Momentum →", key="goto_dividen_momentum", width="stretch"):
+        st.switch_page("pages/9_💰_Dividen_Momentum.py")
+
 render_developer_footer()
