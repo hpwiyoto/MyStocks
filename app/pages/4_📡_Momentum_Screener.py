@@ -495,17 +495,19 @@ else:
     expert_table["cross_display"] = expert_table["cross_type"].map({
         "MA50xMA200": "MA50 x MA200", "MA20xMA50": "MA20 x MA50", "MA9xMA20_menjelang": "MA9 → MA20 (menjelang)",
     })
-    expert_table["bonus_display"] = expert_table.apply(
-        lambda r: " + ".join(
-            [b for b, flag in [
-                ("Foreign flow", r["foreign_flow_bonus"]),
-                ("Dekat support", r["near_support_bonus"]),
-                ("≥AVWAP", r["avwap_bonus"]),
-                ("Deep pullback", r["deep_pullback_bonus"]),
-            ] if flag]
-        ) or "-",
-        axis=1,
-    )
+    def _bonus_display(r) -> str:
+        parts = []
+        if r["foreign_flow_bonus"]:
+            parts.append("Foreign flow")
+        if r["near_support_bonus"]:
+            parts.append(f"Dekat support ({r['distance_to_support_pct']:.1f}%)")
+        if r["avwap_bonus"]:
+            parts.append("≥AVWAP")
+        if r["deep_pullback_bonus"]:
+            parts.append(f"Deep pullback (-{r['deep_pullback_pct']:.1f}%)")
+        return " + ".join(parts) or "-"
+
+    expert_table["bonus_display"] = expert_table.apply(_bonus_display, axis=1)
     expert_table["alasan"] = expert_table["explanation"].apply(lambda lines: " | ".join(lines))
     expert_table["liq_display"] = expert_table["avg_traded_value"].apply(format_traded_value)
 
