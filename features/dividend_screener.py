@@ -100,12 +100,20 @@ def build_dividend_table(panel: pd.DataFrame, min_yield_pct: float = 0.0, as_of:
     Base table for BOTH tabs of the Dividen Momentum page: every ticker
     with a known yield >= `min_yield_pct` and at least
     MIN_YEARS_OF_HISTORY of realized dividend history, sorted by yield
-    descending. Includes `historical_months` (list[int], ALL years) so
-    a caller can derive "seasonally upcoming" for ANY lookahead window
-    via is_seasonally_upcoming/filter_seasonally_upcoming without
-    re-querying the database -- lets a UI slider for that window respond
-    instantly. Also includes this-year/last-year payment count + a
-    human-readable (month, yield%) detail string for each.
+    descending. Includes `last_year_months` (list[int], LAST CALENDAR
+    YEAR ONLY) so a caller can derive "seasonally upcoming" for ANY
+    lookahead window via is_seasonally_upcoming/filter_seasonally_upcoming
+    without re-querying the database -- lets a UI slider for that window
+    respond instantly. Deliberately LAST YEAR only, not all-history --
+    direct user framing was "berdasarkan jadwal tahun lalu" (based on
+    LAST YEAR's schedule), and using the full multi-year month set was
+    confirmed to produce a false positive: LPPF paid a ONE-OFF dividend
+    in November 2021, then every year since (2022-2026) only in April --
+    an all-history match let that single 5-year-old November payment
+    make LPPF look "upcoming" in a Sep/Oct/Nov window even though its
+    actual recent pattern is exclusively April. Also includes this-year/
+    last-year payment count + a human-readable (month, yield%) detail
+    string for each (same last-year scope as the matching itself).
 
     Tickers with no realized dividend history at all, or whose yield is
     missing/below `min_yield_pct`, are dropped entirely -- this is a
@@ -140,7 +148,7 @@ def build_dividend_table(panel: pd.DataFrame, min_yield_pct: float = 0.0, as_of:
             "stock_code": code,
             "dividend_yield_pct": float(yield_pct),
             "payout_ratio": g["payout_ratio"].iloc[-1],
-            "historical_months": historical_dividend_months(dates),
+            "last_year_months": historical_dividend_months([d for d in dates if d.year == last_year]),
             "last_dividend_date": last_date,
             "last_dividend_amount": last_amount,
             "years_of_history": years,
@@ -156,13 +164,17 @@ def build_dividend_table(panel: pd.DataFrame, min_yield_pct: float = 0.0, as_of:
 
 
 def filter_seasonally_upcoming(table: pd.DataFrame, as_of: dt.date | None = None, lookahead_months: int = LOOKAHEAD_MONTHS) -> pd.DataFrame:
-    """table: build_dividend_table's output (needs its `historical_months`
-    column). Returns just the rows whose historical payment months
+    """table: build_dividend_table's output (needs its `last_year_months`
+    column). Returns just the rows whose LAST YEAR's payment months
     overlap the [this month .. +lookahead_months] window -- see
-    is_seasonally_upcoming. Pure filter over already-loaded data, so a
-    UI can call this on every slider move without hitting the database."""
+    is_seasonally_upcoming and build_dividend_table's docstring for why
+    this is last-year-only, not all-history. A ticker that paid nothing
+    at all last year has an empty last_year_months and is correctly
+    excluded here -- no "last year's schedule" to match against. Pure
+    filter over already-loaded data, so a UI can call this on every
+    slider move without hitting the database."""
     as_of = as_of or dt.date.today()
     if table.empty:
         return table
-    mask = table["historical_months"].apply(lambda months: is_seasonally_upcoming(months, as_of, lookahead_months))
+    mask = table["last_year_months"].apply(lambda months: is_seasonally_upcoming(months, as_of, lookahead_months))
     return table[mask].reset_index(drop=True)
