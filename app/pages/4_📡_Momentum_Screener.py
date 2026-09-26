@@ -544,14 +544,3 @@ else:
     with st.expander("Lihat alasan detail per saham"):
         for _, r in expert_table.iterrows():
             st.markdown(f"**{r['stock_code']}** ({r['score']}/100): " + "; ".join(r["explanation"]))
-
-
-st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
-
-st.info(
-    "💰 **Skrining dividen** (yield terbesar & yang akan bayar dalam waktu dekat berdasarkan "
-    "pola tahun lalu) sekarang punya halaman sendiri.",
-    icon="💰",
-)
-if st.button("Buka Dividen Momentum →", key="goto_dividen_momentum"):
-    st.switch_page("pages/7_💰_Dividen_Momentum.py")
