@@ -55,9 +55,23 @@ Rules, as specified by the user, restated precisely:
      whether the CURRENT close has fallen DEEP_PULLBACK_MIN_PCT (13%) or
      more from that peak. None if neither anchor exists in the available
      window (bonus simply doesn't apply, not an error).
+  10. MACD GOLDEN CROSS BELOW ZERO BONUS (optional, adds confidence, not
+      a gate): direct user follow-up ("syarat untuk MACD cross over
+      dibawah garis 0") -- MACD line just crossed above the signal line
+      TODAY while BOTH lines are still below the zero line. Distinct
+      from gate 4 (MACD HISTOGRAM EARLY-STAGE), which reads the
+      histogram's trajectory/peak, not this specific same-day crossover
+      event. IMPORTANT PRIOR EVIDENCE, surfaced to the user before
+      building this (they chose to proceed anyway): this EXACT pattern
+      was already tested in isolation in scripts/test_strategy_6_criteria.py
+      as "golden_cross_below_zero" -- 26.2% win rate, BELOW the null
+      baseline at the time. Added here as a bonus specifically so that
+      prior negative finding costs nothing if it repeats (a bonus can't
+      exclude a ticker) -- see BACKTEST RESULT below for how it performs
+      layered on top of THIS combo instead of standalone.
 
 Rules 1-5 are GATES (all five must pass for a ticker to appear at all);
-6-9 are BONUSES that raise the confidence score but never gate a ticker
+6-10 are BONUSES that raise the confidence score but never gate a ticker
 out on their own -- exactly the "bisa dijadikan menambah bobot" (CAN be
 used to add weight) framing the user used, as opposed to "pastikan"
 (make sure) for 1-5.
@@ -80,6 +94,8 @@ not a real signal.
     FULL COMBO + AVWAP bonus:             n=271     WR=31.73%  Wilson LB=26.48%  <- below null AND below the full combo without it
     FULL COMBO + foreign flow bonus:      n=54      WR=37.04%  Wilson LB=25.42%
     FULL COMBO + deep-pullback bonus:     n=7       WR=14.29%  Wilson LB=2.57%   <- n WAY too small, no conclusion possible
+    FULL COMBO + MACD-below-zero bonus:   n=33      WR=18.18%  Wilson LB=8.61%   <- meaningfully-sized, CLEARLY below null
+    MACD-below-zero bonus ALONE:          n=33      WR=18.18%  Wilson LB=8.61%   <- IDENTICAL n to the row above (see note)
     Golden Cross MA50xMA200 alone:        n=1,090   WR=29.63%  Wilson LB=27.00%
     Golden Cross (any type) alone:        n=14,285  WR=31.03%  Wilson LB=30.27%
     MACD early-stage alone:               n=17,138  WR=31.01%  Wilson LB=30.32%
@@ -113,6 +129,31 @@ accumulate. Kept in the code (non-gating, same reasoning as the other
 bonuses) but treat this one as literally untested rather than
 "tested and found unhelpful" like AVWAP/near-support/foreign-flow above
 -- there just isn't enough data yet to say either way.
+
+MACD-BELOW-ZERO BONUS, direct user follow-up ("apakah bisa ditambahkan
+syarat untuk MACD cross over dibawah garis 0") -- surfaced to the user
+BEFORE building this that the exact same pattern was already tested in
+isolation (scripts/test_strategy_6_criteria.py's golden_cross_below_zero,
+26.2%, below that test's own null baseline); they chose to add it as a
+bonus and re-test anyway. Result: n=33 -- a real, meaningfully-sized
+sample (unlike deep-pullback's n=7), and CLEARLY below null both alone
+and combined (WR=18.18%, Wilson LB=8.61%, vs null 32.02%) -- confirms
+and sharpens the original negative finding rather than contradicting
+it. Notably, "FULL COMBO + this bonus" and "this bonus ALONE" have the
+exact same n=33 -- every single historical instance of this MACD event
+also happened to satisfy all 4 other gates simultaneously. Not a bug:
+the crossover this bonus checks (macd crosses above macd_signal) is BY
+DEFINITION the exact moment the histogram (macd - macd_signal) flips
+from negative to positive -- which is already what gate 4 (MACD early-
+stage) is largely built to detect, so this bonus's firing condition is
+close to a strict subset of an already-required gate rather than an
+independent signal. Kept in the code (non-gating, same as the other
+bonuses -- and per the user's own explicit choice to add it despite the
+prior evidence), but this is now the STRONGEST negative signal of any
+bonus in this module, with a sample size solid enough to trust: adding
++WEIGHT_MACD_BELOW_ZERO_BONUS to the score for this bonus is arguably
+misleading given what actually correlates with it -- worth reconsidering
+whether it should be a bonus at all, not just an untested curiosity.
 
 Every candidate here sits at or below the null baseline's own Wilson
 band -- the FULL COMBO's raw win rate (33.07%) is close to but under
@@ -216,6 +257,7 @@ WEIGHT_FOREIGN_FLOW_BONUS = 10
 WEIGHT_SUPPORT_PROXIMITY_BONUS = 10
 WEIGHT_AVWAP_BONUS = 10
 WEIGHT_DEEP_PULLBACK_BONUS = 10
+WEIGHT_MACD_BELOW_ZERO_BONUS = 10
 MAX_SCORE = 100
 
 
@@ -324,6 +366,20 @@ def _deep_pullback_pct(close: np.ndarray, low: np.ndarray, rsi: np.ndarray) -> f
     if peak <= 0 or np.isnan(peak) or np.isnan(close[-1]):
         return None
     return (peak - float(close[-1])) / peak * 100
+
+
+def _macd_golden_cross_below_zero(macd: np.ndarray, macd_signal: np.ndarray) -> bool:
+    """True if the MACD line crossed above the signal line on the MOST
+    RECENT bar (today) while BOTH lines are still below the zero line --
+    the exact same single-day-event definition as scripts/
+    test_strategy_6_criteria.py's golden_cross_below_zero (tested there
+    in isolation: 26.2% win rate, below that test's null baseline)."""
+    if len(macd) < 2:
+        return False
+    if np.isnan(macd[-1]) or np.isnan(macd_signal[-1]) or np.isnan(macd[-2]) or np.isnan(macd_signal[-2]):
+        return False
+    crossed_up = macd[-1] > macd_signal[-1] and macd[-2] <= macd_signal[-2]
+    return bool(crossed_up and macd[-1] < 0 and macd_signal[-1] < 0)
 
 
 def evaluate_expert_signal(g: pd.DataFrame) -> dict:
@@ -458,6 +514,13 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     elif pullback_pct is None:
         explanation.append("Belum ada rebound/RSI oversold terkonfirmasi dalam jendela data (tidak mempengaruhi skor)")
 
+    macd_below_zero_bonus = passed and _macd_golden_cross_below_zero(
+        g["macd"].to_numpy(dtype=float), g["macd_signal"].to_numpy(dtype=float),
+    )
+    if macd_below_zero_bonus:
+        score += WEIGHT_MACD_BELOW_ZERO_BONUS
+        explanation.append("Bonus: MACD baru cross ke atas garis sinyal, masih di bawah garis nol")
+
     score = min(score, MAX_SCORE)
     tier = None
     if passed:
@@ -483,6 +546,7 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
         "close_above_avwap": close_above_avwap,
         "deep_pullback_bonus": deep_pullback_bonus,
         "deep_pullback_pct": pullback_pct,
+        "macd_below_zero_bonus": macd_below_zero_bonus,
         "explanation": explanation,
     }
 

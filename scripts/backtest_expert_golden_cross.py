@@ -75,7 +75,7 @@ def load_full_panel() -> pd.DataFrame:
     df = pd.read_sql(
         """
         SELECT ph.stock_code, ph.date, ph.close, ph.high, ph.low, ph.volume,
-               fd.rsi_14, fd.macd_hist, fd.macd_hist_slope_3d, fd.rvol_20,
+               fd.rsi_14, fd.macd, fd.macd_signal, fd.macd_hist, fd.macd_hist_slope_3d, fd.rvol_20,
                fd.sma_20, fd.sma_50, fd.sma_200,
                fd.distance_to_support_pct, fd.net_foreign_flow
         FROM price_history ph
@@ -128,7 +128,8 @@ def build_dataset() -> pd.DataFrame:
                 "foreign_flow_bonus": result["foreign_flow_bonus"],
                 "near_support_bonus": result["near_support_bonus"],
                 "avwap_bonus": result["avwap_bonus"],
-                "deep_pullback_bonus": result["deep_pullback_bonus"], "score": result["score"],
+                "deep_pullback_bonus": result["deep_pullback_bonus"],
+                "macd_below_zero_bonus": result["macd_below_zero_bonus"], "score": result["score"],
             })
         if (n_done + 1) % 20 == 0:
             logger.info("... %d/%d as-of dates done (%d rows so far)", n_done + 1, len(as_of_dates), len(rows))
@@ -175,6 +176,8 @@ def run():
         ("FULL COMBO + near-support bonus", df["passed"] & df["near_support_bonus"]),
         ("FULL COMBO + AVWAP bonus", df["passed"] & df["avwap_bonus"]),
         ("FULL COMBO + deep-pullback bonus", df["passed"] & df["deep_pullback_bonus"]),
+        ("FULL COMBO + MACD-below-zero bonus", df["passed"] & df["macd_below_zero_bonus"]),
+        ("MACD-below-zero bonus ALONE (no other gates)", df["macd_below_zero_bonus"]),
         ("FULL COMBO, score>=85 ('Kuat' tier only)", df["passed"] & (df["score"] >= 85)),
     ]
 
