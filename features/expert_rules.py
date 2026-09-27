@@ -260,6 +260,59 @@ WEIGHT_DEEP_PULLBACK_BONUS = 10
 WEIGHT_MACD_BELOW_ZERO_BONUS = 10
 MAX_SCORE = 100
 
+# Every FILTER threshold above, consolidated into one dict + a UI-driving
+# metadata list -- direct user request ("bisa ditampilkan filter apa saja
+# dipakai... dan kita bisa adjust value tiap parameter"). evaluate_expert_
+# signal/compute_expert_panel accept an optional `params` dict that
+# overrides any subset of these; anything not overridden falls back to
+# the module-constant default above, so every EXISTING caller (the
+# backtest scripts, compute_expert_panel with no args) keeps working
+# unchanged. Deliberately just the GATE/BONUS thresholds a user would
+# reasonably want to tune, not the WEIGHT_* scoring points -- those are
+# about how a passing ticker gets ranked, not whether it passes at all,
+# a different kind of knob the user didn't ask to touch.
+DEFAULT_PARAMS: dict = {
+    "golden_cross_lookback_days": GOLDEN_CROSS_LOOKBACK_DAYS,
+    "ma9_approach_lookback_days": MA9_APPROACH_LOOKBACK_DAYS,
+    "ma9_approach_gap_max_pct": MA9_APPROACH_GAP_MAX_PCT,
+    "volume_confirm_rvol": VOLUME_CONFIRM_RVOL,
+    "rsi_normal_min": RSI_NORMAL_MIN,
+    "rsi_normal_max": RSI_NORMAL_MAX,
+    "macd_phase_lookback_days": MACD_PHASE_LOOKBACK_DAYS,
+    "macd_peak_fraction": MACD_PEAK_FRACTION,
+    "macd_near_zero_fraction": MACD_NEAR_ZERO_FRACTION,
+    "liquidity_window_days": LIQUIDITY_WINDOW_DAYS,
+    "min_avg_traded_value": MIN_AVG_TRADED_VALUE,
+    "foreign_flow_lookback_days": FOREIGN_FLOW_LOOKBACK_DAYS,
+    "support_proximity_max_pct": SUPPORT_PROXIMITY_MAX_PCT,
+    "deep_pullback_min_pct": DEEP_PULLBACK_MIN_PCT,
+    "rsi_oversold_threshold": RSI_OVERSOLD_THRESHOLD,
+}
+
+# UI metadata for each tunable param -- category groups them the same way
+# the module docstring's rule list does (gates 1-5, then bonuses), label
+# is the Indonesian caption, kind picks the Streamlit widget/unit
+# ("int"/"pct"/"rvol"/"days" all render as a plain number; "rupiah_miliar"
+# is stored internally in raw Rupiah but shown/edited in Rp miliar for
+# usability -- see the page's own conversion).
+PARAM_META = [
+    {"key": "golden_cross_lookback_days", "label": "Golden Cross: jendela 'baru' (hari)", "category": "1. Golden Cross", "kind": "int", "min": 1, "max": 20, "step": 1},
+    {"key": "ma9_approach_lookback_days", "label": "MA9 menjelang: jendela cek menyempit (hari)", "category": "1. Golden Cross", "kind": "int", "min": 1, "max": 20, "step": 1},
+    {"key": "ma9_approach_gap_max_pct", "label": "MA9 menjelang: jarak maksimum ke MA20 (%)", "category": "1. Golden Cross", "kind": "float", "min": 0.5, "max": 10.0, "step": 0.5},
+    {"key": "volume_confirm_rvol", "label": "Volume: ambang RVOL minimum", "category": "2. Volume", "kind": "float", "min": 0.5, "max": 3.0, "step": 0.1},
+    {"key": "rsi_normal_min", "label": "RSI: batas bawah normal", "category": "3. RSI", "kind": "float", "min": 20.0, "max": 50.0, "step": 1.0},
+    {"key": "rsi_normal_max", "label": "RSI: batas atas normal", "category": "3. RSI", "kind": "float", "min": 50.0, "max": 90.0, "step": 1.0},
+    {"key": "macd_phase_lookback_days", "label": "MACD: jendela cek puncak/dekat-nol (hari)", "category": "4. MACD", "kind": "int", "min": 5, "max": 60, "step": 1},
+    {"key": "macd_peak_fraction", "label": "MACD: ambang 'sudah di puncak' (fraksi dari max)", "category": "4. MACD", "kind": "float", "min": 0.3, "max": 1.0, "step": 0.05},
+    {"key": "macd_near_zero_fraction", "label": "MACD: ambang 'dekat nol' (fraksi dari rentang)", "category": "4. MACD", "kind": "float", "min": 0.1, "max": 1.0, "step": 0.05},
+    {"key": "liquidity_window_days", "label": "Likuiditas: jendela rata-rata (hari)", "category": "5. Likuiditas", "kind": "int", "min": 5, "max": 60, "step": 1},
+    {"key": "min_avg_traded_value", "label": "Likuiditas: minimum (Rp miliar/hari)", "category": "5. Likuiditas", "kind": "rupiah_miliar", "min": 0.1, "max": 20.0, "step": 0.1},
+    {"key": "foreign_flow_lookback_days", "label": "Bonus Foreign Flow: jendela akumulasi (hari)", "category": "Bonus", "kind": "int", "min": 1, "max": 20, "step": 1},
+    {"key": "support_proximity_max_pct", "label": "Bonus Dekat Support: jarak maksimum (%)", "category": "Bonus", "kind": "float", "min": 0.5, "max": 10.0, "step": 0.5},
+    {"key": "deep_pullback_min_pct", "label": "Bonus Deep Pullback: ambang penurunan (%)", "category": "Bonus", "kind": "float", "min": 5.0, "max": 30.0, "step": 1.0},
+    {"key": "rsi_oversold_threshold", "label": "Bonus Deep Pullback: ambang RSI oversold", "category": "Bonus", "kind": "float", "min": 15.0, "max": 40.0, "step": 1.0},
+]
+
 
 def _detect_cross(fast: np.ndarray, slow: np.ndarray, lookback_days: int) -> tuple[bool, int | None]:
     """fast/slow: ascending-by-date arrays, same length (e.g. sma_20 and
@@ -307,7 +360,11 @@ def _detect_approaching_cross(fast: np.ndarray, slow: np.ndarray, lookback_days:
     return approaching, gap_now
 
 
-def classify_macd_phase(macd_hist: np.ndarray, macd_hist_slope_3d: float) -> str:
+def classify_macd_phase(
+    macd_hist: np.ndarray, macd_hist_slope_3d: float,
+    lookback_days: int = MACD_PHASE_LOOKBACK_DAYS, peak_fraction: float = MACD_PEAK_FRACTION,
+    near_zero_fraction: float = MACD_NEAR_ZERO_FRACTION,
+) -> str:
     """One of "early_bullish" (fresh or about-to cross the zero line --
     the entry the user described), "extended" (already deep positive, a
     peak -- late), "fading" (positive but declining -- rolling over, not
@@ -322,7 +379,7 @@ def classify_macd_phase(macd_hist: np.ndarray, macd_hist_slope_3d: float) -> str
     if len(hist) < 2 or pd.isna(macd_hist_slope_3d):
         return "unknown"
     current = hist[-1]
-    window = hist[-MACD_PHASE_LOOKBACK_DAYS:]
+    window = hist[-lookback_days:]
     recent_max = float(window.max())
     recent_min = float(window.min())
     hist_range = max(recent_max - min(recent_min, 0.0), 1e-9)
@@ -330,36 +387,36 @@ def classify_macd_phase(macd_hist: np.ndarray, macd_hist_slope_3d: float) -> str
     if current > 0:
         if macd_hist_slope_3d < 0:
             return "fading"
-        if recent_max > 0 and current >= MACD_PEAK_FRACTION * recent_max:
+        if recent_max > 0 and current >= peak_fraction * recent_max:
             return "extended"
         return "early_bullish"
-    if macd_hist_slope_3d > 0 and abs(current) <= MACD_NEAR_ZERO_FRACTION * hist_range:
+    if macd_hist_slope_3d > 0 and abs(current) <= near_zero_fraction * hist_range:
         return "early_bullish"
     return "bearish"
 
 
-def _last_rebound_anchor_idx(low: np.ndarray, rsi: np.ndarray) -> int | None:
+def _last_rebound_anchor_idx(low: np.ndarray, rsi: np.ndarray, oversold_threshold: float = RSI_OVERSOLD_THRESHOLD) -> int | None:
     """Index of the MORE RECENT of: the last confirmed swing low in price
     (a "rebound" -- features.support_resistance.find_swing_lows, which
     requires a full trailing window AFTER a point before it counts as
     confirmed, so a dip that hasn't turned around yet won't show up) or
-    the last day RSI was oversold (<RSI_OVERSOLD_THRESHOLD). This is the
+    the last day RSI was oversold (<oversold_threshold). This is the
     anchor point for the deep-pullback bonus, per the user's own
     definition ("dari harga tertinggi setelah rebound terakhir atau
     setelah RSI oversold terakhir"). None if neither exists in the
     available window."""
     swing_lows = find_swing_lows(low)
     last_swing_low = swing_lows[-1] if swing_lows else None
-    oversold_idx = np.where(rsi < RSI_OVERSOLD_THRESHOLD)[0]
+    oversold_idx = np.where(rsi < oversold_threshold)[0]
     last_oversold = int(oversold_idx[-1]) if len(oversold_idx) else None
     candidates = [i for i in (last_swing_low, last_oversold) if i is not None]
     return max(candidates) if candidates else None
 
 
-def _deep_pullback_pct(close: np.ndarray, low: np.ndarray, rsi: np.ndarray) -> float | None:
+def _deep_pullback_pct(close: np.ndarray, low: np.ndarray, rsi: np.ndarray, oversold_threshold: float = RSI_OVERSOLD_THRESHOLD) -> float | None:
     """% decline from the highest close since _last_rebound_anchor_idx to
     the current (last) close. None if no anchor point exists yet."""
-    anchor = _last_rebound_anchor_idx(low, rsi)
+    anchor = _last_rebound_anchor_idx(low, rsi, oversold_threshold)
     if anchor is None:
         return None
     peak = float(close[anchor:].max())
@@ -382,13 +439,18 @@ def _macd_golden_cross_below_zero(macd: np.ndarray, macd_signal: np.ndarray) -> 
     return bool(crossed_up and macd[-1] < 0 and macd_signal[-1] < 0)
 
 
-def evaluate_expert_signal(g: pd.DataFrame) -> dict:
+def evaluate_expert_signal(g: pd.DataFrame, params: dict | None = None) -> dict:
     """g: one ticker's rows, ascending by date, with close, high, low,
     volume, rsi_14, macd_hist, macd_hist_slope_3d, rvol_20, sma_20,
     sma_50, sma_200, distance_to_support_pct, net_foreign_flow columns
     (from app.data.load_screener_raw_panel -- high/low needed for the
     AVWAP bonus's compute_avwap_from_low call and the deep-pullback
-    bonus's swing-low detection). Returns a dict with `passed` (all 5
+    bonus's swing-low detection). `params`: optional dict overriding any
+    subset of DEFAULT_PARAMS's threshold keys -- direct user request to
+    make every filter/bonus threshold adjustable, see PARAM_META for the
+    full list with UI labels. Anything not in `params` falls back to its
+    DEFAULT_PARAMS value, so every existing caller that doesn't pass
+    this keeps working unchanged. Returns a dict with `passed` (all 5
     gates met), `score` (0-100, only meaningful when passed), `tier`
     ("kuat"/"cukup" when passed), `cross_type`, `macd_phase`, per-rule
     booleans (including the 4 bonuses: foreign_flow_bonus,
@@ -396,20 +458,21 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     `explanation` (list of human-readable strings for the UI to show
     why/why not).
     """
+    p = {**DEFAULT_PARAMS, **(params or {})}
     latest = g.iloc[-1]
     explanation = []
 
     cross_50_200, days_50_200 = _detect_cross(
-        g["sma_50"].to_numpy(dtype=float), g["sma_200"].to_numpy(dtype=float), GOLDEN_CROSS_LOOKBACK_DAYS,
+        g["sma_50"].to_numpy(dtype=float), g["sma_200"].to_numpy(dtype=float), p["golden_cross_lookback_days"],
     )
     cross_20_50, days_20_50 = _detect_cross(
-        g["sma_20"].to_numpy(dtype=float), g["sma_50"].to_numpy(dtype=float), GOLDEN_CROSS_LOOKBACK_DAYS,
+        g["sma_20"].to_numpy(dtype=float), g["sma_50"].to_numpy(dtype=float), p["golden_cross_lookback_days"],
     )
     # SMA9 isn't a stored feature_daily column -- computed here from this
     # window's own close prices (see MA9_APPROACH_* constants' comment).
     sma_9 = g["close"].astype(float).rolling(9).mean().to_numpy()
     approaching_9_20, gap_9_20 = _detect_approaching_cross(
-        sma_9, g["sma_20"].to_numpy(dtype=float), MA9_APPROACH_LOOKBACK_DAYS, MA9_APPROACH_GAP_MAX_PCT,
+        sma_9, g["sma_20"].to_numpy(dtype=float), p["ma9_approach_lookback_days"], p["ma9_approach_gap_max_pct"],
     )
 
     golden_cross = cross_50_200 or cross_20_50 or approaching_9_20
@@ -426,7 +489,11 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
         cross_type = None
         explanation.append("Belum ada Golden Cross baru atau MA9 menjelang cross MA20")
 
-    macd_phase = classify_macd_phase(g["macd_hist"].to_numpy(dtype=float), latest.get("macd_hist_slope_3d"))
+    macd_phase = classify_macd_phase(
+        g["macd_hist"].to_numpy(dtype=float), latest.get("macd_hist_slope_3d"),
+        lookback_days=p["macd_phase_lookback_days"], peak_fraction=p["macd_peak_fraction"],
+        near_zero_fraction=p["macd_near_zero_fraction"],
+    )
     macd_ok = macd_phase == "early_bullish"
     macd_reason = {
         "early_bullish": "MACD histogram baru/menjelang crossover -- masih awal",
@@ -438,29 +505,29 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     explanation.append(macd_reason)
 
     rvol = latest.get("rvol_20")
-    volume_ok = pd.notna(rvol) and rvol >= VOLUME_CONFIRM_RVOL
+    volume_ok = pd.notna(rvol) and rvol >= p["volume_confirm_rvol"]
     explanation.append(
         f"Volume {'terkonfirmasi' if volume_ok else 'BELUM terkonfirmasi'} "
-        f"(RVOL {rvol:.2f}x, ambang {VOLUME_CONFIRM_RVOL:.1f}x)" if pd.notna(rvol) else "Data volume relatif tidak ada"
+        f"(RVOL {rvol:.2f}x, ambang {p['volume_confirm_rvol']:.1f}x)" if pd.notna(rvol) else "Data volume relatif tidak ada"
     )
 
     rsi = latest.get("rsi_14")
-    rsi_ok = pd.notna(rsi) and RSI_NORMAL_MIN <= rsi <= RSI_NORMAL_MAX
+    rsi_ok = pd.notna(rsi) and p["rsi_normal_min"] <= rsi <= p["rsi_normal_max"]
     if pd.notna(rsi):
-        explanation.append(
-            f"RSI {rsi:.1f} -- {'normal, tidak oversold' if rsi_ok else f'di luar rentang normal {RSI_NORMAL_MIN}-{RSI_NORMAL_MAX}'}"
-        )
+        rsi_range_txt = f"{p['rsi_normal_min']:.0f}-{p['rsi_normal_max']:.0f}"
+        rsi_status_txt = "normal, tidak oversold" if rsi_ok else f"di luar rentang normal {rsi_range_txt}"
+        explanation.append(f"RSI {rsi:.1f} -- {rsi_status_txt}")
     else:
         explanation.append("Data RSI tidak ada")
 
-    liq_window = g.tail(LIQUIDITY_WINDOW_DAYS)
+    liq_window = g.tail(p["liquidity_window_days"])
     traded_value = liq_window["close"].astype(float) * liq_window["volume"].astype(float)
     avg_traded_value = float(traded_value.mean()) if not traded_value.empty else None
-    liquidity_ok = avg_traded_value is not None and avg_traded_value >= MIN_AVG_TRADED_VALUE
+    liquidity_ok = avg_traded_value is not None and avg_traded_value >= p["min_avg_traded_value"]
     if avg_traded_value is not None:
         explanation.append(
             f"Likuiditas {'cukup' if liquidity_ok else 'BELUM cukup'} "
-            f"(rata-rata Rp {avg_traded_value / 1e9:.1f} M/hari, ambang Rp {MIN_AVG_TRADED_VALUE / 1e9:.0f} M/hari)"
+            f"(rata-rata Rp {avg_traded_value / 1e9:.1f} M/hari, ambang Rp {p['min_avg_traded_value'] / 1e9:.1f} M/hari)"
         )
     else:
         explanation.append("Data volume transaksi tidak ada")
@@ -477,17 +544,17 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
             score += WEIGHT_MA9_APPROACHING
         score += WEIGHT_MACD_EARLY_STAGE + WEIGHT_VOLUME_CONFIRMATION + WEIGHT_RSI_NORMAL + WEIGHT_LIQUIDITY
 
-    flow_window = g["net_foreign_flow"].tail(FOREIGN_FLOW_LOOKBACK_DAYS)
+    flow_window = g["net_foreign_flow"].tail(p["foreign_flow_lookback_days"])
     flow_sum = flow_window.sum(skipna=True) if flow_window.notna().any() else None
     foreign_flow_bonus = passed and flow_sum is not None and flow_sum > 0
     if foreign_flow_bonus:
         score += WEIGHT_FOREIGN_FLOW_BONUS
-        explanation.append(f"Bonus: akumulasi net foreign flow {FOREIGN_FLOW_LOOKBACK_DAYS} hari terakhir positif")
+        explanation.append(f"Bonus: akumulasi net foreign flow {p['foreign_flow_lookback_days']} hari terakhir positif")
     elif flow_sum is None:
         explanation.append("Data foreign flow tidak tersedia untuk ticker ini (tidak mempengaruhi skor)")
 
     dist_support = latest.get("distance_to_support_pct")
-    near_support_bonus = passed and pd.notna(dist_support) and dist_support <= SUPPORT_PROXIMITY_MAX_PCT
+    near_support_bonus = passed and pd.notna(dist_support) and dist_support <= p["support_proximity_max_pct"]
     if near_support_bonus:
         score += WEIGHT_SUPPORT_PROXIMITY_BONUS
         explanation.append(f"Bonus: harga dekat support ({dist_support:.1f}% dari level terendah)")
@@ -506,8 +573,9 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
 
     pullback_pct = _deep_pullback_pct(
         g["close"].to_numpy(dtype=float), g["low"].to_numpy(dtype=float), g["rsi_14"].to_numpy(dtype=float),
+        oversold_threshold=p["rsi_oversold_threshold"],
     )
-    deep_pullback_bonus = passed and pullback_pct is not None and pullback_pct >= DEEP_PULLBACK_MIN_PCT
+    deep_pullback_bonus = passed and pullback_pct is not None and pullback_pct >= p["deep_pullback_min_pct"]
     if deep_pullback_bonus:
         score += WEIGHT_DEEP_PULLBACK_BONUS
         explanation.append(f"Bonus: turun {pullback_pct:.1f}% dari puncak sejak rebound/RSI oversold terakhir")
@@ -551,9 +619,12 @@ def evaluate_expert_signal(g: pd.DataFrame) -> dict:
     }
 
 
-def compute_expert_panel(panel: pd.DataFrame) -> pd.DataFrame:
+def compute_expert_panel(panel: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     """panel: same long-format frame as features.momentum_screener.
     compute_screener_panel (from app.data.load_screener_raw_panel).
+    params: optional overrides for DEFAULT_PARAMS, forwarded as-is to
+    evaluate_expert_signal for every ticker -- see that function's
+    docstring. Omit to use the module defaults.
     Returns one row per ticker that PASSED all 4 gates (tickers that
     didn't pass are dropped entirely -- this is a screener, not a
     ranking of everything), sorted by score descending.
@@ -565,7 +636,7 @@ def compute_expert_panel(panel: pd.DataFrame) -> pd.DataFrame:
         g = g.sort_values("date").reset_index(drop=True)
         if len(g) < 2:
             continue
-        result = evaluate_expert_signal(g)
+        result = evaluate_expert_signal(g, params=params)
         if not result["passed"]:
             continue
         latest = g.iloc[-1]

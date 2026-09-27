@@ -22,7 +22,7 @@ from app.style import (
     regime_badge,
     render_developer_footer,
 )
-from features.expert_rules import compute_expert_panel
+from features.expert_rules import DEFAULT_PARAMS, PARAM_META, compute_expert_panel
 from features.momentum_screener import compute_screener_panel
 
 st.set_page_config(page_title="MyStocks — Momentum Screener", page_icon="📡", layout="wide")
@@ -471,7 +471,51 @@ st.caption(
     "tabel di atas."
 )
 
-expert_df = compute_expert_panel(raw_panel)
+with st.expander("⚙️ Atur parameter Expert System (ambang filter & bonus)"):
+    st.caption(
+        "Semua ambang syarat wajib & bonus di bawah bisa diubah -- nilai default sudah "
+        "sesuai aturan yang dipakai selama ini. Perubahan hanya berlaku di sesi ini, "
+        "tidak disimpan permanen."
+    )
+    param_categories: dict[str, list[dict]] = {}
+    for meta in PARAM_META:
+        param_categories.setdefault(meta["category"], []).append(meta)
+
+    if st.button("↺ Reset ke default"):
+        for meta in PARAM_META:
+            st.session_state.pop(f"expert_param_{meta['key']}", None)
+        st.rerun()
+
+    user_params: dict = {}
+    for category, metas in param_categories.items():
+        st.markdown(f"**{category}**")
+        cols = st.columns(len(metas))
+        for col, meta in zip(cols, metas):
+            key = meta["key"]
+            widget_key = f"expert_param_{key}"
+            if meta["kind"] == "int":
+                default_val = int(DEFAULT_PARAMS[key])
+                value = col.number_input(
+                    meta["label"], min_value=int(meta["min"]), max_value=int(meta["max"]),
+                    step=int(meta["step"]), value=default_val, key=widget_key,
+                )
+                user_params[key] = int(value)
+            elif meta["kind"] == "rupiah_miliar":
+                default_val = float(DEFAULT_PARAMS[key]) / 1e9
+                value = col.number_input(
+                    meta["label"], min_value=float(meta["min"]), max_value=float(meta["max"]),
+                    step=float(meta["step"]), value=default_val, key=widget_key,
+                )
+                user_params[key] = float(value) * 1e9
+            else:
+                default_val = float(DEFAULT_PARAMS[key])
+                value = col.number_input(
+                    meta["label"], min_value=float(meta["min"]), max_value=float(meta["max"]),
+                    step=float(meta["step"]), value=default_val, key=widget_key,
+                )
+                user_params[key] = float(value)
+
+expert_df = compute_expert_panel(raw_panel, params=user_params)
 if not expert_df.empty:
     expert_df = expert_df.merge(stocks_df, left_on="stock_code", right_on="code", how="left")
     if suspended_tickers:
