@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -6,8 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_login
+from app.auth import is_logged_in, require_login
 from app.data import load_data_freshness, load_screener_universe, load_suspended_tickers
+from app.positions import has_active_position, mark_position
 from app.style import (
     data_freshness_note,
     format_traded_value,
@@ -258,3 +260,38 @@ if selected_rows:
     picked_code = table_df.iloc[selected_rows[0]]["stock_code"]
     st.session_state["selected_ticker"] = picked_code
     st.switch_page("pages/1_📈_Detail_Saham.py")
+
+# Tandai Beli: kondisi di sini murni disusun bebas oleh user, tidak ada
+# stop-loss/take-profit bawaan -- diisi manual, sama seperti Expert
+# System di Momentum Screener.
+with st.expander("📌 Tandai saham dari hasil di atas sebagai sudah dibeli"):
+    _csk_mark_options = {
+        f"{r['stock_code']} — {r['name'] if pd.notna(r['name']) else r['stock_code']}": r
+        for _, r in table_df.iterrows()
+    }
+    _csk_mark_label = st.selectbox("Pilih saham", list(_csk_mark_options.keys()), key="csk_mark_select")
+    _csk_mark_row = _csk_mark_options[_csk_mark_label]
+    if not is_logged_in():
+        st.caption("🔒 Login untuk menandai saham sebagai sudah dibeli.")
+    elif has_active_position(st.user.email, _csk_mark_row["stock_code"]):
+        st.caption(f"📌 {_csk_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
+    else:
+        _csk_entry_default = float(_csk_mark_row["close"])
+        m1, m2, m3 = st.columns(3)
+        _csk_entry = m1.number_input("Harga Beli", min_value=0.0, value=_csk_entry_default, step=1.0, key="csk_mark_entry")
+        _csk_stop = m2.number_input("Stop Loss", min_value=0.0, value=round(_csk_entry_default * 0.975, 1), step=1.0, key="csk_mark_stop")
+        _csk_target = m3.number_input("Take Profit", min_value=0.0, value=round(_csk_entry_default * 1.05, 1), step=1.0, key="csk_mark_target")
+        if st.button("📌 Tandai Beli", key="csk_mark_btn"):
+            _csk_context = {
+                "kondisi": " DAN ".join(
+                    f"{_param_label(c['param'])} {c.get('operator', '=')} {c.get('value', c.get('compare_to', ''))}"
+                    for c in conditions
+                ) or "(tanpa kondisi)",
+            }
+            mark_position(
+                st.user.email, _csk_mark_row["stock_code"], "custom_screener_v1",
+                _csk_entry, _csk_stop, _csk_target,
+                entry_source="screener_kustom", entry_context=json.dumps(_csk_context),
+            )
+            st.success(f"{_csk_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
+            st.rerun()

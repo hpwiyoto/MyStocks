@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -6,8 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_login
-from app.data import load_data_freshness, load_dividend_screener_data, load_liquidity, load_stock_list, load_suspended_tickers
+from app.auth import is_logged_in, require_login
+from app.data import load_data_freshness, load_dividend_screener_data, load_liquidity, load_live_prices, load_stock_list, load_suspended_tickers
+from app.positions import has_active_position, mark_position
 from app.style import data_freshness_note, format_traded_value, inject_base_css, liquidity_sidebar_filter, render_developer_footer
 from features.dividend_screener import (
     DIVIDEND_YIELD_MIN_PCT,
@@ -30,18 +32,19 @@ st.caption(
     "Dua cara melihat saham dividen: mana yang bayar PALING BESAR, dan mana yang historisnya "
     "bayar sekitar sekarang -- jadi kemungkinan akan bayar lagi dalam waktu dekat."
 )
-st.warning(
-    "**Tidak ada jadwal cum-date resmi ke depan yang bisa didapat otomatis** -- sudah dicek "
-    "langsung: field `exDividendDate` yfinance ternyata melaporkan tanggal TERAKHIR YANG SUDAH "
-    "LEWAT, bukan yang akan datang (terbukti: BBCA menunjukkan 31 Agt 2026 padahal itu sudah 3+ "
-    "minggu lalu saat dicek). Situs resmi BEI diblokir Cloudflare, dan API RapidAPI yang sudah "
-    "dipakai di sini tidak punya endpoint kalender dividen. Semua yang ada di halaman ini dihitung "
-    "dari **histori pembayaran dividen nyata** (`price_history.dividends`) -- tab kedua adalah "
-    "**perkiraan berdasarkan pola tahun-tahun sebelumnya, BUKAN jadwal pasti**. Cum-date "
-    "sebenarnya bisa berbeda atau tidak terjadi sama sekali tahun ini -- selalu cek pengumuman "
-    "resmi RUPS/keterbukaan informasi sebelum mengambil keputusan.",
-    icon="⚠️",
-)
+with st.expander("ℹ️ Catatan tentang jadwal cum-date (klik untuk buka)"):
+    st.warning(
+        "**Tidak ada jadwal cum-date resmi ke depan yang bisa didapat otomatis** -- sudah dicek "
+        "langsung: field `exDividendDate` yfinance ternyata melaporkan tanggal TERAKHIR YANG SUDAH "
+        "LEWAT, bukan yang akan datang (terbukti: BBCA menunjukkan 31 Agt 2026 padahal itu sudah 3+ "
+        "minggu lalu saat dicek). Situs resmi BEI diblokir Cloudflare, dan API RapidAPI yang sudah "
+        "dipakai di sini tidak punya endpoint kalender dividen. Semua yang ada di halaman ini dihitung "
+        "dari **histori pembayaran dividen nyata** (`price_history.dividends`) -- tab kedua adalah "
+        "**perkiraan berdasarkan pola tahun-tahun sebelumnya, BUKAN jadwal pasti**. Cum-date "
+        "sebenarnya bisa berbeda atau tidak terjadi sama sekali tahun ini -- selalu cek pengumuman "
+        "resmi RUPS/keterbukaan informasi sebelum mengambil keputusan.",
+        icon="⚠️",
+    )
 data_freshness_note(load_data_freshness())
 
 stocks_df = load_stock_list()
@@ -116,6 +119,41 @@ def _render_table(df: pd.DataFrame, key: str) -> None:
     if selected_rows:
         st.session_state["selected_ticker"] = table.iloc[selected_rows[0]]["stock_code"]
         st.switch_page("pages/1_📈_Detail_Saham.py")
+
+    # Tandai Beli: tabel ini tidak punya harga/stop/target saat ini (cuma
+    # histori tanggal bayar dividen) -- harga beli default diambil live,
+    # stop/target tetap diisi manual sama seperti halaman screener lain.
+    with st.expander("📌 Tandai saham dari tabel di atas sebagai sudah dibeli"):
+        div_mark_options = {
+            f"{r['stock_code']} — {r['name'] if pd.notna(r['name']) else r['stock_code']}": r
+            for _, r in table.iterrows()
+        }
+        div_mark_label = st.selectbox("Pilih saham", list(div_mark_options.keys()), key=f"{key}_mark_select")
+        div_mark_row = div_mark_options[div_mark_label]
+        if not is_logged_in():
+            st.caption("🔒 Login untuk menandai saham sebagai sudah dibeli.")
+        elif has_active_position(st.user.email, div_mark_row["stock_code"]):
+            st.caption(f"📌 {div_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
+        else:
+            live = load_live_prices((div_mark_row["stock_code"],))
+            div_entry_default = float(live.get(div_mark_row["stock_code"], 0.0))
+            m1, m2, m3 = st.columns(3)
+            div_entry = m1.number_input("Harga Beli", min_value=0.0, value=div_entry_default, step=1.0, key=f"{key}_mark_entry")
+            div_stop = m2.number_input("Stop Loss", min_value=0.0, value=round(div_entry_default * 0.975, 1), step=1.0, key=f"{key}_mark_stop")
+            div_target = m3.number_input("Take Profit", min_value=0.0, value=round(div_entry_default * 1.05, 1), step=1.0, key=f"{key}_mark_target")
+            if st.button("📌 Tandai Beli", key=f"{key}_mark_btn"):
+                div_context = {
+                    "dividend_yield_pct": round(float(div_mark_row["dividend_yield_pct"]), 2) if pd.notna(div_mark_row["dividend_yield_pct"]) else None,
+                    "dividen_terakhir": div_mark_row["last_div_display"],
+                    "payout_ratio": div_mark_row["payout_display"],
+                }
+                mark_position(
+                    st.user.email, div_mark_row["stock_code"], "dividend_screener_v1",
+                    div_entry, div_stop, div_target,
+                    entry_source="dividen_momentum", entry_context=json.dumps(div_context),
+                )
+                st.success(f"{div_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
+                st.rerun()
 
 
 tab_biggest, tab_upcoming = st.tabs(["🏆 Dividen Terbesar", "📅 Akan Bayar dalam Waktu Dekat"])

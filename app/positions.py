@@ -29,6 +29,17 @@ STATUS_LABELS = {
     "under_pressure": "🟡 Dalam Tekanan",
     "on_track": "✅ On Track",
 }
+# Which page a "Tandai Beli" click came from -- see app/db.py's
+# entry_source comment. None/"swing" both map to Swing: that was the
+# only source before this column existed, so old rows (entry_source is
+# NULL) display the same as if they'd been tagged "swing" explicitly.
+SOURCE_LABELS = {
+    "swing": "🎯 Swing",
+    "rekomendasi_emitten": "🏆 Rekomendasi Emitten",
+    "momentum_screener": "📡 Momentum Screener",
+    "screener_kustom": "🧰 Screener Kustom",
+    "dividen_momentum": "💰 Dividen Momentum",
+}
 # Trading-day horizons run on TRADING days; entry_date/today are calendar
 # days. Same approximation scripts/check_suspension_risk_v2.py already
 # uses elsewhere in this project (LOOKBACK_DAYS * 1.5) to convert one to
@@ -121,6 +132,7 @@ def mark_position(
     entry_probability: float | None = None, entry_regime: str | None = None,
     entry_wyckoff_phase: str | None = None, entry_target_pct: float | None = None,
     entry_stop_pct: float | None = None, entry_horizon_days: int | None = None,
+    entry_source: str | None = None, entry_context: str | None = None,
 ) -> None:
     """entry_date is always TODAY (dt.date.today()), not the prediction
     row's own `date` column -- found the hard way from a real user report:
@@ -139,7 +151,12 @@ def mark_position(
     said AT THE MOMENT this was marked -- direct user request ("direcord
     hasil rekomendasi swing nya apa saat di klik tandai beli"). See
     app/db.py's tracked_positions docstring for why these are snapshotted
-    rather than looked up live later."""
+    rather than looked up live later.
+
+    entry_source/entry_context: which page this was marked from and an
+    opaque JSON snapshot of that page's own data for it (e.g. Expert
+    System score/tier, dividend yield) -- see app/db.py's column
+    comments. Both optional/None for backward compatibility."""
     engine = get_engine()
     init_schema(engine)
     entry_date = dt.date.today()
@@ -152,6 +169,7 @@ def mark_position(
                 entry_probability=entry_probability, entry_regime=entry_regime,
                 entry_wyckoff_phase=entry_wyckoff_phase, entry_target_pct=entry_target_pct,
                 entry_stop_pct=entry_stop_pct, entry_horizon_days=entry_horizon_days,
+                entry_source=entry_source, entry_context=entry_context,
                 status="active",
             )
         )

@@ -320,7 +320,7 @@ if row is not None:
             entry_probability=float(row["probability"]), entry_regime=row.get("regime"),
             entry_wyckoff_phase=wyckoff_row["wyckoff_phase"] if wyckoff_row is not None else None,
             entry_target_pct=_det_meta["target_pct"], entry_stop_pct=_det_meta["stop_pct"],
-            entry_horizon_days=_det_meta["horizon_days"],
+            entry_horizon_days=_det_meta["horizon_days"], entry_source="swing",
         )
         st.success("Ditandai. Pantau progresnya di halaman **Posisi Saya**.")
         st.rerun()

@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_login
+from app.auth import is_logged_in, require_login
 from app.data import (
     load_data_freshness,
     load_latest_predictions,
@@ -16,8 +16,10 @@ from app.data import (
     load_screener_raw_panel,
     load_stock_list,
     load_suspended_tickers,
+    load_wyckoff_status,
     selected_swing_model_version,
 )
+from app.positions import has_active_position, mark_position
 from app.style import (
     ACCENT,
     badge_html,
@@ -49,29 +51,30 @@ st.caption(
     "(aturan teknikal tervalidasi lewat backtest) -- untuk mencari saham yang mendapat sinyal dari "
     "KEDUANYA pada saat yang sama, bukan cuma dari satu sudut pandang."
 )
-st.success(
-    "**Bukti historis (backtest 5 tahun, `scripts/search_momentum_rules.py` + lanjutannya, "
-    "diverifikasi ulang 25 Sep 2026)**: saham yang lolos Sinyal Tervalidasi Momentum Screener "
-    "SENDIRIAN menang **34,9%** dari kejadian (n=1.099, batas bawah keyakinan 95%: 32,2%, vs "
-    "baseline acak 31,8%) -- marginnya tipis, tapi ini tetap satu-satunya angka gabungan yang "
-    "sudah diuji ketat lewat walk-forward validation di halaman ini. (Klaim sebelumnya, 42,4%/"
-    "LB 38,3% dengan syarat tambahan Anchored VWAP, DICABUT -- verifikasi ulang menemukan bug "
-    "sampling di metode backtest lama yang membuat temuan AVWAP itu artefak, bukan pola nyata; "
-    "lihat halaman Momentum Screener untuk detail.) Menambahkan syarat Swing ≥WATCH di atasnya "
-    "BELUM diuji ulang secara terpisah untuk kombinasi dua-alat ini -- anggap sebagai penyaring "
-    "tambahan yang masuk akal, bukan angka yang sudah terbukti sendiri.",
-    icon="🏆",
-)
-st.info(
-    "Halaman ini murni **menyaring & menggabungkan** hasil dari dua halaman lain -- tidak ada "
-    "perhitungan baru. Probabilitas Swing persis sama dengan yang tampil di halamannya sendiri; "
-    "status Momentum Screener persis sama dengan kolom ✅ Tervalidasi di sana.\n\n"
-    "**Catatan**: halaman Turnaround (model 6-bulan) sudah dipensiunkan -- backtest top-2 "
-    "(`scripts/compare_turnaround_v2_top2.py`) menunjukkan performanya, dan bahkan usulan "
-    "penggantinya, keduanya jauh di bawah Swing untuk tujuan jangka pendek/menengah manapun -- "
-    "jadi tidak lagi ikut dihitung di sini.",
-    icon="ℹ️",
-)
+with st.expander("ℹ️ Bukti backtest & catatan metodologi (klik untuk buka)"):
+    st.success(
+        "**Bukti historis (backtest 5 tahun, `scripts/search_momentum_rules.py` + lanjutannya, "
+        "diverifikasi ulang 25 Sep 2026)**: saham yang lolos Sinyal Tervalidasi Momentum Screener "
+        "SENDIRIAN menang **34,9%** dari kejadian (n=1.099, batas bawah keyakinan 95%: 32,2%, vs "
+        "baseline acak 31,8%) -- marginnya tipis, tapi ini tetap satu-satunya angka gabungan yang "
+        "sudah diuji ketat lewat walk-forward validation di halaman ini. (Klaim sebelumnya, 42,4%/"
+        "LB 38,3% dengan syarat tambahan Anchored VWAP, DICABUT -- verifikasi ulang menemukan bug "
+        "sampling di metode backtest lama yang membuat temuan AVWAP itu artefak, bukan pola nyata; "
+        "lihat halaman Momentum Screener untuk detail.) Menambahkan syarat Swing ≥WATCH di atasnya "
+        "BELUM diuji ulang secara terpisah untuk kombinasi dua-alat ini -- anggap sebagai penyaring "
+        "tambahan yang masuk akal, bukan angka yang sudah terbukti sendiri.",
+        icon="🏆",
+    )
+    st.info(
+        "Halaman ini murni **menyaring & menggabungkan** hasil dari dua halaman lain -- tidak ada "
+        "perhitungan baru. Probabilitas Swing persis sama dengan yang tampil di halamannya sendiri; "
+        "status Momentum Screener persis sama dengan kolom ✅ Tervalidasi di sana.\n\n"
+        "**Catatan**: halaman Turnaround (model 6-bulan) sudah dipensiunkan -- backtest top-2 "
+        "(`scripts/compare_turnaround_v2_top2.py`) menunjukkan performanya, dan bahkan usulan "
+        "penggantinya, keduanya jauh di bawah Swing untuk tujuan jangka pendek/menengah manapun -- "
+        "jadi tidak lagi ikut dihitung di sini.",
+        icon="ℹ️",
+    )
 data_freshness_note(load_data_freshness())
 
 TIER_LABELS = {2: "🌟 Keduanya Sepakat (2/2)", 1: "Salah Satu (1/2)"}
@@ -94,9 +97,9 @@ if stocks_df.empty:
 
 base = stocks_df.rename(columns={"code": "stock_code"})
 df = base.merge(
-    swing[["stock_code", "decision", "probability"]].rename(
+    swing[["stock_code", "decision", "probability", "entry_price", "stop_loss_price", "take_profit_price"]].rename(
         columns={"decision": "swing_decision", "probability": "swing_prob"}
-    ) if not swing.empty else pd.DataFrame(columns=["stock_code", "swing_decision", "swing_prob"]),
+    ) if not swing.empty else pd.DataFrame(columns=["stock_code", "swing_decision", "swing_prob", "entry_price", "stop_loss_price", "take_profit_price"]),
     on="stock_code", how="left",
 )
 df = df.merge(
@@ -199,6 +202,38 @@ if selected_rows:
     picked_code = table_df.iloc[selected_rows[0]]["stock_code"]
     st.session_state["selected_ticker"] = picked_code
     st.switch_page("pages/1_📈_Detail_Saham.py")
+
+# Tandai Beli langsung dari sini -- halaman ini murni menyaring hasil
+# Swing (lihat komentar di atas), jadi entry/stop/target/probabilitas/
+# horizon dipakai APA ADANYA dari model Swing yang sama, sama seperti
+# app/pages/2_🎯_Swing.py's mark_position call -- bukan perhitungan baru.
+with st.expander("📌 Tandai saham dari daftar di atas sebagai sudah dibeli"):
+    _reko_mark_options = {
+        f"{r['stock_code']} — {r['name'] if pd.notna(r['name']) else r['stock_code']}": r
+        for _, r in table_df.iterrows() if pd.notna(r.get("entry_price"))
+    }
+    if not _reko_mark_options:
+        st.caption("Tidak ada saham di daftar ini yang punya harga entry Swing untuk ditandai.")
+    else:
+        _reko_mark_label = st.selectbox("Pilih saham", list(_reko_mark_options.keys()), key="reko_mark_select")
+        _reko_mark_row = _reko_mark_options[_reko_mark_label]
+        if not is_logged_in():
+            st.caption("🔒 Login untuk menandai saham sebagai sudah dibeli.")
+        elif has_active_position(st.user.email, _reko_mark_row["stock_code"]):
+            st.caption(f"📌 {_reko_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
+        elif st.button("📌 Tandai Beli", key="reko_mark_btn"):
+            _reko_wyckoff = load_wyckoff_status(_reko_mark_row["stock_code"])
+            mark_position(
+                st.user.email, _reko_mark_row["stock_code"], _swing_model_version,
+                float(_reko_mark_row["entry_price"]), float(_reko_mark_row["stop_loss_price"]), float(_reko_mark_row["take_profit_price"]),
+                entry_probability=float(_reko_mark_row["swing_prob"]) if pd.notna(_reko_mark_row.get("swing_prob")) else None,
+                entry_regime=_reko_mark_row.get("regime"),
+                entry_wyckoff_phase=_reko_wyckoff["wyckoff_phase"] if _reko_wyckoff else None,
+                entry_target_pct=_reko_meta["target_pct"], entry_stop_pct=_reko_meta["stop_pct"],
+                entry_horizon_days=_reko_h, entry_source="rekomendasi_emitten",
+            )
+            st.success(f"{_reko_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
+            st.rerun()
 
 st.markdown('<div class="mystocks-divider"></div>', unsafe_allow_html=True)
 

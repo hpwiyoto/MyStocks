@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import textwrap
@@ -7,8 +8,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_login
+from app.auth import is_logged_in, require_login
 from app.data import load_data_freshness, load_latest_predictions, load_liquidity, load_screener_raw_panel, load_stock_list, load_suspended_tickers, selected_swing_model_version
+from app.positions import has_active_position, mark_position
 from app.style import (
     ACCENT,
     COLOR_AVOID,
@@ -43,65 +45,66 @@ st.caption(
     "pivot 50, (5) divergence yang lebih baru, (6) probabilitas model Swing cuma sebagai "
     "tiebreaker terakhir -- bukan penentu urutan."
 )
-st.success(
-    "**✅ Sinyal Tervalidasi** (diverifikasi ulang 25 Sep 2026): `scripts/search_momentum_rules.py` "
-    "+ lanjutan grid search 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`) menguji "
-    "terhadap data historis nyata (5 tahun, target sama seperti Swing: naik ≥5% sebelum turun "
-    "-2,5% dalam 10 hari). Kombinasi **regime bottoming + momentum histogram menguat + money flow "
-    "negatif (distribusi, BUKAN akumulasi) + volume relatif ≥0,8x** masih menang dari baseline "
-    "acak (baseline 31,8%, kombinasi ini 34,9%, batas bawah keyakinan 95%: **32,2%**, dari 1.099 "
-    "kejadian) -- tapi marginnya tipis (cuma 0,4 poin di atas baseline), bukan margin besar yang "
-    "pernah dilaporkan sebelumnya. Money flow negatif terdengar aneh untuk sinyal 'naik' tapi "
-    "konsisten dengan pola lain di sini: saham yang secara permukaan masih terlihat lemah justru "
-    "punya ruang lebih besar untuk mengejutkan naik.\n\n"
-    "**Koreksi penting**: syarat tambahan *harga ≥ Anchored VWAP* yang sebelumnya diklaim "
-    "menaikkan win rate ke 42,4% (LB 38,3%) sudah DICABUT dari syarat wajib -- verifikasi ulang "
-    "menemukan bug sampling di metode backtest lama (lihat `scripts/search_momentum_rules.py` "
-    "fungsi `select_as_of_dates`) yang membuat temuan AVWAP itu artefak, bukan pola nyata. Dengan "
-    "sampling yang sudah diperbaiki, menambahkan syarat AVWAP justru MENURUNKAN batas bawah ke "
-    "29,6% -- di bawah baseline. Kesimpulan: kombinasi 4 kriteria di atas (tanpa AVWAP) tetap "
-    "satu-satunya yang terbukti lebih baik dari acak di halaman ini, tapi dengan margin yang jauh "
-    "lebih tipis dari yang pernah dilaporkan -- kriteria lain (termasuk divergence & regime "
-    "priority) tetap murni heuristik yang belum terbukti.",
-    icon="✅",
-)
-st.info(
-    "**Beda dari Swing**: model ML lain di aplikasi ini diurutkan oleh "
-    "probabilitas model machine learning. Screener ini sebaliknya -- urutannya murni "
-    "dari aturan teknikal, sebagian besar masih heuristik (masuk akal tapi belum diuji), "
-    "kecuali kategori Tervalidasi di atas. Kolom probabilitas tetap ditampilkan supaya Anda "
-    "bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
-    icon="ℹ️",
-)
-st.warning(
-    "**🧠 Expert System: Golden Cross Awal** (di bagian bawah halaman) -- dari aturan trading "
-    "Anda sendiri: (Golden Cross baru -- MA50xMA200 atau MA20xMA50 dalam 5 hari terakhir -- ATAU "
-    "MA9 sedang menjelang cross MA20) + volume di atas rata-rata + RSI normal (tidak oversold) + "
-    "MACD histogram baru/menjelang crossover (BUKAN sudah di puncak atau sedang menurun) + "
-    "likuiditas cukup (≥ Rp 1 miliar/hari rata-rata 20 hari) -- kelimanya wajib. Foreign flow "
-    "akumulasi, harga dekat support, harga ≥ Anchored VWAP dari titik terendah 50 hari, turun ≥13% "
-    "dari puncak sejak rebound/RSI oversold terakhir, & MACD baru cross ke atas garis sinyal saat "
-    "masih di bawah garis nol menambah skor keyakinan tapi tidak wajib.\n\n"
-    "**SUDAH di-backtest ulang dengan metode sampling yang diperbaiki** (25-26 Sep 2026, lihat "
-    "`scripts/backtest_expert_golden_cross.py` -- metode sama seperti kotak hijau di atas, 5 tahun "
-    "data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap (5 syarat) TIDAK terbukti "
-    "mengalahkan acak**: menang 33,1% dari 387 kejadian (baseline acak 32,0%), batas bawah "
-    "keyakinan 95%-nya cuma 28,6% -- di BAWAH baseline. Bonus 'dekat support' yang sebelumnya "
-    "sempat terlihat menjanjikan (35,0%, di atas baseline) ternyata itu ARTEFAK bug sampling di "
-    "metode backtest lama -- setelah diperbaiki, angka yang SAMA PERSIS (n=57) sekarang menunjukkan "
-    "27,1%, di BAWAH baseline. Bonus AVWAP juga sudah diuji -- TIDAK membantu (n=271, 26,5%, di "
-    "bawah baseline DAN di bawah kombinasi tanpa bonus ini). Bonus deep-pullback (turun ≥13%) baru "
-    "diuji dan sampelnya TERLALU KECIL untuk disimpulkan (n=7, menang 14,3%, batas bawah 2,6%). "
-    "**⚠️ Bonus 'MACD cross di bawah nol' sudah diuji dan hasilnya JELAS BURUK** (n=33, sampel cukup "
-    "besar untuk dipercaya, menang cuma 18,2%, batas bawah 8,6% -- jauh di bawah baseline) -- ini "
-    "sesuai temuan lama proyek ini (pola sama pernah diuji sendirian: 26,2%, juga di bawah baseline). "
-    "Kalau bonus ini aktif untuk suatu saham, anggap sebagai PERINGATAN, bukan nilai tambah, meski "
-    "skor angkanya tetap naik +10 poin (label ⚠️ sengaja ditambahkan di kolom Bonus untuk ini). "
-    "Tidak ada satu pun kriteria (Golden Cross, MACD awal, volume, RSI, bonus lain) yang punya edge "
-    "positif sendiri. Kesimpulan: pakai sebagai alat bantu observasi manual, JANGAN diperlakukan "
-    "setara 'Sinyal Tervalidasi' di atas.",
-    icon="🧠",
-)
+with st.expander("ℹ️ Metodologi, bukti backtest & keterbatasan Expert System (klik untuk buka)"):
+    st.success(
+        "**✅ Sinyal Tervalidasi** (diverifikasi ulang 25 Sep 2026): `scripts/search_momentum_rules.py` "
+        "+ lanjutan grid search 5.880 kombinasi (`scripts/grid_search_momentum_rules.py`) menguji "
+        "terhadap data historis nyata (5 tahun, target sama seperti Swing: naik ≥5% sebelum turun "
+        "-2,5% dalam 10 hari). Kombinasi **regime bottoming + momentum histogram menguat + money flow "
+        "negatif (distribusi, BUKAN akumulasi) + volume relatif ≥0,8x** masih menang dari baseline "
+        "acak (baseline 31,8%, kombinasi ini 34,9%, batas bawah keyakinan 95%: **32,2%**, dari 1.099 "
+        "kejadian) -- tapi marginnya tipis (cuma 0,4 poin di atas baseline), bukan margin besar yang "
+        "pernah dilaporkan sebelumnya. Money flow negatif terdengar aneh untuk sinyal 'naik' tapi "
+        "konsisten dengan pola lain di sini: saham yang secara permukaan masih terlihat lemah justru "
+        "punya ruang lebih besar untuk mengejutkan naik.\n\n"
+        "**Koreksi penting**: syarat tambahan *harga ≥ Anchored VWAP* yang sebelumnya diklaim "
+        "menaikkan win rate ke 42,4% (LB 38,3%) sudah DICABUT dari syarat wajib -- verifikasi ulang "
+        "menemukan bug sampling di metode backtest lama (lihat `scripts/search_momentum_rules.py` "
+        "fungsi `select_as_of_dates`) yang membuat temuan AVWAP itu artefak, bukan pola nyata. Dengan "
+        "sampling yang sudah diperbaiki, menambahkan syarat AVWAP justru MENURUNKAN batas bawah ke "
+        "29,6% -- di bawah baseline. Kesimpulan: kombinasi 4 kriteria di atas (tanpa AVWAP) tetap "
+        "satu-satunya yang terbukti lebih baik dari acak di halaman ini, tapi dengan margin yang jauh "
+        "lebih tipis dari yang pernah dilaporkan -- kriteria lain (termasuk divergence & regime "
+        "priority) tetap murni heuristik yang belum terbukti.",
+        icon="✅",
+    )
+    st.info(
+        "**Beda dari Swing**: model ML lain di aplikasi ini diurutkan oleh "
+        "probabilitas model machine learning. Screener ini sebaliknya -- urutannya murni "
+        "dari aturan teknikal, sebagian besar masih heuristik (masuk akal tapi belum diuji), "
+        "kecuali kategori Tervalidasi di atas. Kolom probabilitas tetap ditampilkan supaya Anda "
+        "bisa membandingkan, bukan supaya menggantikan penilaian teknikal ini.",
+        icon="ℹ️",
+    )
+    st.warning(
+        "**🧠 Expert System: Golden Cross Awal** (di bagian bawah halaman) -- dari aturan trading "
+        "Anda sendiri: (Golden Cross baru -- MA50xMA200 atau MA20xMA50 dalam 5 hari terakhir -- ATAU "
+        "MA9 sedang menjelang cross MA20) + volume di atas rata-rata + RSI normal (tidak oversold) + "
+        "MACD histogram baru/menjelang crossover (BUKAN sudah di puncak atau sedang menurun) + "
+        "likuiditas cukup (≥ Rp 1 miliar/hari rata-rata 20 hari) -- kelimanya wajib. Foreign flow "
+        "akumulasi, harga dekat support, harga ≥ Anchored VWAP dari titik terendah 50 hari, turun ≥13% "
+        "dari puncak sejak rebound/RSI oversold terakhir, & MACD baru cross ke atas garis sinyal saat "
+        "masih di bawah garis nol menambah skor keyakinan tapi tidak wajib.\n\n"
+        "**SUDAH di-backtest ulang dengan metode sampling yang diperbaiki** (25-26 Sep 2026, lihat "
+        "`scripts/backtest_expert_golden_cross.py` -- metode sama seperti kotak hijau di atas, 5 tahun "
+        "data IDX, target +5%/-2,5%/10 hari) -- **kombinasi lengkap (5 syarat) TIDAK terbukti "
+        "mengalahkan acak**: menang 33,1% dari 387 kejadian (baseline acak 32,0%), batas bawah "
+        "keyakinan 95%-nya cuma 28,6% -- di BAWAH baseline. Bonus 'dekat support' yang sebelumnya "
+        "sempat terlihat menjanjikan (35,0%, di atas baseline) ternyata itu ARTEFAK bug sampling di "
+        "metode backtest lama -- setelah diperbaiki, angka yang SAMA PERSIS (n=57) sekarang menunjukkan "
+        "27,1%, di BAWAH baseline. Bonus AVWAP juga sudah diuji -- TIDAK membantu (n=271, 26,5%, di "
+        "bawah baseline DAN di bawah kombinasi tanpa bonus ini). Bonus deep-pullback (turun ≥13%) baru "
+        "diuji dan sampelnya TERLALU KECIL untuk disimpulkan (n=7, menang 14,3%, batas bawah 2,6%). "
+        "**⚠️ Bonus 'MACD cross di bawah nol' sudah diuji dan hasilnya JELAS BURUK** (n=33, sampel cukup "
+        "besar untuk dipercaya, menang cuma 18,2%, batas bawah 8,6% -- jauh di bawah baseline) -- ini "
+        "sesuai temuan lama proyek ini (pola sama pernah diuji sendirian: 26,2%, juga di bawah baseline). "
+        "Kalau bonus ini aktif untuk suatu saham, anggap sebagai PERINGATAN, bukan nilai tambah, meski "
+        "skor angkanya tetap naik +10 poin (label ⚠️ sengaja ditambahkan di kolom Bonus untuk ini). "
+        "Tidak ada satu pun kriteria (Golden Cross, MACD awal, volume, RSI, bonus lain) yang punya edge "
+        "positif sendiri. Kesimpulan: pakai sebagai alat bantu observasi manual, JANGAN diperlakukan "
+        "setara 'Sinyal Tervalidasi' di atas.",
+        icon="🧠",
+    )
 
 # Harga & semua indikator (RSI/MACD/CMF) di halaman ini datang dari
 # feature_daily, yang cuma seaktual scheduler harian (lihat
@@ -591,6 +594,41 @@ else:
     if expert_selected_rows:
         st.session_state["selected_ticker"] = expert_table.iloc[expert_selected_rows[0]]["stock_code"]
         st.switch_page("pages/1_📈_Detail_Saham.py")
+
+    # Tandai Beli: Expert System ini rule-based, bukan model ML, jadi
+    # TIDAK punya stop-loss/take-profit terhitung seperti Swing -- diisi
+    # manual di sini (direct user request untuk opsi tandai beli di luar
+    # Swing, dengan input manual untuk stop/target di halaman non-ML).
+    with st.expander("📌 Tandai saham dari tabel di atas sebagai sudah dibeli"):
+        _exp_mark_options = {
+            f"{r['stock_code']} — {r['name'] if pd.notna(r['name']) else r['stock_code']}": r
+            for _, r in expert_table.iterrows()
+        }
+        _exp_mark_label = st.selectbox("Pilih saham", list(_exp_mark_options.keys()), key="expert_mark_select")
+        _exp_mark_row = _exp_mark_options[_exp_mark_label]
+        if not is_logged_in():
+            st.caption("🔒 Login untuk menandai saham sebagai sudah dibeli.")
+        elif has_active_position(st.user.email, _exp_mark_row["stock_code"]):
+            st.caption(f"📌 {_exp_mark_row['stock_code']} sudah ditandai sebagai posisi aktif.")
+        else:
+            _exp_entry_default = float(_exp_mark_row["close"])
+            m1, m2, m3 = st.columns(3)
+            _exp_entry = m1.number_input("Harga Beli", min_value=0.0, value=_exp_entry_default, step=1.0, key="expert_mark_entry")
+            _exp_stop = m2.number_input("Stop Loss", min_value=0.0, value=round(_exp_entry_default * 0.975, 1), step=1.0, key="expert_mark_stop")
+            _exp_target = m3.number_input("Take Profit", min_value=0.0, value=round(_exp_entry_default * 1.05, 1), step=1.0, key="expert_mark_target")
+            if st.button("📌 Tandai Beli", key="expert_mark_btn"):
+                _exp_context = {
+                    "score": int(_exp_mark_row["score"]), "tier": _exp_mark_row["tier_display"],
+                    "golden_cross": _exp_mark_row["cross_display"], "bonus": _exp_mark_row["bonus_display"],
+                    "rsi_14": round(float(_exp_mark_row["rsi_14"]), 1) if pd.notna(_exp_mark_row["rsi_14"]) else None,
+                }
+                mark_position(
+                    st.user.email, _exp_mark_row["stock_code"], "expert_system_v1",
+                    _exp_entry, _exp_stop, _exp_target,
+                    entry_source="momentum_screener", entry_context=json.dumps(_exp_context),
+                )
+                st.success(f"{_exp_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
+                st.rerun()
 
     with st.expander("Lihat alasan detail per saham"):
         for _, r in expert_table.iterrows():

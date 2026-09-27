@@ -5,7 +5,7 @@ pipeline/db.py's docstring comments for the reasoning). This one is only
 ever touched by the Streamlit app itself (app/auth.py), never by the CLI
 data pipeline.
 """
-from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, MetaData, Numeric, String, Table, func, inspect, text
+from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, MetaData, Numeric, String, Table, Text, func, inspect, text
 
 metadata = MetaData()
 
@@ -63,6 +63,20 @@ tracked_positions = Table(
     Column("entry_target_pct", Numeric(6, 4)),
     Column("entry_stop_pct", Numeric(6, 4)),
     Column("entry_horizon_days", Integer),
+    # Which page the "Tandai Beli" click came from -- direct user request
+    # ("ditampilkan tandai beli ini pilihan dari halaman mana"), since
+    # Tandai Beli is no longer Swing-only. NULL means a row marked before
+    # this column existed -- app.positions.SOURCE_LABELS treats NULL as
+    # "swing" (the only source that existed then). entry_context is a
+    # free-form JSON string snapshot of whatever that source page showed
+    # at mark-time for pages with no ML prediction to snapshot into the
+    # entry_probability/entry_regime/etc columns above (e.g. Expert
+    # System score/tier, dividend yield) -- kept as opaque JSON rather
+    # than one column per source-specific field, since each source has a
+    # different, growing set of fields and this is display-only context,
+    # never queried/filtered on.
+    Column("entry_source", String(30)),
+    Column("entry_context", Text),
     Column("status", String(12), nullable=False, default="active"),
     Column("closed_date", Date),
     Column("closed_price", Numeric(14, 2)),
@@ -91,6 +105,8 @@ _TRACKED_POSITIONS_ADDED_COLUMNS = {
     "entry_target_pct": "NUMERIC(6,4)",
     "entry_stop_pct": "NUMERIC(6,4)",
     "entry_horizon_days": "INTEGER",
+    "entry_source": "VARCHAR(30)",
+    "entry_context": "TEXT",
 }
 
 

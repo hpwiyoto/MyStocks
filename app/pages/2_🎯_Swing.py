@@ -374,6 +374,7 @@ for row_chunk in rows:
                     entry_probability=float(r["probability"]), entry_regime=r.get("regime"),
                     entry_wyckoff_phase=_wyckoff_at_mark["wyckoff_phase"] if _wyckoff_at_mark else None,
                     entry_target_pct=_t, entry_stop_pct=_s, entry_horizon_days=_h,
+                    entry_source="swing",
                 )
                 st.success(f"{r['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
                 st.rerun()
@@ -469,6 +470,7 @@ with st.expander("📌 Tandai saham dari daftar di atas sebagai sudah dibeli"):
             entry_probability=float(_mark_row["probability"]), entry_regime=_mark_row.get("regime"),
             entry_wyckoff_phase=_wyckoff_at_mark["wyckoff_phase"] if _wyckoff_at_mark else None,
             entry_target_pct=_t, entry_stop_pct=_s, entry_horizon_days=_h,
+            entry_source="swing",
         )
         st.success(f"{_mark_row['stock_code']} ditandai. Lihat halaman **Posisi Saya**.")
         st.rerun()

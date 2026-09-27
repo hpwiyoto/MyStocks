@@ -3,12 +3,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+import json
+
 import pandas as pd
 import streamlit as st
 
 from app.auth import require_login
 from app.data import load_ihsg_trend
-from app.positions import STATUS_LABELS, close_position, load_positions_with_progress
+from app.positions import SOURCE_LABELS, STATUS_LABELS, close_position, load_positions_with_progress
 from app.style import inject_base_css, position_status_badge, render_developer_footer, render_ihsg_context
 
 # Display order: most urgent first -- a stock already past target/stop
@@ -81,6 +83,8 @@ with tab_active:
                         unsafe_allow_html=True,
                     )
                     st.caption(f"Beli {pos['entry_date']} @ {pos['entry_price']:,.0f} -- {pos['days_held']} hari lalu")
+                    source_label = SOURCE_LABELS.get(pos.get("entry_source") or "swing", pos.get("entry_source") or "swing")
+                    st.caption(f"Ditandai dari: {source_label}")
                 with h2:
                     price_txt = f"{pos['current_price']:,.0f}" if pos["current_price"] is not None else "-"
                     st.metric("Harga sekarang", price_txt, delta=f"{pos['pct_change_from_entry']:+.1f}%" if pos["pct_change_from_entry"] is not None else None)
@@ -126,6 +130,18 @@ with tab_active:
                     st.write(f"Probabilitas: {_fmt_pct(pos.get('entry_probability'))}")
                     st.write(f"Regime: {_fmt_regime(pos.get('entry_regime'))}")
                     st.write(f"Fase Wyckoff: {_fmt_regime(pos.get('entry_wyckoff_phase'))}")
+                    # entry_context: opaque JSON snapshot from non-ML
+                    # source pages (Expert System score/tier, dividend
+                    # yield, etc -- see app/db.py's column comment) --
+                    # only present for positions marked from those pages.
+                    raw_context = pos.get("entry_context")
+                    if isinstance(raw_context, str) and raw_context.strip():
+                        try:
+                            context_dict = json.loads(raw_context)
+                        except ValueError:
+                            context_dict = None
+                        if context_dict:
+                            st.write("Konteks: " + " | ".join(f"{k}: {v}" for k, v in context_dict.items()))
                 with cmp2:
                     st.caption("📡 Sekarang")
                     st.write(f"Probabilitas: {_fmt_pct(pos.get('current_probability'))}"
@@ -199,11 +215,13 @@ with tab_closed:
         closed["hasil_pct"] = (closed["closed_price"].astype(float) - closed["entry_price"].astype(float)) / closed["entry_price"].astype(float) * 100
         reason_labels = {"target_hit": "🎯 Kena Target", "stop_hit": "🛑 Kena Stop", "manual": "🚪 Manual", "early_warning": "⚠️ Peringatan Dini"}
         closed["alasan"] = closed["closed_reason"].map(reason_labels).fillna(closed["closed_reason"])
-        table = closed[["stock_code", "entry_date", "entry_price", "closed_date", "closed_price", "hasil_pct", "alasan"]]
+        closed["sumber"] = closed["entry_source"].fillna("swing").map(SOURCE_LABELS).fillna(closed["entry_source"])
+        table = closed[["stock_code", "sumber", "entry_date", "entry_price", "closed_date", "closed_price", "hasil_pct", "alasan"]]
         st.dataframe(
             table, width="stretch", hide_index=True,
             column_config={
                 "stock_code": st.column_config.TextColumn("Kode"),
+                "sumber": st.column_config.TextColumn("Sumber"),
                 "entry_date": st.column_config.TextColumn("Tgl Beli"),
                 "entry_price": st.column_config.NumberColumn("Harga Beli", format="%.0f"),
                 "closed_date": st.column_config.TextColumn("Tgl Tutup"),
